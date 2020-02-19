@@ -1,4 +1,4 @@
-/*
+nnn/*
 
 Virtual machine for language Source §0+ 
 (Source §0 with division, plus conditionals)
