@@ -1,6 +1,6 @@
 # Source Programs
 
-This repo contains programs written in [Source](https://en.wikipedia.org/wiki/Source_(programming_language)), developed for SICP JS and other educational projects
+This repo contains programs written in [Source](https://en.wikipedia.org/wiki/Source_(programming_language)), developed for [SICP JS](https://en.wikipedia.org/wiki/Structure_and_Interpretation_of_Computer_Programs,_JavaScript_Adaptation) and other educational projects. 
 
 All programs in this repository are runnable in the Source Academy playground (https://sourceacademy.nus.edu.sg/playground#chap=4): copy the program into the editor, choose "Source §4", and press "Run".
 
@@ -21,14 +21,14 @@ The steppers in this section implement a small-step semantics, following the sub
 
 ## Type checkers
 
-The type checkers in this section follow a rule-based static semantics available in doc/type-checking.pdf.
+The type checkers in this section follow a rule-based static semantics available in [doc/type-checking.pdf](https://github.com/source-academy/source-programs/blob/master/doc/type-checking.pdf).
 
 * `src/type-checkers/source-0.js`: type checker for Source §0
 * `src/type-checkers/typed-source.js`: type checker for Typed Source, a typed version of a Source §1 sublanguage
 
 ## Virtual machines
 
-The virtual machines in this section are SECD-style and follow a description in doc/type-checking.pdf. Each virtual machine comes with a compiler, implemented in the same file.
+The virtual machines in this section are SECD-style and follow a description in [doc/virtual-machines.pdf](https://github.com/source-academy/source-programs/blob/master/doc/virtual-machines.pdf). Each virtual machine comes with a compiler, implemented in the same file.
 
 * `src/virtual-machines/source-0m.js`: virtual machine for Source §0- (calculator language without division)
 * `src/virtual-machines/source-0.js`: virtual machine for Source §0 (calculator language)
