@@ -807,7 +807,7 @@ function initialize_machine(heapsize) {
 let TEMP_ROOT = -Infinity;
 
 // NEW expects tag in A and size in B
-// changes A, B, C, D, J, K
+// changes A, B, C, J, K
 function NEW() {
     J = A;
     K = B;
@@ -830,7 +830,7 @@ function NEW() {
 // can never be confused with heap addresses
 const FORWARDINGADDRESS = 0;
 
-// changes B, C, D, I
+// changes B, C, I
 function FLIP() {
     A = FROMSPACE;
     FROMSPACE = TOSPACE; 
