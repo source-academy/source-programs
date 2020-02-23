@@ -24,7 +24,7 @@ expr    ::= expr ? expr : expr
          |  expr(expr, expr, ...)
 binop   ::= + | - | * | / | % | < | > | <= | >= 
          | === | !== |  && | ||
-unop    ::= !
+unop    ::= ! | -
 */
 
 /* CONSTANTS: NUMBERS, STRINGS, TRUE, FALSE */
