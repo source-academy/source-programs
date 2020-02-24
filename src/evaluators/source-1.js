@@ -24,7 +24,7 @@ expr    ::= expr ? expr : expr
          |  expr(expr, expr, ...)
 binop   ::= + | - | * | / | % | < | > | <= | >= 
          | === | !== |  && | ||
-unop    ::= !
+unop    ::= ! | -
 */
 
 /* CONSTANTS: NUMBERS, STRINGS, TRUE, FALSE */
@@ -649,6 +649,17 @@ function eval_toplevel(stmt) {
 
 const the_empty_environment = null;
 
+// the minus operation is overloaded to
+// support both binary minus and unary minus
+
+function minus(x, y) {
+    if (is_number(x) && is_number(y)) {
+      return x - y;
+    } else {
+      return -x;
+    }
+}
+
 // the global environment has bindings for all
 // primitive functions, including the operators
 
@@ -656,7 +667,7 @@ const primitive_functions = list(
        list("display",       display         ),
        list("error",         error           ),
        list("+",             (x,y) => x + y  ),
-       list("-",             (x,y) => x - y  ),
+       list("-",             (x,y) => minus(x, y)  ),
        list("*",             (x,y) => x * y  ),
        list("/",             (x,y) => x / y  ),
        list("%",             (x,y) => x % y  ),
@@ -748,6 +759,8 @@ parse_and_eval("true;");
 parse_and_eval("! (1 === 1);");
 parse_and_eval("(! (1 === 1)) ? 1 : 2;");
 parse_and_eval("'hello' + ' ' + 'world';");
+parse_and_eval("6 * -1;");
+parse_and_eval("-12 - 8;");
 */
 
 parse_and_eval("function factorial(n) { return n === 1 ? 1 : n * factorial(n - 1);} factorial(4);");
