@@ -295,7 +295,7 @@ function print_program(P) {
                 stringify(P[i + 1]);
             i = i + 2;
         } else {}
-        display("", s);
+        display(undefined, s);
     }
 }
 
@@ -711,7 +711,7 @@ let G = 0;
 let H = 0;
 
 function show_executing(s) {
-    display("", "--- RUN ---" + s);
+    display(undefined, "--- RUN ---" + s);
     display( PC, "PC :");
     display( get_name(P[PC]), "instr:");
 }
@@ -719,7 +719,7 @@ function show_executing(s) {
 // for debugging: show all registers
 function show_registers(s) {
     show_executing(s);
-    display("", "--- REGISTERS ---");
+    display(undefined, "--- REGISTERS ---");
     display(RES, "RES:");
     display(  A, "A  :");
     display(  B, "B  :");
@@ -999,9 +999,9 @@ function node_kind(x) {
 function show_heap(s) {
     const len = array_length(HEAP);
     let i = 0;
-    display("", "--- HEAP --- " + s);
+    display(undefined, "--- HEAP --- " + s);
     while (i < len) {
-        display("", stringify(i) + ": " + stringify(HEAP[i]) +
+        display(undefined, stringify(i) + ": " + stringify(HEAP[i]) +
                     (is_number(HEAP[i]) && is_node_tag(HEAP[i]) 
                      ? " ("+node_kind(HEAP[i])+")" 
                      : ""));
@@ -1010,7 +1010,7 @@ function show_heap(s) {
 }
 
 function show_heap_value(address) {
-    display("", "result: heap node of type = " + 
+    display(undefined, "result: heap node of type = " + 
                 node_kind(HEAP[address]) +
                 ", value = " + 
                 stringify(HEAP[address + NUMBER_VALUE_SLOT]));
