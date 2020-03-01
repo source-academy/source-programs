@@ -6,11 +6,11 @@ All programs in this repository are runnable in the [Source Academy playground](
 
 ## Evaluators
 
-The evaluators in this section all follow the general style of SICP JS Section 4.1.
+The evaluators in this section all follow the general style of SICP JS Chapter 4.
 
 * [`src/evaluators/source-0.js`](https://github.com/source-academy/source-programs/blob/master/src/evaluators/source-0.js): evaluator for Source §0 (calculator language)
 * [`src/evaluators/source-0pp.js`](https://github.com/source-academy/source-programs/blob/master/src/evaluators/source-0pp.js): evaluator for Source §0++ (calculator language plus conditionals, blocks and sequences)
-* [`src/evaluators/source-1.js`](https://github.com/source-academy/source-programs/blob/master/src/evaluators/source-1.js): evaluator for Source §1
+* [`src/evaluators/source-4-1.js`](https://github.com/source-academy/source-programs/blob/master/src/evaluators/source-1.js): evaluator for Source §1, described in SICP JS 4.1
 * [`src/evaluators/typed-source.js`](https://github.com/source-academy/source-programs/blob/master/src/evaluators/typed-source.js): evaluator for Typed Source (typed version of a Source §1 sublanguage)
 
 ## Steppers
@@ -37,5 +37,21 @@ The virtual machines in this section are SECD-style and follow a description in 
 * [`src/virtual-machines/source-1-with-copying-gc.js`](https://github.com/source-academy/source-programs/blob/master/src/virtual-machines/source-1-with-copying-gc.js): virtual machine for a Source §1 sublanguage with a Cheney-style stop-and-copy garbage collector
 * [`src/virtual-machines/register-machine-gcd.js`](https://github.com/source-academy/source-programs/blob/master/src/virtual-machines/register-machine-gcd.js): register machine following SICP JS Section 5.2, using GCD example
 
+## Tool Demos
+
+* [`src/tool-demos/stepper.js`](https://tinyurl.com/SICPJS-stepper): stepper tool (small-step semantics, based on substitution)
+* [`src/tool-demos/box-and-pointer-diagrams.js`](https://tinyurl.com/SICPJS-box-and-pointer): box-and-pointer diagram visualizer for pairs and lists (following SICP JS chapter 2)
+* [`src/tool-demos/environment-model.js`](https://tinyurl.com/SICPJS-env-diagram): environment model visualizer (following SICP JS chapter 3)
+
+## Library Demos
+
+* [`src/module-demos/runes.js`](https://tinyurl.com/SICPJS-hearts): the "picture language" of SICP JS 2.2.4
+* [`src/module-demos/twist.js`](https://tinyurl.com/SICPJS-twist): some fun with the "picture language"
+* [`src/module-demos/curves.js`](https://tinyurl.com/SICPJS-circle): a "curves" library for drawing curves with functional programming
+* [`src/module-demos/times.js`](https://tinyurl.com/SICPJS-timestables): visual times tables using the "curves" library
+* [`src/module-demos/sounds.js`](https://tinyurl.com/SICPJS-siren): a "sounds" library for generating sounds and music, starting from their constituent sine waves
+* [`src/module-demos/bohemian.js`](https://tinyurl.com/SICPJS-rhapsody): Bohemian Rhapsody cover using the "sounds" library 
+* [`src/module-demos/pix-n-flix.js`](https://tinyurl.com/SICP-distortion): a library for image and video processing, based on the constituent pixels
+
 ## Test
-* [`src/test/framework/main.js`](https://github.com/source-academy/source-programs/blob/master/src/test/framework/): test framework for Source programs
+* [`src/test/framework/main.js`](https://github.com/source-academy/source-programs/blob/master/src/test/framework/): test framework for Source programs, written in Source §4

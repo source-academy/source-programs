@@ -295,7 +295,7 @@ function print_program(P) {
                 stringify(P[i + 1]);
             i = i + 2;
         } else {}
-        display("", s);
+        display(undefined, s);
     }
 }
 
@@ -725,7 +725,7 @@ let L = 0;
 let N = 0;
 
 function show_executing(s) {
-    display("", "--- RUN ---" + s);
+    display(undefined, "--- RUN ---" + s);
     display( PC, "PC :");
     display( get_name(P[PC]), "instr:");
 }
@@ -733,7 +733,7 @@ function show_executing(s) {
 // for debugging: show all registers
 function show_registers(s) {
     show_executing(s);
-    display("", "--- REGISTERS ---");
+    display(undefined, "--- REGISTERS ---");
     display(RES, "RES:");
     display(  A, "A  :");
     display(  B, "B  :");
@@ -807,7 +807,7 @@ function initialize_machine(heapsize) {
 let TEMP_ROOT = -Infinity;
 
 // NEW expects tag in A and size in B
-// changes A, B, C, D, J, K
+// changes A, B, C, J, K
 function NEW() {
     J = A;
     K = B;
@@ -830,7 +830,7 @@ function NEW() {
 // can never be confused with heap addresses
 const FORWARDINGADDRESS = 0;
 
-// changes B, C, D, I
+// changes B, C, I
 function FLIP() {
     A = FROMSPACE;
     FROMSPACE = TOSPACE; 
@@ -1161,9 +1161,9 @@ function node_kind(x) {
 function show_heap(s) {
     const len = array_length(HEAP);
     let i = 0;
-    display("", "--- HEAP --- " + s);
+    display(undefined, "--- HEAP --- " + s);
     while (i < len) {
-        display("", stringify(i) + ": " + stringify(HEAP[i]) +
+        display(undefined, stringify(i) + ": " + stringify(HEAP[i]) +
                     (is_number(HEAP[i]) && is_node_tag(HEAP[i]) 
                      ? " ("+node_kind(HEAP[i])+")" 
                      : ""));
@@ -1172,11 +1172,10 @@ function show_heap(s) {
 }
 
 function show_heap_value(address) {
-    display("", "result: heap node of type = " + 
+    display(undefined, "result: heap node of type = " + 
                 node_kind(HEAP[address]) +
                 ", value = " + 
                 stringify(HEAP[address + NUMBER_VALUE_SLOT]));
-    
 }
 
 // SVMLa implementation
@@ -1569,6 +1568,3 @@ function x(a) {         \
 }                       \
 x(2)();                 ");
 run();
-
-
-
