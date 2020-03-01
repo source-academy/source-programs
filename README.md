@@ -36,3 +36,6 @@ The virtual machines in this section are SECD-style and follow a description in 
 * [`src/virtual-machines/source-1.js`](https://github.com/source-academy/source-programs/blob/master/src/virtual-machines/source-1.js): virtual machine for a Source §1 sublanguage (without memory management)
 * [`src/virtual-machines/source-1-with-copying-gc.js`](https://github.com/source-academy/source-programs/blob/master/src/virtual-machines/source-1-with-copying-gc.js): virtual machine for a Source §1 sublanguage with a Cheney-style stop-and-copy garbage collector
 * [`src/virtual-machines/register-machine-gcd.js`](https://github.com/source-academy/source-programs/blob/master/src/virtual-machines/register-machine-gcd.js): register machine following SICP JS Section 5.2, using GCD example
+
+## Test
+* [`src/test/framework/main.js`](https://github.com/source-academy/source-programs/blob/master/src/test/framework/): test framework for Source programs
