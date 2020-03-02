@@ -5,7 +5,7 @@ Included here:
 * examples
 */
 
-/* 
+/*
 
 Compiler for language Source §1-
 
@@ -13,7 +13,7 @@ using virtual machine SVML1, Lecture Week 5 of CS4215
 
 Instructions: press "Run" to evaluate an example expression
               (scroll down and un-comment one example)
-              
+
 The language Source §1- is defined as follows:
 
 stmt    ::= expr ;
@@ -31,11 +31,11 @@ expr    ::= number
          |  expr ( expr (, expr)* )
          |  ( params ) => { stmt } ;
 binop   ::= + | - | * | / | < | > | <= | >= | === | !==
-unop    ::= !              
+unop    ::= !
 params  ::= ε | name ( , name ) . . .
 */
 
-// SYNTAX OF SOURCE §1 
+// SYNTAX OF SOURCE §1
 
 // Functions from SICP JS Section 4.1.2
 // with slight modifications
@@ -57,7 +57,7 @@ function is_self_evaluating(stmt) {
     return is_number(stmt) || is_boolean(stmt) || is_undefined(stmt);
 }
 
-function is_undefined_expression(stmt) {     
+function is_undefined_expression(stmt) {
     return is_name(stmt) && name_of_name(stmt) === "undefined";
 }
 
@@ -85,11 +85,21 @@ function is_application(expr) {
 
 function is_primitive_application(expr) {
     return is_tagged_list(expr, "application") &&
-        ! is_null(member(primitive_operator_name(expr), 
-                         list("!", "+", "-", "*", "/", "===", 
+        ! is_null(member(primitive_operator_name(expr),
+                         list("!", "+", "-", "*", "/", "===",
                               "!==", "<", ">", "<=", ">=")));
 }
 function primitive_operator_name(expr) {
+    return head(tail(head(tail(expr))));
+}
+// similarly, we distinguish pair applications by their
+// operator name
+function is_pair_operation(expr) {
+    return is_tagged_list(expr, "application") &&
+      ! is_null(member(pair_operator_name(expr),
+        list("pair", "head", "tail")));
+}
+function pair_operator_name(expr) {
     return head(tail(head(tail(expr))));
 }
 function operator(expr) {
@@ -122,7 +132,7 @@ function boolean_operator_name(expr) {
 // with "conditional_expression"
 
 function is_conditional_expression(expr) {
-    return is_tagged_list(expr, 
+    return is_tagged_list(expr,
                 "conditional_expression");
 }
 function cond_expr_pred(expr) {
@@ -143,10 +153,10 @@ function to_string(expr) {
     return (is_number(expr) || is_boolean(expr))
             ? stringify(expr)
             : length(operands(expr)) === 1
-            ? "(" + operator(expr) + 
+            ? "(" + operator(expr) +
                     to_string(list_ref(operands(expr), 0)) + ")"
-            : "(" + to_string(list_ref(operands(expr), 0)) + 
-                    operator(expr) +  
+            : "(" + to_string(list_ref(operands(expr), 0)) +
+                    operator(expr) +
                     to_string(list_ref(operands(expr), 1)) + ")";
 }
 
@@ -172,7 +182,7 @@ function is_sequence(stmt) {
 function make_sequence(stmts) {
    return list("sequence", stmts);
 }
-function sequence_statements(stmt) {   
+function sequence_statements(stmt) {
    return head(tail(stmt));
 }
 function is_empty_sequence(stmts) {
@@ -206,26 +216,29 @@ function return_statement_expression(stmt) {
 const START   =  0;
 const LDCN    =  1; // followed by: number
 const LDCB    =  2; // followed by: boolean
-const LDCU    =  3; 
-const PLUS    =  4; 
-const MINUS   =  5; 
-const TIMES   =  6; 
-const EQUAL   =  7; 
-const LESS    =  8; 
-const GREATER =  9; 
-const LEQ     = 10; 
-const GEQ     = 11; 
-const NOT     = 12; 
-const DIV     = 13; 
+const LDCU    =  3;
+const PLUS    =  4;
+const MINUS   =  5;
+const TIMES   =  6;
+const EQUAL   =  7;
+const LESS    =  8;
+const GREATER =  9;
+const LEQ     = 10;
+const GEQ     = 11;
+const NOT     = 12;
+const DIV     = 13;
 const POP     = 14;
 const ASSIGN  = 15; // followed by: index of value in environment
 const JOF     = 16; // followed by: jump address
 const GOTO    = 17; // followed by: jump address
 const LDF     = 18; // followed by: max_stack_size, address, env extensn count
-const CALL    = 19; 
+const CALL    = 19;
 const LD      = 20; // followed by: index of value in environment
-const RTN     = 21;
-const DONE    = 22; 
+const PAIR    = 21; // followed by: head value, tail value
+const HEAD    = 22; // followed by: index of pair
+const TAIL    = 23; // followed by: index of pair
+const RTN     = 24;
+const DONE    = 25;
 
 // some auxiliary constants
 // to keep track of the inline data
@@ -260,9 +273,12 @@ const OPCODES = list(
     pair(LDF,     "LDF    "),
     pair(CALL,    "CALL   "),
     pair(LD,      "LD     "),
+    pair(PAIR,    "PAIR   "),
+    pair(PAIR,    "HEAD   "),
+    pair(PAIR,    "TAIL   "),
     pair(RTN,     "RTN    "),
     pair(DONE,    "DONE   "));
-    
+
 // get a the name of an opcode, for debugging
 
 function get_name(op) {
@@ -284,7 +300,7 @@ function print_program(P) {
         const op = P[i];
         s = s + ": " + get_name(P[i]);
         i = i + 1;
-        if (op === LDCN || op === LDCB || op === GOTO || 
+        if (op === LDCN || op === LDCB || op === GOTO ||
             op === JOF || op === ASSIGN ||
             op === LDF || op === LD || op === CALL) {
             s = s + " " + stringify(P[i]);
@@ -305,10 +321,10 @@ function print_program(P) {
 // return the machine code in an array
 
 function parse_and_compile(string) {
-    
+
     // machine_code is array for machine instructions
     const machine_code = [];
-    
+
     // insert_pointer keeps track of the next free place
     // in machine_code
     let insert_pointer = 0;
@@ -328,18 +344,18 @@ function parse_and_compile(string) {
     function add_binary_instruction(op_code, arg_1, arg_2) {
         machine_code[insert_pointer] = op_code;
         machine_code[insert_pointer + 1] = arg_1;
-        machine_code[insert_pointer + 2] = arg_2;        
+        machine_code[insert_pointer + 2] = arg_2;
         insert_pointer = insert_pointer + 3;
     }
     // ternary instructions have three arguments
     function add_ternary_instruction(op_code, arg_1, arg_2, arg_3) {
         machine_code[insert_pointer] = op_code;
         machine_code[insert_pointer + 1] = arg_1;
-        machine_code[insert_pointer + 2] = arg_2;   
-        machine_code[insert_pointer + 3] = arg_3;    
+        machine_code[insert_pointer + 2] = arg_2;
+        machine_code[insert_pointer + 3] = arg_3;
         insert_pointer = insert_pointer + 4;
     }
-        
+
     // to_compile stack keeps track of remaining compiler work:
     // these are function bodies that still need to be compiled
     let to_compile = null;
@@ -354,20 +370,20 @@ function parse_and_compile(string) {
     function push_to_compile(task) {
         to_compile = pair(task, to_compile);
     }
-    
+
     // to compile a function body, we need an index table
     // to get the environment indices for each name
     // (parameters, globals and locals)
     // Each compile function returns the max operand stack
-    // size needed for running the code. When compilation of 
-    // a function body is done, the function continue_to_compile 
+    // size needed for running the code. When compilation of
+    // a function body is done, the function continue_to_compile
     // writes the max operand stack size and the address of the
     // function body to the given addresses.
 
     function make_to_compile_task(
-                 function_body, max_stack_size_address, 
+                 function_body, max_stack_size_address,
                  address_address, index_table) {
-        return list(function_body, max_stack_size_address, 
+        return list(function_body, max_stack_size_address,
                     address_address, index_table);
     }
     function to_compile_task_body(to_compile_task) {
@@ -389,14 +405,14 @@ function parse_and_compile(string) {
         return null;
     }
     function extend_index_table(t, s) {
-        return is_null(t) 
+        return is_null(t)
             ? list(pair(s, 0))
             : pair(pair(s, tail(head(t)) + 1), t);
     }
     function index_of(t, s) {
         return is_null(t)
             ? error(s, "name not found:")
-            : head(head(t)) === s 
+            : head(head(t)) === s
             ? tail(head(t))
             : index_of(tail(t), s);
     }
@@ -404,14 +420,14 @@ function parse_and_compile(string) {
     // a small complication: the toplevel function
     // needs to return the value of the last statement
     let toplevel = true;
-    
+
     function continue_to_compile() {
         while (! is_null(to_compile)) {
             const next_to_compile = pop_to_compile();
-            const address_address = 
+            const address_address =
                       to_compile_task_address_address(next_to_compile);
             machine_code[address_address] = insert_pointer;
-            const index_table = 
+            const index_table =
                       to_compile_task_index_table(next_to_compile);
             const max_stack_size_address =
                       to_compile_task_max_stack_size_address(
@@ -419,12 +435,12 @@ function parse_and_compile(string) {
             const body = to_compile_task_body(next_to_compile);
             const max_stack_size =
                       compile(body, index_table, true);
-            machine_code[max_stack_size_address] = 
+            machine_code[max_stack_size_address] =
                       max_stack_size;
             toplevel = false;
         }
     }
-    
+
     function local_names(stmt) {
         if (is_sequence(stmt)) {
             const stmts = sequence_statements(stmt);
@@ -439,10 +455,10 @@ function parse_and_compile(string) {
                 ? list(constant_declaration_name(stmt))
                 : null;
         }
-    }	  
-    
+    }
+
     // compile_arguments compiles the arguments and
-    // computes the maximal stack size needed for 
+    // computes the maximal stack size needed for
     // computing the arguments. Note that the arguments
     // themselves accumulate on the operand stack, which
     // explains the "i + compile(...)"
@@ -451,8 +467,8 @@ function parse_and_compile(string) {
         let s = length(exprs);
         let max_stack_size = 0;
         while (i < s) {
-            max_stack_size = math_max(i + 
-                                      compile(head(exprs), index_table, 
+            max_stack_size = math_max(i +
+                                      compile(head(exprs), index_table,
                                           false),
                                       max_stack_size);
             i = i + 1;
@@ -460,7 +476,7 @@ function parse_and_compile(string) {
         }
         return max_stack_size;
     }
-    
+
     function compile_boolean_operation(expr, index_table) {
         if (boolean_operator_name(expr) === "&&") {
             return compile(make_conditional_expression(
@@ -469,7 +485,7 @@ function parse_and_compile(string) {
                                          first_operand(
                                              rest_operands(
                                                  operands(expr))),
-                                         false), 
+                                         false),
                                      index_table,
                                      false);
         } else {
@@ -484,13 +500,13 @@ function parse_and_compile(string) {
                                      false);
         }
     }
-    
+
     function compile_conditional_expression(expr, index_table, insert_flag) {
-        const m_1 = compile(cond_expr_pred(expr), 
+        const m_1 = compile(cond_expr_pred(expr),
                             index_table, false);
         add_unary_instruction(JOF, NaN);
         const JOF_address_address = insert_pointer - 1;
-        const m_2 = compile(cond_expr_cons(expr), 
+        const m_2 = compile(cond_expr_cons(expr),
                             index_table, insert_flag);
         let GOTO_address_address = NaN;
         if (!insert_flag) {
@@ -498,14 +514,33 @@ function parse_and_compile(string) {
             GOTO_address_address = insert_pointer - 1;
         } else {}
         machine_code[JOF_address_address] = insert_pointer;
-        const m_3 = compile(cond_expr_alt(expr), 
+        const m_3 = compile(cond_expr_alt(expr),
                             index_table, insert_flag);
         if (!insert_flag) {
             machine_code[GOTO_address_address] = insert_pointer;
         } else {}
         return math_max(m_1, m_2, m_3);
     }
-    
+
+    function compile_pair_application(expr, index_table) {
+        const op = pair_operator_name(expr);
+        const ops = operands(expr);
+        const operand_1 = first_operand(ops);
+        const operand_2 = first_operand(rest_operands(ops));
+        const op_code = op === "pair" ? PAIR
+                      : op === "head" ? HEAD
+                      : op === "tail" ? TAIL
+                      : error(op, "unknown operator:");
+        const m_1 = compile(operand_1, index_table, false);
+        const m_2 = compile(operand_2, index_table, false);
+        display("m_1:");
+        display(m_1);
+        display("m_2:");
+        display(m_2);
+        add_nullary_instruction(op_code);
+        return math_max(m_1, m_2);
+    }
+
     function compile_primitive_application(expr, index_table) {
         const op = primitive_operator_name(expr);
         const ops = operands(expr);
@@ -532,8 +567,10 @@ function parse_and_compile(string) {
             return math_max(m_1, 1 + m_2);
         }
     }
-            
-    function compile_application(expr, index_table) {    
+
+    function compile_application(expr, index_table) {
+        display(expr);
+      display(index_table);
         const max_stack_operator = compile(operator(expr),
                                        index_table, false);
         const max_stack_operands = compile_arguments(operands(expr),
@@ -541,44 +578,44 @@ function parse_and_compile(string) {
         add_unary_instruction(CALL, length(operands(expr)));
         return math_max(max_stack_operator, max_stack_operands + 1);
     }
-    
+
     function compile_function_definition(expr, index_table) {
         const body = function_definition_body(expr);
         const locals = local_names(body);
-        const parameters = 
+        const parameters =
             map(x => name_of_name(x), function_definition_parameters(expr));
         const extended_index_table =
             accumulate((s, it) => extend_index_table(it, s),
                        index_table,
-                       append(reverse(locals), 
+                       append(reverse(locals),
                        reverse(parameters)));
-        add_ternary_instruction(LDF, NaN, NaN, 
+        add_ternary_instruction(LDF, NaN, NaN,
                                length(parameters) + length(locals));
         const max_stack_size_address = insert_pointer - 3;
         const address_address = insert_pointer - 2;
         push_to_compile(make_to_compile_task(
-                            body, max_stack_size_address, 
+                            body, max_stack_size_address,
                             address_address, extended_index_table));
         return 1;
     }
-    
+
     function compile_sequence(expr, index_table, insert_flag) {
         const statements = sequence_statements(expr);
         if (is_empty_sequence(statements)) {
             return 0;
         } else if (is_last_statement(statements)) {
-            return compile(first_statement(statements), 
+            return compile(first_statement(statements),
                            index_table, insert_flag);
         } else {
-            const m_1 = compile(first_statement(statements), 
+            const m_1 = compile(first_statement(statements),
                                 index_table, false);
             add_nullary_instruction(POP);
-            const m_2 = compile(make_sequence(rest_statements(statements)), 
+            const m_2 = compile(make_sequence(rest_statements(statements)),
                                 index_table, insert_flag);
             return math_max(m_1, m_2);
         }
     }
-    
+
     function compile_constant_declaration(expr, index_table) {
         const name = constant_declaration_name(expr);
         const index = index_of(index_table, name);
@@ -588,36 +625,40 @@ function parse_and_compile(string) {
         add_nullary_instruction(LDCU);
         return max_stack_size;
     }
-    
+
     function compile(expr, index_table, insert_flag) {
         let max_stack_size = 0;
         if (is_number(expr)) {
             add_unary_instruction(LDCN, expr);
             max_stack_size = 1;
         } else if (is_boolean(expr)) {
-            add_unary_instruction(LDCB, expr);    
+            add_unary_instruction(LDCB, expr);
             max_stack_size = 1;
         } else if (is_undefined_expression(expr)) {
-            add_nullary_instruction(LDCU);  
+            add_nullary_instruction(LDCU);
             max_stack_size = 1;
         } else if (is_boolean_operation(expr)) {
-            max_stack_size = 
+            max_stack_size =
             compile_boolean_operation(expr, index_table);
         } else if (is_conditional_expression(expr)) {
-            max_stack_size = 
+            max_stack_size =
             compile_conditional_expression(expr, index_table, insert_flag);
             insert_flag = false;
         } else if (is_primitive_application(expr)) {
-            max_stack_size = 
+            max_stack_size =
             compile_primitive_application(expr, index_table);
+        } else if (is_pair_operation(expr)) {
+            display(index_table);
+            max_stack_size =
+            compile_pair_application(expr, index_table);
         } else if (is_application(expr)) {
-            max_stack_size = 
+            max_stack_size =
             compile_application(expr, index_table);
         } else if (is_function_definition(expr)) {
             max_stack_size =
             compile_function_definition(expr, index_table);
         } else if (is_name(expr)) {
-            add_unary_instruction(LD, index_of(index_table, 
+            add_unary_instruction(LD, index_of(index_table,
                                   name_of_name(expr)));
             max_stack_size = 1;
         } else if (is_sequence(expr)) {
@@ -628,17 +669,17 @@ function parse_and_compile(string) {
             max_stack_size =
             compile_constant_declaration(expr, index_table);
         } else if (is_return_statement(expr)) {
-            max_stack_size = compile(return_statement_expression(expr), 
+            max_stack_size = compile(return_statement_expression(expr),
                                      index_table, false);
         } else {
             error(expr, "unknown expression:");
         }
-        
+
         // handling of return
         if (insert_flag) {
             if (is_return_statement(expr)) {
                 add_nullary_instruction(RTN);
-            } else if (toplevel && 
+            } else if (toplevel &&
                        (is_self_evaluating(expr) ||
                         is_undefined_expression(expr) ||
                         is_application(expr) ||
@@ -649,30 +690,30 @@ function parse_and_compile(string) {
                 add_nullary_instruction(LDCU);
                 max_stack_size = max_stack_size + 1;
                 add_nullary_instruction(RTN);
-            } 
+            }
         } else {}
         return max_stack_size;
     }
-    
+
     const program = parse(string);
     add_nullary_instruction(START);
-    add_ternary_instruction(LDF, NaN, NaN, 
+    add_ternary_instruction(LDF, NaN, NaN,
                             length(local_names(program)));
     const LDF_max_stack_size_address = insert_pointer - 3;
     const LDF_address_address = insert_pointer - 2;
     add_unary_instruction(CALL, 0);
     add_nullary_instruction(DONE);
-    
+
     const locals = reverse(local_names(program));
     const program_names_index_table =
          accumulate((s, it) => extend_index_table(it, s),
                     make_empty_index_table(),
                     locals);
-    
+
     push_to_compile(make_to_compile_task(
-                        program, 
-                        LDF_max_stack_size_address, 
-                        LDF_address_address, 
+                        program,
+                        LDF_max_stack_size_address,
+                        LDF_address_address,
                         program_names_index_table));
     continue_to_compile();
     return machine_code;
@@ -680,11 +721,11 @@ function parse_and_compile(string) {
 
 // VIRTUAL MACHINE
 
-// "registers" are the global variables of our machine. 
-// These contain primitive values (numbers or boolean 
+// "registers" are the global variables of our machine.
+// These contain primitive values (numbers or boolean
 // values) or arrays of primitive values
 
-// P is an array that contains an SVML machine program: 
+// P is an array that contains an SVML machine program:
 // the op-codes of instructions and their arguments
 let P = [];
 // PC is program counter: index of the next instruction
@@ -698,7 +739,7 @@ let ENV = -Infinity;
 // OS is address of current operand stack in HEAP; initially a dummy value
 let OS = -Infinity;
 // temporary value, used by PUSH and POP; initially a dummy value
-let RES = -Infinity;   
+let RES = -Infinity;
 
 // some general-purpose registers
 let A = 0;
@@ -735,7 +776,7 @@ function show_registers(s) {
     display(TOP_RTS, "TOP_RTS:");
 }
 
-// register that says if machine is running                   
+// register that says if machine is running
 let RUNNING = true;
 
 const NORMAL = 0;
@@ -848,7 +889,7 @@ function NEW_OS() {
 // PUSH expects its argument in A
 function PUSH_OS() {
     B = HEAP[OS + LAST_CHILD_SLOT]; // address of current top of OS
-    B = B + 1; 
+    B = B + 1;
     HEAP[OS + LAST_CHILD_SLOT] = B; // update address of current top of OS
     HEAP[OS + B] = A;
 }
@@ -952,7 +993,7 @@ function POP_RTS() {
 // 0: tag  = -102
 // 1: size = number of entries + 4
 // 2: first child = 4
-// 3: last child 
+// 3: last child
 // 4: first entry
 // 5: second entry
 // ...
@@ -975,7 +1016,7 @@ function EXTEND() {
     D = A;
     A = HEAP[A + SIZE_SLOT] - 4 + B;
     NEW_ENVIRONMENT();
-    for (B = HEAP[D + FIRST_CHILD_SLOT]; 
+    for (B = HEAP[D + FIRST_CHILD_SLOT];
          B <= HEAP[D + LAST_CHILD_SLOT];
          B = B + 1) {
         HEAP[RES + B] = HEAP[D + B];
@@ -1002,39 +1043,39 @@ function show_heap(s) {
     display(undefined, "--- HEAP --- " + s);
     while (i < len) {
         display(undefined, stringify(i) + ": " + stringify(HEAP[i]) +
-                    (is_number(HEAP[i]) && is_node_tag(HEAP[i]) 
-                     ? " ("+node_kind(HEAP[i])+")" 
+                    (is_number(HEAP[i]) && is_node_tag(HEAP[i])
+                     ? " ("+node_kind(HEAP[i])+")"
                      : ""));
         i = i + 1;
     }
 }
 
 function show_heap_value(address) {
-    display(undefined, "result: heap node of type = " + 
+    display(undefined, "result: heap node of type = " +
                 node_kind(HEAP[address]) +
-                ", value = " + 
+                ", value = " +
                 stringify(HEAP[address + NUMBER_VALUE_SLOT]));
-    
+
 }
 
 // SVMLa implementation
 
 // We implement our machine with an array M that
 // contains subroutines. Each subroutine implements
-// a machine instruction, using a nullary function. 
+// a machine instruction, using a nullary function.
 // The machine can then index into M using the op-codes
 // of the machine instructions. To be implementable on
-// common hardware, the subroutines have the 
+// common hardware, the subroutines have the
 // following structure:
 // * they have no parameters
 // * they do not return any results
 // * they do not have local variables
-// * they do not call other functions except the 
+// * they do not call other functions except the
 //   subroutines PUSH and POP
 // * each line is very simple, for example an array access
 // Ideally, each line can be implemented directly with a
 // machine instruction of a real computer. In that case,
-// the subroutines could become machine language macros, 
+// the subroutines could become machine language macros,
 // and the compiler could generate real machine code.
 
 const M = [];
@@ -1055,7 +1096,7 @@ M[LDCN] = () =>    { A = P[PC + LDCN_VALUE_OFFSET];
                      PC = PC + 2;
                    };
 
-M[LDCB] = () =>    { A = P[PC + LDCB_VALUE_OFFSET]; 
+M[LDCB] = () =>    { A = P[PC + LDCB_VALUE_OFFSET];
                      NEW_BOOL();
                      A = RES;
                      PUSH_OS();
@@ -1067,7 +1108,7 @@ M[LDCU] = () =>    { NEW_UNDEFINED();
                      PUSH_OS();
                      PC = PC + 1;
                    };
-                   
+
 M[PLUS] = () =>    { POP_OS();
                      A = HEAP[RES + NUMBER_VALUE_SLOT];
                      POP_OS();
@@ -1097,7 +1138,7 @@ M[TIMES] = () =>   { POP_OS();
                      PUSH_OS();
                      PC = PC + 1;
                    };
-     
+
 M[EQUAL] = () =>   { POP_OS();
                      A = HEAP[RES + NUMBER_VALUE_SLOT];
                      POP_OS();
@@ -1107,7 +1148,7 @@ M[EQUAL] = () =>   { POP_OS();
                      PUSH_OS();
                      PC = PC + 1;
                    };
-         
+
 M[LESS] = () =>    { POP_OS();
                      A = HEAP[RES + NUMBER_VALUE_SLOT];
                      POP_OS();
@@ -1117,7 +1158,7 @@ M[LESS] = () =>    { POP_OS();
                      PUSH_OS();
                      PC = PC + 1;
                    };
-     
+
 M[GEQ] = () =>     { POP_OS();
                      A = HEAP[RES + NUMBER_VALUE_SLOT];
                      POP_OS();
@@ -1137,7 +1178,7 @@ M[LEQ] = () =>     { POP_OS();
                      PUSH_OS();
                      PC = PC + 1;
                    };
-     
+
 M[GREATER] = () => { POP_OS();
                      A = HEAP[RES + NUMBER_VALUE_SLOT];
                      POP_OS();
@@ -1169,24 +1210,24 @@ M[DIV] = () =>     { POP_OS();
                      if (E) { STATE = DIV_ERROR; } else {}
                      if (E) { RUNNING = false; } else {}
                    };
-                   
+
 M[POP] = () =>     { POP_OS();
                      PC = PC + 1;
                    };
-                   
+
 M[ASSIGN] = () =>  { POP_OS();
-                     HEAP[ENV + HEAP[ENV + FIRST_CHILD_SLOT] 
+                     HEAP[ENV + HEAP[ENV + FIRST_CHILD_SLOT]
                               + P[PC + 1]] = RES;
                      PC = PC + 2;
                    };
-                   
+
 M[JOF] = () =>     { POP_OS();
                      A = HEAP[RES + NUMBER_VALUE_SLOT];
                      if (!A) { PC = P[PC + 1]; } else {}
                      if (A) { PC = PC + 2; } else {}
                    };
 
-M[GOTO] = () =>    { PC = P[PC + 1]; 
+M[GOTO] = () =>    { PC = P[PC + 1];
                    };
 
 M[LDF] = () =>     { A = P[PC + LDF_MAX_OS_SIZE_OFFSET];
@@ -1198,25 +1239,25 @@ M[LDF] = () =>     { A = P[PC + LDF_MAX_OS_SIZE_OFFSET];
                      PC = PC + 4;
                    };
 
-M[LD] = () =>      { A = HEAP[ENV + HEAP[ENV + FIRST_CHILD_SLOT] 
+M[LD] = () =>      { A = HEAP[ENV + HEAP[ENV + FIRST_CHILD_SLOT]
                                   + P[PC + 1]];
                      PUSH_OS();
                      PC = PC + 2;
                    };
-                   
+
 M[CALL] = () =>    { G = P[PC + 1];  // lets keep number of arguments in G
                      // we peek down OS to get the closure
-                     F = HEAP[OS + HEAP[OS + LAST_CHILD_SLOT] - G]; 
+                     F = HEAP[OS + HEAP[OS + LAST_CHILD_SLOT] - G];
                      // prep for EXTEND
                      A = HEAP[F + CLOSURE_ENV_SLOT];
                      // A is now env to be extended
-                     H = HEAP[A + LAST_CHILD_SLOT]; 
+                     H = HEAP[A + LAST_CHILD_SLOT];
                      // H is now offset of last child slot
                      B = HEAP[F + CLOSURE_ENV_EXTENSION_COUNT_SLOT];
                      // B is now the environment extension count
                      EXTEND(); // after this, RES is new env
                      E = RES;
-                     H = E + H + G; 
+                     H = E + H + G;
                      // H is now address where last argument goes in new env
                      for (C = H; C > H - G; C = C - 1) {
                          POP_OS(); // now RES has the address of the next arg
@@ -1232,7 +1273,7 @@ M[CALL] = () =>    { G = P[PC + 1];  // lets keep number of arguments in G
                      OS = RES;
                      ENV = E;
                    };
-                   
+
 M[RTN] = () =>     { POP_RTS();
                      H = RES;
                      PC = HEAP[H + RTS_FRAME_PC_SLOT];
@@ -1245,23 +1286,23 @@ M[RTN] = () =>     { POP_RTS();
 
 M[DONE] = () =>    { RUNNING = false;
                    };
-                   
+
 function run() {
-    while (RUNNING) { 
+    while (RUNNING) {
         //show_registers("run loop");
         //show_heap("run loop");
         if (M[P[PC]] === undefined) {
             error(P[PC], "unknown op-code:");
         } else {
-            M[P[PC]](); 
+            M[P[PC]]();
         }
-    } 
+    }
     if (STATE === DIV_ERROR) {
         POP_OS();
         error(RES, "execution aborted:");
     } else {
         POP_OS();
-        show_heap_value(RES); 
+        show_heap_value(RES);
     }
 }
 
@@ -1296,11 +1337,9 @@ run();
 
 // compiler and VM test cases
 
-/*
- P = parse_and_compile("true ? 11 : 22;");
- display(P);
+P = parse_and_compile("pair(1, 2);");
+print_program(P);
 run();
-*/
 
 /*
 P = parse_and_compile("false ? 11 : 22;");
@@ -1322,7 +1361,7 @@ run();
 
 /*
 P = parse_and_compile("1 + 2 * 3 * 4 - 5;");
-run(); 
+run();
 */
 
 /*
@@ -1434,35 +1473,35 @@ run();
 */
 
 
-P = parse_and_compile("                         \
-function abs(x) {                               \
-    return x >= 0 ? x : 0 - x;                  \
-}                                               \
-function square(x) {                            \
-    return x * x;                               \
-}                                               \
-function average(x,y) {                         \
-    return (x + y) / 2;                         \
-}                                               \
-function sqrt(x) {                              \
-    function good_enough(guess, x) {            \
-        return abs(square(guess) - x) < 0.001;  \
-    }                                           \
-    function improve(guess, x) {                \
-        return average(guess, x / guess);       \
-    }                                           \
-    function sqrt_iter(guess, x) {              \
-        return good_enough(guess, x)            \
-                   ? guess                      \
-                   : sqrt_iter(improve(         \
-                                guess, x), x);  \
-    }                                           \
-    return sqrt_iter(1.0, x);                   \
-}                                               \
-                                                \
-sqrt(5);                                        ");
-//print_program(P);
-run();
+// P = parse_and_compile("                         \
+// function abs(x) {                               \
+//     return x >= 0 ? x : 0 - x;                  \
+// }                                               \
+// function square(x) {                            \
+//     return x * x;                               \
+// }                                               \
+// function average(x,y) {                         \
+//     return (x + y) / 2;                         \
+// }                                               \
+// function sqrt(x) {                              \
+//     function good_enough(guess, x) {            \
+//         return abs(square(guess) - x) < 0.001;  \
+//     }                                           \
+//     function improve(guess, x) {                \
+//         return average(guess, x / guess);       \
+//     }                                           \
+//     function sqrt_iter(guess, x) {              \
+//         return good_enough(guess, x)            \
+//                    ? guess                      \
+//                    : sqrt_iter(improve(         \
+//                                 guess, x), x);  \
+//     }                                           \
+//     return sqrt_iter(1.0, x);                   \
+// }                                               \
+//                                                 \
+// sqrt(5);                                        ");
+// //print_program(P);
+// run();
 
 
 /*
