@@ -274,8 +274,8 @@ const OPCODES = list(
     pair(CALL,    "CALL   "),
     pair(LD,      "LD     "),
     pair(PAIR,    "PAIR   "),
-    pair(PAIR,    "HEAD   "),
-    pair(PAIR,    "TAIL   "),
+    pair(HEAD,    "HEAD   "),
+    pair(TAIL,    "TAIL   "),
     pair(RTN,     "RTN    "),
     pair(DONE,    "DONE   "));
 
@@ -525,20 +525,21 @@ function parse_and_compile(string) {
     function compile_pair_application(expr, index_table) {
         const op = pair_operator_name(expr);
         const ops = operands(expr);
-        const operand_1 = first_operand(ops);
-        const operand_2 = first_operand(rest_operands(ops));
         const op_code = op === "pair" ? PAIR
                       : op === "head" ? HEAD
                       : op === "tail" ? TAIL
                       : error(op, "unknown operator:");
+        const operand_1 = first_operand(ops);
         const m_1 = compile(operand_1, index_table, false);
-        const m_2 = compile(operand_2, index_table, false);
-        display("m_1:");
-        display(m_1);
-        display("m_2:");
-        display(m_2);
-        add_nullary_instruction(op_code);
-        return math_max(m_1, m_2);
+        if (op_code === PAIR) {
+            const operand_2 = first_operand(rest_operands(ops));
+            const m_2 = compile(operand_2, index_table, false);
+            add_nullary_instruction(op_code);
+            return math_max(m_1, m_2);
+        } else {
+            add_nullary_instruction(op_code);
+            return m_1;
+        }
     }
 
     function compile_primitive_application(expr, index_table) {
@@ -569,8 +570,6 @@ function parse_and_compile(string) {
     }
 
     function compile_application(expr, index_table) {
-        display(expr);
-      display(index_table);
         const max_stack_operator = compile(operator(expr),
                                        index_table, false);
         const max_stack_operands = compile_arguments(operands(expr),
@@ -648,7 +647,6 @@ function parse_and_compile(string) {
             max_stack_size =
             compile_primitive_application(expr, index_table);
         } else if (is_pair_operation(expr)) {
-            display(index_table);
             max_stack_size =
             compile_pair_application(expr, index_table);
         } else if (is_application(expr)) {
@@ -902,6 +900,34 @@ function POP_OS() {
     RES = HEAP[OS + B];
 }
 
+// array nodes layout
+//
+// 0: tag  = -107
+// 1: size = depends on initialization
+// 2: first child = 4
+// 3: last child
+// 4: value in index 0
+// 5: value in index 1
+// ....
+
+const ARRAY_TAG = -107;
+// implementation of pair utilizing array of size 2
+const PAIR_SIZE = 6;
+const HEAD_SLOT = FIRST_CHILD_SLOT;
+const TAIL_SLOT = FIRST_CHILD_SLOT + 1;
+
+// expects array size in A
+function NEW_ARRAY() {
+    B = A;
+    A = ARRAY_TAG;
+    NEW();
+    HEAP[RES + FIRST_CHILD_SLOT] = 4;
+    HEAP[RES + LAST_CHILD_SLOT] = 4 + B;
+    for (let i = 0; i < B; i = i + 1) {
+        HEAP[RES + FIRST_CHILD_SLOT + i] = 0;
+    }
+}
+
 // closure nodes layout
 //
 // 0: tag  = -103
@@ -929,10 +955,10 @@ function NEW_CLOSURE() {
     NEW();
     A = E;
     B = F;
-	HEAP[RES + FIRST_CHILD_SLOT] = CLOSURE_ENV_SLOT;
-	HEAP[RES + LAST_CHILD_SLOT] = CLOSURE_ENV_SLOT;
-	HEAP[RES + CLOSURE_OS_SIZE_SLOT] = A;
-	HEAP[RES + CLOSURE_ADDRESS_SLOT] = B;
+	  HEAP[RES + FIRST_CHILD_SLOT] = CLOSURE_ENV_SLOT;
+	  HEAP[RES + LAST_CHILD_SLOT] = CLOSURE_ENV_SLOT;
+	  HEAP[RES + CLOSURE_OS_SIZE_SLOT] = A;
+	  HEAP[RES + CLOSURE_ADDRESS_SLOT] = B;
     HEAP[RES + CLOSURE_ENV_SLOT] = ENV;
     HEAP[RES + CLOSURE_ENV_EXTENSION_COUNT_SLOT] = C;
 }
@@ -963,10 +989,10 @@ function NEW_RTS_FRAME() {
     A = RTS_FRAME_TAG;
     B = RTS_FRAME_SIZE;
     NEW();
-	HEAP[RES + FIRST_CHILD_SLOT] = RTS_FRAME_ENV_SLOT;
-	HEAP[RES + LAST_CHILD_SLOT] = RTS_FRAME_OS_SLOT;
-	HEAP[RES + RTS_FRAME_PC_SLOT] = PC + 2; // next instruction!
-	HEAP[RES + RTS_FRAME_ENV_SLOT] = ENV;
+	  HEAP[RES + FIRST_CHILD_SLOT] = RTS_FRAME_ENV_SLOT;
+	  HEAP[RES + LAST_CHILD_SLOT] = RTS_FRAME_OS_SLOT;
+	  HEAP[RES + RTS_FRAME_PC_SLOT] = PC + 2; // next instruction!
+	  HEAP[RES + RTS_FRAME_ENV_SLOT] = ENV;
     HEAP[RES + RTS_FRAME_OS_SLOT] = OS;
 }
 
@@ -1035,6 +1061,7 @@ function node_kind(x) {
          : x ===          OS_TAG ? "OS"
          : x ===         ENV_TAG ? "environment"
          : x ===   UNDEFINED_TAG ? "undefined"
+         : x === ARRAY_TAG ? "array"
          : " (unknown node kind)";
 }
 function show_heap(s) {
@@ -1274,6 +1301,39 @@ M[CALL] = () =>    { G = P[PC + 1];  // lets keep number of arguments in G
                      ENV = E;
                    };
 
+M[PAIR] = () =>    { // get head and tail from OS stack
+                     POP_OS();
+                     C = RES; // tail
+                     POP_OS();
+                     D = RES; // head
+                     // instantiate a pair
+                     A = PAIR_SIZE;
+                     NEW_ARRAY();
+                     HEAP[RES + HEAD_SLOT] = D;
+                     HEAP[RES + TAIL_SLOT] = C;
+                     A = RES;
+                     PUSH_OS();
+                     PC = PC + 1;
+                   };
+
+M[HEAD] = () =>    { // get address of the pair from OS stack
+                     POP_OS();
+                     C = RES;
+                     // peek into the pair
+                     A = HEAP[C + HEAD_SLOT];
+                     PUSH_OS();
+                     PC = PC + 1;
+                    };
+
+M[TAIL] = () =>    { // get address of the pair from OS stack
+                     POP_OS();
+                     C = RES;
+                     // peek into the pair
+                     A = HEAP[C + TAIL_SLOT];
+                     PUSH_OS();
+                     PC = PC + 1;
+                    };
+
 M[RTN] = () =>     { POP_RTS();
                      H = RES;
                      PC = HEAP[H + RTS_FRAME_PC_SLOT];
@@ -1337,7 +1397,7 @@ run();
 
 // compiler and VM test cases
 
-P = parse_and_compile("pair(1, 2);");
+P = parse_and_compile("const x = pair(5, pair(2, 0)); tail(x);");
 print_program(P);
 run();
 
