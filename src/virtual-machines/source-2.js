@@ -92,16 +92,6 @@ function is_primitive_application(expr) {
 function primitive_operator_name(expr) {
     return head(tail(head(tail(expr))));
 }
-// similarly, we distinguish pair applications by their
-// operator name
-function is_pair_operation(expr) {
-    return is_tagged_list(expr, "application") &&
-      ! is_null(member(pair_operator_name(expr),
-        list("pair", "head", "tail")));
-}
-function pair_operator_name(expr) {
-    return head(tail(head(tail(expr))));
-}
 function operator(expr) {
     return head(tail(expr));
 }
@@ -116,6 +106,38 @@ function first_operand(ops) {
 }
 function rest_operands(ops) {
     return tail(ops);
+}
+
+// array expressions are tagged
+// with "array_expression"
+function is_array_expression(expr) {
+    return is_tagged_list(expr,
+                  "array_expression");
+}
+function arr_elements(expr) {
+    return head(tail(expr));
+}
+function first_arr_element(ops) {
+    return head(ops);
+}
+function rest_arr_elements(ops) {
+    return tail(ops);
+}
+function no_arr_elements(ops) {
+    return is_null(ops);
+}
+
+// array accesses are tagged
+// with "array_access"
+function is_array_access(expr) {
+    return is_tagged_list(expr,
+                  "array_access");
+}
+function array_name(expr) {
+    return head(tail(expr));
+}
+function array_index(expr) {
+    return head(tail(tail((expr))));
 }
 
 // boolean operations are tagged
@@ -234,9 +256,9 @@ const GOTO    = 17; // followed by: jump address
 const LDF     = 18; // followed by: max_stack_size, address, env extensn count
 const CALL    = 19;
 const LD      = 20; // followed by: index of value in environment
-const PAIR    = 21; // followed by: head value, tail value
-const HEAD    = 22; // followed by: index of pair
-const TAIL    = 23; // followed by: index of pair
+const IARRAY  = 21; // followed by: array size
+const LARRAY  = 22;
+const AARRAY  = 23;
 const RTN     = 24;
 const DONE    = 25;
 
@@ -273,9 +295,9 @@ const OPCODES = list(
     pair(LDF,     "LDF    "),
     pair(CALL,    "CALL   "),
     pair(LD,      "LD     "),
-    pair(PAIR,    "PAIR   "),
-    pair(HEAD,    "HEAD   "),
-    pair(TAIL,    "TAIL   "),
+    pair(IARRAY,  "IARRAY "),
+    pair(LARRAY,  "LARRAY "),
+    pair(AARRAY,  "AARRAY "),
     pair(RTN,     "RTN    "),
     pair(DONE,    "DONE   "));
 
@@ -522,24 +544,24 @@ function parse_and_compile(string) {
         return math_max(m_1, m_2, m_3);
     }
 
-    function compile_pair_application(expr, index_table) {
-        const op = pair_operator_name(expr);
-        const ops = operands(expr);
-        const op_code = op === "pair" ? PAIR
-                      : op === "head" ? HEAD
-                      : op === "tail" ? TAIL
-                      : error(op, "unknown operator:");
-        const operand_1 = first_operand(ops);
-        const m_1 = compile(operand_1, index_table, false);
-        if (op_code === PAIR) {
-            const operand_2 = first_operand(rest_operands(ops));
-            const m_2 = compile(operand_2, index_table, false);
-            add_nullary_instruction(op_code);
-            return math_max(m_1, m_2);
-        } else {
-            add_nullary_instruction(op_code);
-            return m_1;
+    function compile_array_expression(expr, index_table) {
+        const length_of_array = length(head(tail(expr)));
+        compile(length_of_array, index_table, false);
+        add_nullary_instruction(IARRAY);
+        let ops = arr_elements(expr);
+        while (!no_arr_elements(ops)) {
+            compile(first_arr_element(ops), index_table, false);
+            ops = rest_arr_elements(ops);
         }
+        add_nullary_instruction(LARRAY);
+        return 1;
+    }
+
+    function compile_array_access(expr, index_table) {
+        compile(array_name(expr), index_table, false);
+        compile(array_index(expr), index_table, false);
+        add_nullary_instruction(AARRAY);
+        return 1;
     }
 
     function compile_primitive_application(expr, index_table) {
@@ -646,9 +668,12 @@ function parse_and_compile(string) {
         } else if (is_primitive_application(expr)) {
             max_stack_size =
             compile_primitive_application(expr, index_table);
-        } else if (is_pair_operation(expr)) {
+        } else if (is_array_expression(expr)) {
             max_stack_size =
-            compile_pair_application(expr, index_table);
+              compile_array_expression(expr, index_table);
+        } else if (is_array_access(expr)) {
+            max_stack_size =
+              compile_array_access(expr, index_table);
         } else if (is_application(expr)) {
             max_stack_size =
             compile_application(expr, index_table);
@@ -911,20 +936,16 @@ function POP_OS() {
 // ....
 
 const ARRAY_TAG = -107;
-// implementation of pair utilizing array of size 2
-const PAIR_SIZE = 6;
-const HEAD_SLOT = FIRST_CHILD_SLOT;
-const TAIL_SLOT = FIRST_CHILD_SLOT + 1;
 
 // expects array size in A
 function NEW_ARRAY() {
-    B = A;
+    B = A + 4; // add the book keeping slots
     A = ARRAY_TAG;
     NEW();
     HEAP[RES + FIRST_CHILD_SLOT] = 4;
-    HEAP[RES + LAST_CHILD_SLOT] = 4 + B;
+    HEAP[RES + LAST_CHILD_SLOT] = B - 1;
     for (let i = 0; i < B; i = i + 1) {
-        HEAP[RES + FIRST_CHILD_SLOT + i] = 0;
+        HEAP[RES + HEAP[RES + FIRST_CHILD_SLOT] + i] = 0;
     }
 }
 
@@ -1061,7 +1082,7 @@ function node_kind(x) {
          : x ===          OS_TAG ? "OS"
          : x ===         ENV_TAG ? "environment"
          : x ===   UNDEFINED_TAG ? "undefined"
-         : x === ARRAY_TAG ? "array"
+         : x ===       ARRAY_TAG ? "array"
          : " (unknown node kind)";
 }
 function show_heap(s) {
@@ -1078,11 +1099,37 @@ function show_heap(s) {
 }
 
 function show_heap_value(address) {
-    display(undefined, "result: heap node of type = " +
+    if (node_kind(HEAP[address])=== "array") {
+        let display_text = "result: heap node of type = " +
+                           node_kind(HEAP[address]) + ", value = " +
+                           show_array_value(address);
+        display(undefined, display_text + "]");
+    } else {
+        display(undefined, "result: heap node of type = " +
                 node_kind(HEAP[address]) +
                 ", value = " +
                 stringify(HEAP[address + NUMBER_VALUE_SLOT]));
+    }
+}
 
+function show_array_value(address) {
+    let display_text = "[ ";
+    const size = HEAP[address + SIZE_SLOT];
+    for (let i = 0; i < size - 4; i = i + 1) {
+        const addr = HEAP[address + HEAP[address + FIRST_CHILD_SLOT] + i];
+        // show_heap("");
+        // display(addr);
+        const value_type = node_kind(HEAP[addr]);
+        // display(value_type === "number");
+        // display(HEAP[addr + NUMBER_VALUE_SLOT]);
+        display_text = display_text +
+                       value_type === "number" ? HEAP[addr + NUMBER_VALUE_SLOT]
+                       : value_type === "array" ? show_array_value(addr)
+                       : "unknown type";
+        display_text = display_text + ", ";
+    }
+    display_text = display_text + "]";
+    return display_text;
 }
 
 // SVMLa implementation
@@ -1301,46 +1348,51 @@ M[CALL] = () =>    { G = P[PC + 1];  // lets keep number of arguments in G
                      ENV = E;
                    };
 
-M[PAIR] = () =>    { // get head and tail from OS stack
-                     POP_OS();
-                     C = RES; // tail
-                     POP_OS();
-                     D = RES; // head
-                     // instantiate a pair
-                     A = PAIR_SIZE;
-                     NEW_ARRAY();
-                     HEAP[RES + HEAD_SLOT] = D;
-                     HEAP[RES + TAIL_SLOT] = C;
+M[IARRAY] = () =>    {
+                     POP_OS(); // get array size
+                     A = HEAP[RES + NUMBER_VALUE_SLOT] + 1;
+                     G = OS;
+                     NEW_OS(); // initialize a new OS with array size
                      A = RES;
-                     PUSH_OS();
+                     F = OS;    // stores the old OS address to F
+                     OS = A;    // change OS pointer to new OS for array initialization
+                     A = G;
+                     PUSH_OS(); // push the address of the old OS to new OS
                      PC = PC + 1;
                    };
 
-M[HEAD] = () =>    { // get address of the pair from OS stack
+M[LARRAY] = () =>    { // get head and tail from OS stack
+                     A = HEAP[OS + SIZE_SLOT] - 4; // get the number of child nodes in the array OS
+                     C = A;
+                     NEW_ARRAY();
+                     A = RES;
+                     for (let i = C - 2; i >= 0; i = i - 1) {
+                         POP_OS();
+                         HEAP[A + HEAP[A + FIRST_CHILD_SLOT] + i] = RES;
+                     }
                      POP_OS();
-                     C = RES;
-                     // peek into the pair
-                     A = HEAP[C + HEAD_SLOT];
+                     OS = RES;   // change the OS back to the old one
                      PUSH_OS();
                      PC = PC + 1;
-                    };
+};
 
-M[TAIL] = () =>    { // get address of the pair from OS stack
+M[AARRAY] = () =>  {
                      POP_OS();
-                     C = RES;
-                     // peek into the pair
-                     A = HEAP[C + TAIL_SLOT];
+                     C = RES; // get index of the array access in D
+                     D = HEAP[C + NUMBER_VALUE_SLOT];
+                     POP_OS(); // get address of the array in RES
+                     A = HEAP[RES + HEAP[RES + FIRST_CHILD_SLOT] + D];
                      PUSH_OS();
                      PC = PC + 1;
                     };
 
 M[RTN] = () =>     { POP_RTS();
-                     H = RES;
-                     PC = HEAP[H + RTS_FRAME_PC_SLOT];
-                     ENV = HEAP[H + RTS_FRAME_ENV_SLOT];
-                     POP_OS();
-                     A = RES;
-                     OS = HEAP[H + RTS_FRAME_OS_SLOT];
+    H = RES;
+    PC = HEAP[H + RTS_FRAME_PC_SLOT];
+    ENV = HEAP[H + RTS_FRAME_ENV_SLOT];
+    POP_OS();
+    A = RES;
+    OS = HEAP[H + RTS_FRAME_OS_SLOT];
                      PUSH_OS();
                     };
 
@@ -1397,7 +1449,28 @@ run();
 
 // compiler and VM test cases
 
-P = parse_and_compile("const x = pair(5, pair(2, 0)); tail(x);");
+// P = parse_and_compile("const x = pair(500, pair(1, 2)); \
+// \
+// //head(x);\
+// //tail(x);");
+// print_program(P);
+// run();
+
+P = parse_and_compile("\
+const y = 107;\
+function pair(x, y) {\
+    return [x, y];\
+}\
+function head(arr) {\
+    return arr[0];\
+}\
+function tail(arr) {\
+    return arr[1];\
+}\
+const x = pair(1, 2);\
+const z = tail(x);\
+z + y;\
+");
 print_program(P);
 run();
 
