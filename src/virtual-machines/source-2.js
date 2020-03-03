@@ -7,14 +7,14 @@ Included here:
 
 /*
 
-Compiler for language Source §1-
+Compiler for language Source §2- (upgraded from Source §1)
 
 using virtual machine SVML1, Lecture Week 5 of CS4215
 
 Instructions: press "Run" to evaluate an example expression
               (scroll down and un-comment one example)
 
-The language Source §1- is defined as follows:
+The language Source §2- is defined as follows:
 
 stmt    ::= expr ;
          |  const x = expr ;
@@ -35,7 +35,7 @@ unop    ::= !
 params  ::= ε | name ( , name ) . . .
 */
 
-// SYNTAX OF SOURCE §1
+// SYNTAX OF SOURCE §2
 
 // Functions from SICP JS Section 4.1.2
 // with slight modifications
@@ -54,7 +54,8 @@ function name_of_name(stmt) {
 }
 
 function is_self_evaluating(stmt) {
-    return is_number(stmt) || is_boolean(stmt) || is_undefined(stmt);
+    return is_number(stmt) || is_boolean(stmt) || is_undefined(stmt) ||
+      is_array_expression(stmt) || is_null(stmt);
 }
 
 function is_undefined_expression(stmt) {
@@ -259,8 +260,9 @@ const LD      = 20; // followed by: index of value in environment
 const IARRAY  = 21; // followed by: array size
 const LARRAY  = 22;
 const AARRAY  = 23;
-const RTN     = 24;
-const DONE    = 25;
+const LDNULL  = 24;
+const RTN     = 25;
+const DONE    = 26;
 
 // some auxiliary constants
 // to keep track of the inline data
@@ -295,9 +297,10 @@ const OPCODES = list(
     pair(LDF,     "LDF    "),
     pair(CALL,    "CALL   "),
     pair(LD,      "LD     "),
-    pair(IARRAY,  "IARRAY "),
-    pair(LARRAY,  "LARRAY "),
-    pair(AARRAY,  "AARRAY "),
+    pair(IARRAY,  "IARRAY "), // Initiate ARRAY creation
+    pair(LARRAY,  "LARRAY "), // Load ARRAY (part of array creation)
+    pair(AARRAY,  "AARRAY "), // Access ARRAY
+    pair(LDNULL,  "LDNULL "),
     pair(RTN,     "RTN    "),
     pair(DONE,    "DONE   "));
 
@@ -674,6 +677,9 @@ function parse_and_compile(string) {
         } else if (is_array_access(expr)) {
             max_stack_size =
               compile_array_access(expr, index_table);
+        } else if (is_null(expr)) {
+            add_nullary_instruction(LDNULL);
+            max_stack_size = 1;
         } else if (is_application(expr)) {
             max_stack_size =
             compile_application(expr, index_table);
@@ -718,6 +724,19 @@ function parse_and_compile(string) {
         return max_stack_size;
     }
 
+    const predefined_functions = "\
+    function pair(x, y) {\
+        return [x, y];\
+    }\
+    function head(arr) {\
+        return arr[0]; \
+    }\
+    function tail(arr) { \
+        return arr[1]; \
+    }\
+    ";
+
+    // const prepended_string = predefined_functions + string; // prepend the program with pre-defined functions
     const program = parse(string);
     add_nullary_instruction(START);
     add_ternary_instruction(LDF, NaN, NaN,
@@ -949,6 +968,24 @@ function NEW_ARRAY() {
     }
 }
 
+// null nodes layout
+//
+// 0: tag  = -108
+// 1: size = 4
+// 2: first child = 5 (no children)
+// 3: last child = 4 (must be less than first child)
+
+const NULL_TAG = -108;
+const NULL_SIZE = 4;
+
+function NEW_NULL() {
+    A = NULL_TAG;
+    B = NULL_SIZE;
+    NEW();
+    HEAP[RES + FIRST_CHILD_SLOT] = 5;
+    HEAP[RES + LAST_CHILD_SLOT] = 4; // no children
+}
+
 // closure nodes layout
 //
 // 0: tag  = -103
@@ -1083,6 +1120,7 @@ function node_kind(x) {
          : x ===         ENV_TAG ? "environment"
          : x ===   UNDEFINED_TAG ? "undefined"
          : x ===       ARRAY_TAG ? "array"
+         : x ===        NULL_TAG ? "null"
          : " (unknown node kind)";
 }
 function show_heap(s) {
@@ -1117,15 +1155,13 @@ function show_array_value(address) {
     const size = HEAP[address + SIZE_SLOT];
     for (let i = 0; i < size - 4; i = i + 1) {
         const addr = HEAP[address + HEAP[address + FIRST_CHILD_SLOT] + i];
-        // show_heap("");
-        // display(addr);
         const value_type = node_kind(HEAP[addr]);
-        // display(value_type === "number");
-        // display(HEAP[addr + NUMBER_VALUE_SLOT]);
         display_text = display_text +
-                       value_type === "number" ? HEAP[addr + NUMBER_VALUE_SLOT]
-                       : value_type === "array" ? show_array_value(addr)
-                       : "unknown type";
+                       (value_type === "number"
+                           ? stringify(HEAP[addr + NUMBER_VALUE_SLOT])
+                           : (value_type === "array"
+                               ? show_array_value(addr)
+                               : "unknown type"));
         display_text = display_text + ", ";
     }
     display_text = display_text + "]";
@@ -1362,11 +1398,11 @@ M[IARRAY] = () =>    {
                    };
 
 M[LARRAY] = () =>    { // get head and tail from OS stack
-                     A = HEAP[OS + SIZE_SLOT] - 4; // get the number of child nodes in the array OS
+                     A = HEAP[OS + SIZE_SLOT] - 5; // get the number of child nodes in the array OS
                      C = A;
                      NEW_ARRAY();
                      A = RES;
-                     for (let i = C - 2; i >= 0; i = i - 1) {
+                     for (let i = C - 1; i >= 0; i = i - 1) {
                          POP_OS();
                          HEAP[A + HEAP[A + FIRST_CHILD_SLOT] + i] = RES;
                      }
@@ -1382,6 +1418,12 @@ M[AARRAY] = () =>  {
                      D = HEAP[C + NUMBER_VALUE_SLOT];
                      POP_OS(); // get address of the array in RES
                      A = HEAP[RES + HEAP[RES + FIRST_CHILD_SLOT] + D];
+                     PUSH_OS();
+                     PC = PC + 1;
+                    };
+
+M[LDNULL] = () =>    { NEW_NULL();
+                     A = RES;
                      PUSH_OS();
                      PC = PC + 1;
                     };
@@ -1457,19 +1499,7 @@ run();
 // run();
 
 P = parse_and_compile("\
-const y = 107;\
-function pair(x, y) {\
-    return [x, y];\
-}\
-function head(arr) {\
-    return arr[0];\
-}\
-function tail(arr) {\
-    return arr[1];\
-}\
-const x = pair(1, 2);\
-const z = tail(x);\
-z + y;\
+[1, [1,2]];\
 ");
 print_program(P);
 run();
