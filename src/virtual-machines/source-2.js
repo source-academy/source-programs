@@ -231,6 +231,16 @@ function return_statement_expression(stmt) {
    return head(tail(stmt));
 }
 
+// handling injected primitive functions
+
+function is_injected_primitive(expr) {
+    const name = name_of_name(expr);
+    return name === "_is_pair" || name === "_is_null";
+}
+function injected_function_name(expr) {
+    return head(tail(expr));
+}
+
 // OP-CODES
 
 // op-codes of machine instructions, used by compiler
@@ -257,12 +267,15 @@ const GOTO    = 17; // followed by: jump address
 const LDF     = 18; // followed by: max_stack_size, address, env extensn count
 const CALL    = 19;
 const LD      = 20; // followed by: index of value in environment
-const IARRAY  = 21; // followed by: array size
+const IARRAY  = 21;
 const LARRAY  = 22;
 const AARRAY  = 23;
 const LDNULL  = 24;
 const RTN     = 25;
 const DONE    = 26;
+// primitive function bypassing limitation of source parser
+const IS_PAIR = 27;
+const IS_NULL = 28;
 
 // some auxiliary constants
 // to keep track of the inline data
@@ -302,7 +315,10 @@ const OPCODES = list(
     pair(AARRAY,  "AARRAY "), // Access ARRAY
     pair(LDNULL,  "LDNULL "),
     pair(RTN,     "RTN    "),
-    pair(DONE,    "DONE   "));
+    pair(DONE,    "DONE   "),
+    // primitive function injection
+    pair(IS_PAIR, "IS_PAIR"),
+    pair(IS_NULL, "IS_NULL"));
 
 // get a the name of an opcode, for debugging
 
@@ -650,6 +666,18 @@ function parse_and_compile(string) {
         return max_stack_size;
     }
 
+    function compile_injected_primitive(expr, index_table) {
+        const fn = injected_function_name(expr);
+        if (fn === "_is_pair") {
+            add_unary_instruction(LD, index_of(index_table, "p"));
+            add_nullary_instruction(IS_PAIR);
+        } else if (fn === "_is_null") {
+            add_unary_instruction(LD, index_of(index_table, "p"));
+            add_nullary_instruction(IS_NULL);
+        } else {}
+        return 1;
+    }
+
     function compile(expr, index_table, insert_flag) {
         let max_stack_size = 0;
         if (is_number(expr)) {
@@ -687,8 +715,12 @@ function parse_and_compile(string) {
             max_stack_size =
             compile_function_definition(expr, index_table);
         } else if (is_name(expr)) {
-            add_unary_instruction(LD, index_of(index_table,
-                                  name_of_name(expr)));
+            if (is_injected_primitive(expr)) {
+                compile_injected_primitive(expr, index_table);
+            } else {
+                add_unary_instruction(LD, index_of(index_table,
+                  name_of_name(expr)));
+            }
             max_stack_size = 1;
         } else if (is_sequence(expr)) {
             max_stack_size =
@@ -724,20 +756,129 @@ function parse_and_compile(string) {
         return max_stack_size;
     }
 
+    // primitive functions according to source 2 specifications
+    // TODO: list
     const predefined_functions = "\
-    function pair(x, y) {\
-        return [x, y];\
+    function pair(h, t) {\
+        return [h, t];\
     }\
-    function head(arr) {\
-        return arr[0]; \
+    function is_pair(p) {\
+        return _is_pair;\
+    }\
+    function head(p) {\
+        return p[0]; \
     }\
     function tail(arr) { \
         return arr[1]; \
     }\
+    function is_null(p) {\
+        return _is_null;\
+    }\
+    function is_list(xs) {\
+        return is_null(xs)\
+                   ? true\
+                   : is_pair(xs)\
+                       ? is_list(tail(xs))\
+                       : false;\
+    }\
+    function equal(x1, x2) {\
+        return is_null(x1) && is_null(x2)\
+                   ? true\
+                   : is_pair(x1) && is_pair(x2) \
+                       ? equal(head(x1), head(x2)) && equal(tail(x1), tail(x2))\
+                       : x1 === x2;\
+    }\
+    function length(xs) {\
+        function length_aux(ys, count) {\
+            return is_null(ys)\
+                       ? count\
+                       : length_aux(tail(ys), count + 1);\
+        }\
+        return length_aux(xs, 0);\
+    }\
+    function map(f, xs) {\
+        return is_null(xs)\
+                   ? null\
+                   : pair(f(head(xs)), map(f, tail(xs)));\
+    }\
+    function build_list(n, f) {\
+        function build_from_zero(a, n, f) {\
+            return a === n\
+                       ? null\
+                       : pair(f(a), build_from_zero(a + 1, n, f));\
+        }\
+        return build_from_zero(0, n, f);\
+    }\
+    function for_each(f, xs) {\
+        function apply(f, xs) {\
+            f(head(xs));\
+            return for_each(f, tail(xs));\
+        }\
+        return is_null(xs)\
+                   ? true\
+                   : apply(f, xs);\
+    }\
+    function reverse(xs) {\
+        function rev(original, reversed) {\
+            return is_null(original) \
+                       ? reversed \
+                       : rev(tail(original), \
+                             pair(head(original), reversed));\
+        }\
+        return rev(xs, null);\
+    }\
+    function append(xs, ys) {\
+        return is_null(xs) \
+                   ? ys\
+                   : pair(head(xs), append(tail(xs), ys));\
+    }\
+    function member(x, xs) {\
+        return is_null(xs)\
+                   ? null\
+                   : x === head(xs)\
+                       ? xs\
+                       : member(x, tail(xs));\
+    }\
+    function accumulate(f, initial, xs) {\
+        return is_null(xs) \
+                   ? initial \
+                   : f(head(xs), \
+                       accumulate(f, initial, tail(xs)));\
+    }\
+    function remove(x, xs) {\
+        return is_null(xs)\
+                   ? null\
+                   : x === head(xs)\
+                       ? tail(xs)\
+                       : pair(head(xs), remove(x, tail(xs)));\
+    }\
+    function remove_all(x, xs) {\
+        return is_null(xs)\
+                   ? null\
+                   : x === head(xs)\
+                       ? remove_all(x, tail(xs))\
+                       : pair(head(xs), remove_all(x, tail(xs)));\
+    }\
+    function filter(pred, xs) {\
+        return is_null(xs)\
+                   ? null\
+                   : pred(head(xs))\
+                       ? pair(head(xs), filter(pred, tail(xs)))\
+                       : tail(xs);\
+    }\
+    function enum_list(start, end) {\
+        return build_list(end - start + 1, x => x + start);\
+    }\
+    function list_ref(xs, n) {\
+        return n <= 0\
+                   ? head(xs)\
+                   : list_ref(tail(xs), n - 1);\
+    }\
+    \
     ";
 
-    // const prepended_string = predefined_functions + string; // prepend the program with pre-defined functions
-    const program = parse(string);
+    const prepended_string = predefined_functions + string; // prepend the program with pre-defined functions
+    const program = parse(prepended_string);
     add_nullary_instruction(START);
     add_ternary_instruction(LDF, NaN, NaN,
                             length(local_names(program)));
@@ -955,6 +1096,8 @@ function POP_OS() {
 // ....
 
 const ARRAY_TAG = -107;
+// constants for pairs
+const PAIR_SIZE = 6;
 
 // expects array size in A
 function NEW_ARRAY() {
@@ -1252,6 +1395,7 @@ M[TIMES] = () =>   { POP_OS();
 M[EQUAL] = () =>   { POP_OS();
                      A = HEAP[RES + NUMBER_VALUE_SLOT];
                      POP_OS();
+                     show_registers("");
                      A = HEAP[RES + NUMBER_VALUE_SLOT] === A;
                      NEW_BOOL();
                      A = RES;
@@ -1441,6 +1585,31 @@ M[RTN] = () =>     { POP_RTS();
 M[DONE] = () =>    { RUNNING = false;
                    };
 
+// ============================== INJECTED PRIMITIVE FUNCTIONS ========================
+// utilize underlying source functions
+
+M[IS_PAIR] = () => {
+                     POP_OS(); // get address of the node being tested
+                     if (HEAP[RES + TAG_SLOT] === ARRAY_TAG && HEAP[RES + SIZE_SLOT] === PAIR_SIZE) {
+                         A = true;
+                     } else {
+                         A = false;
+                     }
+                     NEW_BOOL();
+                     A = RES;
+                     PUSH_OS();
+                     PC = PC + 1;
+                   };
+
+M[IS_NULL] = () => {
+                     POP_OS();
+                     A = HEAP[RES + TAG_SLOT] === NULL_TAG;
+                     NEW_BOOL();
+                     A = RES;
+                     PUSH_OS();
+                     PC = PC + 1;
+                   };
+
 function run() {
     while (RUNNING) {
         //show_registers("run loop");
@@ -1499,7 +1668,7 @@ run();
 // run();
 
 P = parse_and_compile("\
-[1, [1,2]];\
+null;\
 ");
 print_program(P);
 run();
@@ -1675,7 +1844,3 @@ function f(x) {         \
 f(3);                   ");
 run();
 */
-
-
-
-
