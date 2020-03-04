@@ -1,11 +1,4 @@
 /*
-Included here:
-* compiler S1- to sVML
-* sVM implementation without memory management
-* examples
-*/
-
-/*
 
 Compiler for language Source §2- (upgraded from Source §1)
 
@@ -237,7 +230,9 @@ function is_injected_primitive(expr) {
     const name = name_of_name(expr);
     return name === "_is_number"
         || name === "_is_pair"
-        || name === "_is_null";
+        || name === "_is_null"
+        || name === "_display"
+        || name === "_error";
 }
 function injected_function_name(expr) {
     return head(tail(expr));
@@ -280,6 +275,8 @@ const DONE    = 27;
 const IS_NUM  = 28;
 const IS_PAIR = 29;
 const IS_NULL = 30;
+const DISPLAY = 31;
+const ERROR   = 32;
 
 // some auxiliary constants
 // to keep track of the inline data
@@ -323,9 +320,11 @@ const OPCODES = list(
     pair(RTN,     "RTN    "),
     pair(DONE,    "DONE   "),
     // primitive function injection
-    pair(IS_NUM,  "IS_NUM"),
+    pair(IS_NUM,  "IS_NUM "),
     pair(IS_PAIR, "IS_PAIR"),
-    pair(IS_NULL, "IS_NULL"));
+    pair(IS_NULL, "IS_NULL"),
+    pair(DISPLAY, "DISPLAY"),
+    pair(ERROR,   "ERROR  "));
 
 // get a the name of an opcode, for debugging
 
@@ -349,7 +348,7 @@ function print_program(P) {
         s = s + ": " + get_name(P[i]);
         i = i + 1;
         if (op === LDCN || op === LDCB || op === LDCS || op === GOTO ||
-            op === JOF || op === ASSIGN ||
+            op === JOF || op === ASSIGN || op === DISPLAY || op === ERROR ||
             op === LDF || op === LD || op === CALL) {
             s = s + " " + stringify(P[i]);
             i = i + 1;
@@ -684,6 +683,12 @@ function parse_and_compile(string) {
         } else if (fn === "_is_null") {
             add_unary_instruction(LD, index_of(index_table, "p"));
             add_nullary_instruction(IS_NULL);
+        } else if (fn === "_display") {
+            add_unary_instruction(LD, index_of(index_table, "v"));
+            add_nullary_instruction(DISPLAY);
+        } else if (fn === "_error") {
+            add_unary_instruction(LD, index_of(index_table, "e"));
+            add_nullary_instruction(ERROR);
         } else {}
         return 1;
     }
@@ -772,6 +777,12 @@ function parse_and_compile(string) {
     // primitive functions according to source 2 specifications
     // TODO: list
     const predefined_functions = "\
+    function display(v) {\
+        return _display;\
+    }\
+    function error(e) {\
+        return _error;\
+    }\
     function is_number(v) {\
         return _is_number;\
     }\
@@ -1336,18 +1347,19 @@ function show_heap_value(address) {
 }
 
 function show_array_value(address) {
-    let display_text = "[ ";
+    let display_text = "[";
     const size = HEAP[address + SIZE_SLOT];
     for (let i = 0; i < size - 4; i = i + 1) {
         const addr = HEAP[address + HEAP[address + FIRST_CHILD_SLOT] + i];
         const value_type = node_kind(HEAP[addr]);
         display_text = display_text +
                        (value_type === "number"
-                           ? stringify(HEAP[addr + NUMBER_VALUE_SLOT])
+                           ? stringify(HEAP[addr + NUMBER_VALUE_SLOT]) + ", "
                            : (value_type === "array"
-                               ? show_array_value(addr)
-                               : "unknown type"));
-        display_text = display_text + ", ";
+                               ? show_array_value(addr) + ", "
+                               : (value_type === "null"
+                                   ? "null"
+                                   : "unknown type")));
     }
     display_text = display_text + "]";
     return display_text;
@@ -1680,6 +1692,22 @@ M[IS_NULL] = () => {
                      PC = PC + 1;
                    };
 
+M[DISPLAY] = () => {
+                     POP_OS();
+                     if (HEAP[RES + TAG_SLOT] === ARRAY_TAG) {
+                         display(show_array_value(RES));
+                     } else {
+                         display(HEAP[RES + NUMBER_VALUE_SLOT]);
+                     }
+                     PC = PC + 1;
+                   };
+
+M[ERROR]   = () => {
+                     POP_OS();
+                     error(HEAP[RES + NUMBER_VALUE_SLOT]);
+                     PC = PC + 1;
+                   };
+
 function run() {
     while (RUNNING) {
         //show_registers("run loop");
@@ -1738,7 +1766,8 @@ run();
 // run();
 
 P = parse_and_compile("\
-'hello' + ' world';\
+const y = pair(1, pair(2, null));\
+display(y);\
 ");
 print_program(P);
 run();
