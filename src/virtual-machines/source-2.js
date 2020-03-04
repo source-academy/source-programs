@@ -54,8 +54,8 @@ function name_of_name(stmt) {
 }
 
 function is_self_evaluating(stmt) {
-    return is_number(stmt) || is_boolean(stmt) || is_undefined(stmt) ||
-      is_array_expression(stmt) || is_null(stmt);
+    return is_number(stmt) || is_boolean(stmt) || is_string(stmt) ||
+      is_undefined(stmt) || is_array_expression(stmt) || is_null(stmt);
 }
 
 function is_undefined_expression(stmt) {
@@ -235,7 +235,9 @@ function return_statement_expression(stmt) {
 
 function is_injected_primitive(expr) {
     const name = name_of_name(expr);
-    return name === "_is_pair" || name === "_is_null";
+    return name === "_is_number"
+        || name === "_is_pair"
+        || name === "_is_null";
 }
 function injected_function_name(expr) {
     return head(tail(expr));
@@ -249,33 +251,35 @@ function injected_function_name(expr) {
 const START   =  0;
 const LDCN    =  1; // followed by: number
 const LDCB    =  2; // followed by: boolean
-const LDCU    =  3;
-const PLUS    =  4;
-const MINUS   =  5;
-const TIMES   =  6;
-const EQUAL   =  7;
-const LESS    =  8;
-const GREATER =  9;
-const LEQ     = 10;
-const GEQ     = 11;
-const NOT     = 12;
-const DIV     = 13;
-const POP     = 14;
-const ASSIGN  = 15; // followed by: index of value in environment
-const JOF     = 16; // followed by: jump address
-const GOTO    = 17; // followed by: jump address
-const LDF     = 18; // followed by: max_stack_size, address, env extensn count
-const CALL    = 19;
-const LD      = 20; // followed by: index of value in environment
-const IARRAY  = 21;
-const LARRAY  = 22;
-const AARRAY  = 23;
-const LDNULL  = 24;
-const RTN     = 25;
-const DONE    = 26;
+const LDCS    =  3; // followed by: string
+const LDCU    =  4;
+const PLUS    =  5;
+const MINUS   =  6;
+const TIMES   =  7;
+const EQUAL   =  8;
+const LESS    =  9;
+const GREATER = 10;
+const LEQ     = 11;
+const GEQ     = 12;
+const NOT     = 13;
+const DIV     = 14;
+const POP     = 15;
+const ASSIGN  = 16; // followed by: index of value in environment
+const JOF     = 17; // followed by: jump address
+const GOTO    = 18; // followed by: jump address
+const LDF     = 19; // followed by: max_stack_size, address, env extensn count
+const CALL    = 20;
+const LD      = 21; // followed by: index of value in environment
+const IARRAY  = 22;
+const LARRAY  = 23;
+const AARRAY  = 24;
+const LDNULL  = 25;
+const RTN     = 26;
+const DONE    = 27;
 // primitive function bypassing limitation of source parser
-const IS_PAIR = 27;
-const IS_NULL = 28;
+const IS_NUM  = 28;
+const IS_PAIR = 29;
+const IS_NULL = 30;
 
 // some auxiliary constants
 // to keep track of the inline data
@@ -285,6 +289,7 @@ const LDF_ADDRESS_OFFSET = 2;
 const LDF_ENV_EXTENSION_COUNT_OFFSET = 3;
 const LDCN_VALUE_OFFSET = 1;
 const LDCB_VALUE_OFFSET = 1;
+const LDCS_VALUE_OFFSET = 1;
 
 // printing opcodes for debugging
 
@@ -292,6 +297,7 @@ const OPCODES = list(
     pair(START,   "START  "),
     pair(LDCN,    "LDCN   "),
     pair(LDCB,    "LDCB   "),
+    pair(LDCS,    "LDCS   "),
     pair(LDCU,    "LDCU   "),
     pair(PLUS,    "PLUS   "),
     pair(MINUS,   "MINUS  "),
@@ -317,6 +323,7 @@ const OPCODES = list(
     pair(RTN,     "RTN    "),
     pair(DONE,    "DONE   "),
     // primitive function injection
+    pair(IS_NUM,  "IS_NUM"),
     pair(IS_PAIR, "IS_PAIR"),
     pair(IS_NULL, "IS_NULL"));
 
@@ -341,7 +348,7 @@ function print_program(P) {
         const op = P[i];
         s = s + ": " + get_name(P[i]);
         i = i + 1;
-        if (op === LDCN || op === LDCB || op === GOTO ||
+        if (op === LDCN || op === LDCB || op === LDCS || op === GOTO ||
             op === JOF || op === ASSIGN ||
             op === LDF || op === LD || op === CALL) {
             s = s + " " + stringify(P[i]);
@@ -668,7 +675,10 @@ function parse_and_compile(string) {
 
     function compile_injected_primitive(expr, index_table) {
         const fn = injected_function_name(expr);
-        if (fn === "_is_pair") {
+        if (fn === "_is_number") {
+            add_unary_instruction(LD, index_of(index_table, "v"));
+            add_nullary_instruction(IS_NUM);
+        } else if (fn === "_is_pair") {
             add_unary_instruction(LD, index_of(index_table, "p"));
             add_nullary_instruction(IS_PAIR);
         } else if (fn === "_is_null") {
@@ -685,6 +695,9 @@ function parse_and_compile(string) {
             max_stack_size = 1;
         } else if (is_boolean(expr)) {
             add_unary_instruction(LDCB, expr);
+            max_stack_size = 1;
+        } else if (is_string(expr)) {
+            add_unary_instruction(LDCS, expr);
             max_stack_size = 1;
         } else if (is_undefined_expression(expr)) {
             add_nullary_instruction(LDCU);
@@ -759,6 +772,12 @@ function parse_and_compile(string) {
     // primitive functions according to source 2 specifications
     // TODO: list
     const predefined_functions = "\
+    function is_number(v) {\
+        return _is_number;\
+    }\
+    function is_boolean(v) {\
+        return v === true || v === false;\
+    }\
     function pair(h, t) {\
         return [h, t];\
     }\
@@ -874,7 +893,6 @@ function parse_and_compile(string) {
                    ? head(xs)\
                    : list_ref(tail(xs), n - 1);\
     }\
-    \
     ";
 
     const prepended_string = predefined_functions + string; // prepend the program with pre-defined functions
@@ -1085,6 +1103,29 @@ function POP_OS() {
     RES = HEAP[OS + B];
 }
 
+// string nodes layout
+//
+// 0: tag  = -109
+// 1: size = 5  // naive implementation
+// 2: first child = 4
+// 3: last child  = 4
+// 4: string value
+
+const STRING_TAG = -109;
+const STRING_SIZE = 5;
+const STRING_VALUE_SLOT = 4;
+
+//expects string value in A
+function NEW_STRING() {
+    C = A;
+    A = STRING_TAG;
+    B = STRING_SIZE;
+    NEW();
+    HEAP[RES + FIRST_CHILD_SLOT] = 4;
+    HEAP[RES + LAST_CHILD_SLOT] = 4;
+    HEAP[RES + STRING_VALUE_SLOT] = C;
+}
+
 // array nodes layout
 //
 // 0: tag  = -107
@@ -1257,6 +1298,7 @@ function is_node_tag(x) {
 function node_kind(x) {
     return x ===      NUMBER_TAG ? "number"
          : x ===        BOOL_TAG ? "bool"
+         : x ===      STRING_TAG ? "string"
          : x ===     CLOSURE_TAG ? "closure"
          : x ===   RTS_FRAME_TAG ? "RTS frame"
          : x ===          OS_TAG ? "OS"
@@ -1356,6 +1398,13 @@ M[LDCB] = () =>    { A = P[PC + LDCB_VALUE_OFFSET];
                      PC = PC + 2;
                    };
 
+M[LDCS] = () =>    { A = P[PC + LDCS_VALUE_OFFSET];
+                     NEW_STRING();
+                     A = RES;
+                     PUSH_OS();
+                     PC = PC + 2;
+                   };
+
 M[LDCU] = () =>    { NEW_UNDEFINED();
                      A = RES;
                      PUSH_OS();
@@ -1363,10 +1412,22 @@ M[LDCU] = () =>    { NEW_UNDEFINED();
                    };
 
 M[PLUS] = () =>    { POP_OS();
-                     A = HEAP[RES + NUMBER_VALUE_SLOT];
-                     POP_OS();
-                     A = HEAP[RES + NUMBER_VALUE_SLOT] + A;
-                     NEW_NUMBER();
+                     // Overloading + operator for strings at VM level.
+                     // Might be better to leave it at compile time as a concatenation function
+
+                     // if operands are both strings
+                     if (HEAP[RES + TAG_SLOT] === STRING_TAG) {
+                         A = HEAP[RES + STRING_VALUE_SLOT];
+                         POP_OS();
+                         A = HEAP[RES + STRING_VALUE_SLOT] + A;
+                         NEW_STRING();
+                     } else {
+                         // else assume they are both numbers
+                         A = HEAP[RES + NUMBER_VALUE_SLOT];
+                         POP_OS();
+                         A = HEAP[RES + NUMBER_VALUE_SLOT] + A;
+                         NEW_NUMBER();
+                     }
                      A = RES;
                      PUSH_OS();
                      PC = PC + 1;
@@ -1588,6 +1649,15 @@ M[DONE] = () =>    { RUNNING = false;
 // ============================== INJECTED PRIMITIVE FUNCTIONS ========================
 // utilize underlying source functions
 
+M[IS_NUM]  = () => {
+                     POP_OS();
+                     A = HEAP[RES + TAG_SLOT] === NUMBER_TAG;
+                     NEW_BOOL();
+                     A = RES;
+                     PUSH_OS();
+                     PC = PC + 1;
+                    };
+
 M[IS_PAIR] = () => {
                      POP_OS(); // get address of the node being tested
                      if (HEAP[RES + TAG_SLOT] === ARRAY_TAG && HEAP[RES + SIZE_SLOT] === PAIR_SIZE) {
@@ -1668,7 +1738,7 @@ run();
 // run();
 
 P = parse_and_compile("\
-null;\
+'hello' + ' world';\
 ");
 print_program(P);
 run();
