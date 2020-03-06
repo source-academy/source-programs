@@ -923,9 +923,13 @@ const OUT_OF_MEMORY_ERROR = 2;
 // TODO: block node (-107)
 // TODO: line node(-108)
 
+
+// state of line and block
+const
+
 // Liveness of line and block
 const LIVE = 0;
-const FREE = 1;
+const TO_RECYCLE = 1;
 
 
 // block nodes layout
@@ -939,11 +943,38 @@ const FREE = 1;
 // 6: liveness (live: 0, free: 1)
 
 const BLOCK_TAG = -107;
+const BLOCK_SIZE = 1000;
+const BLOCK_STATE_SLOT = 5;
+const BLOCK_LIVENESS_SLOT = 6;
+
+// changes
+function NEW_BLOCK() {
+    A = BLOCK_TAG;
+    B = BLOCK_SIZE;
+    NEW();
+    HEAP[RES + FIRST_CHILD_SLOT] = 4;
+    HEAP[RES + LAST_CHILD_SLOT] = 6;
+    HEAP[RES + BLOCK_STATE_SLOT] = FREE;
+    HEAP[RES + BLOCK_LIVENESS_SLOT] = FREE;
+}
+
+
+// line nodes layout
+//
+// 0: tag  = -108
+// 1: size = 7
+// 2: offset of first child from the tag: 4
+// 3: offset of last child from the tag: 6
+// 4: block size
+// 5: state (free: 0, occupied: 1)
+// 6: liveness (live: 0, free: 1)
+
+const BLOCK_TAG = -107;
 const BLOCK_SIZE = 7;
 const BLOCK_SIZE_SLOT = 4;
 const BLOCK_STATE_SLOT = 5;
 const BLOCK_LIVENESS_SLOT = 6;
-const BLOCK_SIZE = 100;
+const BLOCK_SIZE = 1000;
 
 // changes
 function NEW_BLOCK() {
