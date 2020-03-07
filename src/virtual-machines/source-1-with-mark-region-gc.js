@@ -756,8 +756,9 @@ function show_registers(s) {
 
 // HEAP is array containing all dynamically allocated data structures
 let HEAP = NaN;
-// next free slot in heap
-let FREE = -Infinity;
+// bump allocator pointers
+let BUMP_HEAD = -Infinity; // for insertion
+let BUMP_TAIL = -Infinity; // for free line size checking
 // scan pointer in Cheney
 let SCAN = -Infinity;
 // the size of the heap is fixed
@@ -782,16 +783,19 @@ let TOSPACE = -Infinity;
 let FROMSPACE = -Infinity;
 let TOPOFSPACE = -Infinity;
 
+// initialize header info for Mark-Region algorithm
+let NUMBER_OF_BLOCKS = -Infinity;
+let CURR_BLOCK = -Infinity;
+let CURR_LINE = -Infinity;
+
 function initialize_machine(heapsize) {
     display(heapsize, "\nRunning VM with heap size:");
     HEAP = [];
     HEAP_SIZE = heapsize;
     HEAPBOTTOM = 0;
-    SPACESIZE = HEAP_SIZE / 2;
-    TOSPACE = HEAPBOTTOM;
-    FROMSPACE = TOSPACE + SPACESIZE;
-    TOPOFSPACE = TOSPACE + SPACESIZE - 1;
-    FREE = TOSPACE;
+    BUMP_HEAD = HEAPBOTTOM;
+    BUMP_TAIL = HEAP_SIZE;
+    INITIALIZE_BLOCKS_AND_LINES();
     TEMP_ROOT = -1;
     RUNNING = true;
     STATE = NORMAL;
@@ -811,18 +815,14 @@ let TEMP_ROOT = -Infinity;
 function NEW() {
     J = A;
     K = B;
-    if (FREE + K > TOPOFSPACE) {
-       display(FREE, "Flip! FREE:");
-	   FLIP();
+    if (BUMP_HEAD + K > BUMP_TAIL) {
+        ALLOCATE_BUMP_HEAD();
+        ALLOCATE_BUMP_TAIL();
     } else {}
-	if (FREE + K > TOPOFSPACE) {
-       STATE = OUT_OF_MEMORY_ERROR;
-       RUNNING = false;
-	} else {}
-    HEAP[FREE + TAG_SLOT] = J;
-    HEAP[FREE + SIZE_SLOT] = K;
-    RES = FREE;
-    FREE = FREE + K;
+    HEAP[BUMP_HEAD + TAG_SLOT] = J;
+    HEAP[BUMP_HEAD + SIZE_SLOT] = K;
+    RES = BUMP_HEAD;
+    BUMP_HEAD = BUMP_HEAD + K;
 }
 
 // use tag slot as forwarding address;
@@ -906,6 +906,29 @@ function MOVE() {
 	}
 }
 
+
+function INITIALIZE_BLOCKS_AND_LINES() {
+    NUMBER_OF_BLOCKS = math_floor(HEAP_SIZE / BLOCK_SIZE);
+    CURR_BLOCK = HEAPBOTTOM;
+    // populate the heap space with blocks
+    for (let i = 0; i < NUMBER_OF_BLOCKS; i = i + 1) {
+        NEW_BLOCK();
+        D = RES;
+        BUMP_HEAD = BUMP_HEAD - NUM_OF_LINES_PER_BLOCK * LINE_SIZE;
+        for (let j = 0; j < NUM_OF_LINES_PER_BLOCK; j = j + 1) {
+            A = D;
+            NEW_LINE();
+        }
+    }
+    // reallocate bump pointers for actual use
+    BUMP_HEAD = HEAPBOTTOM + BLOCK_NODE_SIZE + LINE_NODE_SIZE;
+    BUMP_TAIL = HEAPBOTTOM + BLOCK_SIZE;
+
+    CURR_BLOCK = BUMP_HEAD;
+    CURR_LINE = CURR_BLOCK + BLOCK_NODE_SIZE;
+}
+
+
 // machine states
 
 const NORMAL = 0;
@@ -925,12 +948,83 @@ const OUT_OF_MEMORY_ERROR = 2;
 
 
 // state of line and block
-const
+const OCCUPIED = 0;
+const RECYCLABLE = 1;
+const FREE = 2;
 
 // Liveness of line and block
 const LIVE = 0;
 const TO_RECYCLE = 1;
 
+
+// line nodes layout
+//
+// 0: tag  = -108
+// 1: size = 107
+// 2: offset of first child from the tag: 4
+// 3: offset of last child from the tag: 6
+// 4: block size
+// 5: state (free: 0, occupied: 1)
+// 6: liveness (live: 0, free: 1)
+
+const LINE_TAG = -108;
+const LINE_NODE_SIZE = 7;
+const LINE_SIZE = 20 + LINE_NODE_SIZE;
+const PARENT_BLOCK_SLOT = 4;
+const LINE_STATE_SLOT = 5;
+const LINE_LIVENESS_SLOT = 6;
+
+// expects parent block address in A
+// changes A, B, C
+function NEW_LINE() {
+    C = A;
+    A = LINE_TAG;
+    B = LINE_SIZE;
+    NEW();
+    HEAP[RES + FIRST_CHILD_SLOT] = 4;
+    HEAP[RES + LAST_CHILD_SLOT] = 6;
+    HEAP[RES + PARENT_BLOCK_SLOT] = C;
+    HEAP[RES + LINE_STATE_SLOT] = FREE;
+    HEAP[RES + LINE_LIVENESS_SLOT] = TO_RECYCLE;
+}
+
+function NEXT_FREE_LINE() {
+    A = CURR_BLOCK;
+    // if current line is the last line in the block
+    // go to next available block to find new free line
+    if (CURR_BLOCK + BLOCK_SIZE - CURR_LINE < LINE_SIZE) {
+        GET_NEXT_RECYCLABLE_BLOCK();
+        A = RES;
+    } else {}
+        // a recyclable block is guaranteed to have free line
+    for (let i = 0; i < NUM_OF_LINES_PER_BLOCK; i = i + 1) {
+        display(A);
+        if (HEAP[A + LINE_STATE_SLOT] === FREE) {
+            RES = A;
+            break;
+        } else {}
+    }
+}
+
+
+// for bump allocator (head)
+function ALLOCATE_BUMP_HEAD() {
+    NEXT_FREE_LINE();
+    BUMP_HEAD = RES;
+}
+
+
+// for bump allocator (tail)
+// returns the address of the last byte of contiguous free space in a block
+function ALLOCATE_BUMP_TAIL() {
+    A = CURR_BLOCK;
+    B = CURR_LINE;
+    while (HEAP[B + LINE_STATE_SLOT] === FREE
+           || HEAP[B + LINE_SIZE + TAG_SLOT] === LINE_TAG) {
+        B = B + LINE_SIZE;
+    }
+    BUMP_TAIL = B + LINE_SIZE - 1;
+}
 
 // block nodes layout
 //
@@ -938,14 +1032,20 @@ const TO_RECYCLE = 1;
 // 1: size = 7
 // 2: offset of first child from the tag: 4
 // 3: offset of last child from the tag: 6
-// 4: block size
-// 5: state (free: 0, occupied: 1)
-// 6: liveness (live: 0, free: 1)
+// 4: state (free: 0, occupied: 1)
+// 5: liveness (live: 0, free: 1)
+// 6: line 1
+// 7: line 2
+// ...
 
 const BLOCK_TAG = -107;
-const BLOCK_SIZE = 1000;
-const BLOCK_STATE_SLOT = 5;
-const BLOCK_LIVENESS_SLOT = 6;
+const BLOCK_NODE_SIZE = 6;
+// each block contains 10 lines
+const NUM_OF_LINES_PER_BLOCK = 10;
+const BLOCK_SIZE = 10 * LINE_SIZE + BLOCK_NODE_SIZE;
+const BLOCK_STATE_SLOT = 4;
+const BLOCK_LIVENESS_SLOT = 5;
+const NO_BLOCK_FOUND = -1;
 
 // changes
 function NEW_BLOCK() {
@@ -955,37 +1055,38 @@ function NEW_BLOCK() {
     HEAP[RES + FIRST_CHILD_SLOT] = 4;
     HEAP[RES + LAST_CHILD_SLOT] = 6;
     HEAP[RES + BLOCK_STATE_SLOT] = FREE;
-    HEAP[RES + BLOCK_LIVENESS_SLOT] = FREE;
+    HEAP[RES + BLOCK_LIVENESS_SLOT] = TO_RECYCLE;
+}
+
+function GET_FREE_BLOCK() {
+    let BLOCK_ITER = HEAPBOTTOM;
+    for (let i = 0; i <= NUMBER_OF_BLOCKS; i = i + 1) {
+        // if no block is recyclable
+        if (i >= NUMBER_OF_BLOCKS) {
+            RES = NO_BLOCK_FOUND;
+        } else if (HEAP[BLOCK_ITER + BLOCK_STATE_SLOT] === FREE) {
+            RES = BLOCK_ITER;
+            break;
+        } else {
+            BLOCK_ITER = BLOCK_ITER + BLOCK_SIZE;
+        }
+    }
 }
 
 
-// line nodes layout
-//
-// 0: tag  = -108
-// 1: size = 7
-// 2: offset of first child from the tag: 4
-// 3: offset of last child from the tag: 6
-// 4: block size
-// 5: state (free: 0, occupied: 1)
-// 6: liveness (live: 0, free: 1)
-
-const BLOCK_TAG = -107;
-const BLOCK_SIZE = 7;
-const BLOCK_SIZE_SLOT = 4;
-const BLOCK_STATE_SLOT = 5;
-const BLOCK_LIVENESS_SLOT = 6;
-const BLOCK_SIZE = 1000;
-
-// changes
-function NEW_BLOCK() {
-    A = BLOCK_TAG;
-    B = BLOCK_SIZE;
-    NEW();
-    HEAP[RES + FIRST_CHILD_SLOT] = 4;
-    HEAP[RES + LAST_CHILD_SLOT] = 6;
-    HEAP[RES + BLOCK_SIZE_SLOT] = BLOCK_SIZE;
-    HEAP[RES + BLOCK_STATE_SLOT] = FREE;
-    HEAP[RES + BLOCK_LIVENESS_SLOT] = FREE;
+function GET_NEXT_RECYCLABLE_BLOCK() {
+    let BLOCK_ITER = HEAPBOTTOM;
+    for (let i = 0; i <= NUMBER_OF_BLOCKS; i = i + 1) {
+        // if no block is recyclable
+        if (i >= NUMBER_OF_BLOCKS) {
+            RES = NO_BLOCK_FOUND;
+        } else if (HEAP[BLOCK_ITER + BLOCK_STATE_SLOT] === RECYCLABLE) {
+            RES = BLOCK_ITER;
+            break;
+        } else {
+            BLOCK_ITER = BLOCK_ITER + BLOCK_SIZE;
+        }
+    }
 }
 
 
@@ -1233,6 +1334,8 @@ function node_kind(x) {
          : x ===          OS_TAG ? "OS"
          : x ===         ENV_TAG ? "environment"
          : x ===   UNDEFINED_TAG ? "undefined"
+         : x ===       BLOCK_TAG ? "block"
+         : x ===        LINE_TAG ? "line"
          : " (unknown node kind)";
 }
 function show_heap(s) {
@@ -1517,14 +1620,17 @@ function run() {
 
 // VM test cases for Mark-Region collection
 
-initialize_machine(130);
+initialize_machine(300);
 P = parse_and_compile("     \
 function f(x) {             \
     return x + 1;           \
 }                           \
 f(2);                       ");
+show_heap("");
+print_program(P);
 run();
 //
+show_heap("");
 //
 // initialize_machine(198); // exactly 200 needed
 // P = parse_and_compile("             \
