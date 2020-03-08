@@ -832,8 +832,6 @@ function initialize_machine(linesize, linenumber, blocknumber) {
   display(linesize * linenumber * blocknumber, "\nEffective memory size:");
   HEAPBOTTOM = 0;
   INITIALIZE_BLOCKS_AND_LINES();
-  display(BUMP_HEAD);
-  display(BUMP_TAIL);
   TEMP_ROOT = -1;
   RUNNING = true;
   STATE = NORMAL;
@@ -855,7 +853,6 @@ function NEW() {
   K = B;
   if (BUMP_HEAD + K > BUMP_TAIL) {
     display("Sweeeeep!");
-    show_heap("");
     // mark and free
     MARK();
     // get new bump and limit pointers
@@ -866,10 +863,14 @@ function NEW() {
   if (BUMP_HEAD + K > BUMP_TAIL) {
     STATE = OUT_OF_MEMORY_ERROR;
     RUNNING = false;
+    show_executing("");
+    display(RUNNING);
   } else {
   }
   HEAP[BUMP_HEAD + TAG_SLOT] = J;
   HEAP[BUMP_HEAD + SIZE_SLOT] = K;
+  // TODO: remove assigning mark slot from wrapper functions
+  HEAP[BUMP_HEAD + MARK_SLOT] = UNMARKED;
   RES = BUMP_HEAD;
   BUMP_HEAD = BUMP_HEAD + K;
 }
@@ -886,23 +887,29 @@ function MARK() {
   while (B < TOP_RTS) {
     POP_RTS();
     SCAN = RES;
+    // mark node
+    HEAP[SCAN + MARK_SLOT] = MARKED;
     // mark node's block
     A = math_floor(SCAN / BLOCK_SIZE) * BLOCK_SIZE;
     HEAP[A + BLOCK_STATE_SLOT] = MARKED;
     // mark node's start line to end line
     A = SCAN;
     GET_LINE();
-    HEAP[RES + LINE_MARK_SLOT] = MARKED;
+    A = RES;
+    while (
+      HEAP[A + LINE_ADDRESS_SLOT] + LINE_SIZE <=
+      SCAN + HEAP[SCAN + SIZE_SLOT]
+    ) {
+      HEAP[A + LINE_MARK_SLOT] = MARKED;
+      A = A + LINE_BK_SIZE;
+    }
     for (
       I = HEAP[SCAN + FIRST_CHILD_SLOT];
       I <= HEAP[SCAN + LAST_CHILD_SLOT];
       I = I + 1
     ) {
       A = HEAP[SCAN + I]; // address of child
-      GET_LINE();
-      if (HEAP[RES + LINE_MARK_SLOT] === MARKED) {
-        // TODO:
-        // What if object starts from markedline but extends beyond it?
+      if (HEAP[A + LINE_MARK_SLOT] === MARKED) {
       } else {
         A = HEAP[SCAN + I]; // address of child
         PUSH_RTS();
@@ -912,13 +919,14 @@ function MARK() {
 }
 
 // expects object address in A
+// returns line node address in RES
 function GET_LINE() {
   // TODO: remove constants
   const blockaddress = math_floor(A / BLOCK_SIZE) * BLOCK_SIZE;
   const startaddress =
     HEAP[HEAP[blockaddress + FIRST_CHILD_SLOT] + LINE_ADDRESS_SLOT];
   const lineNo = math_floor((A - startaddress) / LINE_SIZE);
-  RES = blockaddress + FIRST_CHILD_SLOT + lineNo * LINE_BK_SIZE;
+  RES = HEAP[blockaddress + FIRST_CHILD_SLOT] + lineNo * LINE_BK_SIZE;
 }
 
 // use tag slot as forwarding address;
@@ -941,7 +949,6 @@ function INITIALIZE_BLOCKS_AND_LINES() {
   BUMP_HEAD = HEAP[HEAP[CURR_BLOCK + FIRST_CHILD_SLOT]];
   BUMP_TAIL = CURR_BLOCK + BLOCK_SIZE;
   CURR_LINE = CURR_BLOCK + FIRST_CHILD_SLOT;
-  show_heap("");
 }
 
 // machine states
@@ -1591,6 +1598,11 @@ M[CALL] = () => {
   N = HEAP[F + CLOSURE_OS_SIZE_SLOT]; // closure stack size
 
   EXTEND(); // after this, RES is new env
+  // check for oom
+  if (!RUNNING) {
+    return undefined;
+  } else {
+  }
 
   // Heap address of new environment can
   // be changed by NEW_RS_FRAME and NEW_OS below.
@@ -1606,10 +1618,24 @@ M[CALL] = () => {
   }
   POP_OS(); // closure is on top of OS; pop; no more needed
   NEW_RTS_FRAME(); // saves PC + 2, ENV, OS
+
+  // check for oom
+  if (!RUNNING) {
+    return undefined;
+  } else {
+  }
+
   A = RES;
   PUSH_RTS();
   A = N;
   NEW_OS();
+
+  // check for oom
+  if (!RUNNING) {
+    return undefined;
+  } else {
+  }
+
   OS = RES;
   PC = L;
   ENV = TEMP_ROOT;
@@ -1663,7 +1689,7 @@ function run() {
 // print_program(P);
 // run();
 //
-initialize_machine(10, 20, 1); // exactly 200 needed
+initialize_machine(10, 10, 1); // exactly 200 needed
 P = parse_and_compile(
   "             \
 const a = 2;                        \
