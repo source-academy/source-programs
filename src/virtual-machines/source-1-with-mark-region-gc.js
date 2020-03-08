@@ -813,21 +813,25 @@ const LAST_CHILD_SLOT = 3;
 
 // initialize header info for Mark-Region algorithm
 let NUMBER_OF_BLOCKS = -Infinity;
+// address of current working block
 let CURR_BLOCK = -Infinity;
+// address of meta data of current working line
 let CURR_LINE = -Infinity;
 
 // initialize machine with heapsize, number of blocks in heap, and number of lines in each block
-function initialize_machine(heapsize, blocknumber, linenumber) {
-  display(heapsize, "\nRunning VM with heap size:");
+function initialize_machine(linesize, linenumber, blocknumber) {
   HEAP = [];
-  HEAP_SIZE = heapsize;
-  NUMBER_OF_BLOCKS = blocknumber;
-  BLOCK_SIZE = heapsize / blocknumber;
+  LINE_SIZE = linesize;
   NUM_OF_LINES_PER_BLOCK = linenumber;
-  LINE_SIZE = (BLOCK_SIZE - BLOCK_BK_SIZE) / linenumber;
+  NUMBER_OF_BLOCKS = blocknumber;
+  BLOCK_SIZE =
+    (linesize + LINE_BK_SIZE) * NUM_OF_LINES_PER_BLOCK + BLOCK_BK_SIZE;
+  HEAP_SIZE = BLOCK_SIZE * blocknumber;
+  display(HEAP_SIZE, "\nRunning VM with heap size:");
+  display(linesize * linenumber * blocknumber, "\nEffective memory size:");
   HEAPBOTTOM = 0;
-  BUMP_HEAD = HEAPBOTTOM;
   INITIALIZE_BLOCKS_AND_LINES();
+  display(BUMP_HEAD);
   display(BUMP_TAIL);
   TEMP_ROOT = -1;
   RUNNING = true;
@@ -850,8 +854,9 @@ function NEW() {
   K = B;
   if (BUMP_HEAD + K > BUMP_TAIL) {
     display("Sweeeeep!");
-    ALLOCATE_BUMP_HEAD();
-    ALLOCATE_BUMP_TAIL();
+    show_heap("");
+    // ALLOCATE_BUMP_HEAD();
+    // ALLOCATE_BUMP_TAIL();
   } else {
   }
   if (BUMP_HEAD + K > BUMP_TAIL) {
@@ -870,34 +875,22 @@ function NEW() {
 // can never be confused with heap addresses
 const FORWARDINGADDRESS = 0;
 
+// Creates NUMBER_OF_BLOCKS blocks starting from HEAP_BOTTOM,
+// sets CURR_BLOCK to HEAP_BOTTOM, CURR_LINE to first child address
+// Changes A, B, BUMP_HEAD, BUMP_TAIL
 function INITIALIZE_BLOCKS_AND_LINES() {
-  CURR_BLOCK = HEAPBOTTOM;
-  // checks for valid space configurations:
-  if (BLOCK_SIZE <= BLOCK_BK_SIZE) {
-    // block size must be larger than number of book keeping entries
-    error(BLOCK_SIZE, BLOCK_BK_SIZE, "block has no effective space");
-  } else if (LINE_SIZE <= LINE_BK_SIZE) {
-    // line size must be larger than number of book keeping entries
-    error(LINE_SIZE, LINE_BK_SIZE, "line has no effective space");
-  } else {
-  }
   // populate the heap space with blocks
+  A = HEAPBOTTOM;
   for (let i = 0; i < NUMBER_OF_BLOCKS; i = i + 1) {
     NEW_BLOCK();
-    D = RES;
-    // BUMP_HEAD = BUMP_HEAD - NUM_OF_LINES_PER_BLOCK * LINE_SIZE;
-    BUMP_HEAD = HEAP[D + FIRST_CHILD_SLOT];
-    for (let j = 0; j < NUM_OF_LINES_PER_BLOCK; j = j + 1) {
-      A = BUMP_HEAD;
-      NEW_LINE();
-    }
+    A = B;
   }
+  CURR_BLOCK = HEAPBOTTOM;
   // reallocate bump pointers for actual use
-  BUMP_HEAD = HEAPBOTTOM + BLOCK_BK_SIZE + LINE_BK_SIZE;
-  BUMP_TAIL = HEAPBOTTOM + BLOCK_SIZE;
-
-  CURR_BLOCK = BUMP_HEAD;
-  CURR_LINE = CURR_BLOCK + BLOCK_BK_SIZE;
+  BUMP_HEAD = HEAP[HEAP[CURR_BLOCK + FIRST_CHILD_SLOT]];
+  BUMP_TAIL = CURR_BLOCK + BLOCK_SIZE;
+  CURR_LINE = CURR_BLOCK + FIRST_CHILD_SLOT;
+  show_heap("");
 }
 
 // machine states
@@ -915,7 +908,6 @@ const OUT_OF_MEMORY_ERROR = 2;
 // operandstack node (-105)
 // undefined node (-106)
 // TODO: block node (-107)
-// TODO: line node(-108)
 
 // state of line and block
 const OCCUPIED = 0;
@@ -937,11 +929,15 @@ const TO_RECYCLE = 1;
 // 6: liveness (live: 0, free: 1)
 
 const LINE_TAG = -108;
-const LINE_BK_SIZE = 7;
+const LINE_BK_SIZE = 3;
 let LINE_SIZE = -Infinity;
 const PARENT_BLOCK_SLOT = 4;
 const LINE_STATE_SLOT = 5;
 const LINE_LIVENESS_SLOT = 6;
+const LINE_ADDRESS_SLOT = 0;
+const LINE_MARK_SLOT = 1;
+// TODO: better name for end of usable address
+const LINE_LIMIT_SLOT = 2;
 
 // expects parent block address in A
 // changes A, B, C
@@ -1001,13 +997,16 @@ function ALLOCATE_BUMP_TAIL() {
 //
 // 0: tag  = -107
 // 1: size = total size of block
-// 2: offset of first child from the tag: 4
-// 3: offset of last child from the tag: 6
+// 2: offset of first child from the tag: 6
+// 3: offset of last child from the tag: (NUM_OF_LINES_PER_BLOCK - 1) * LINE_BK_SIZE (3)
 // 4: state (free: 0, occupied: 1)
 // 5: liveness (live: 0, free: 1)
-// 6: line 1
-// 7: line 2
+// 6: line 0 address
+// 7: line 0 mark bit ()
+// 8: line 0 start of free address
+// 9: line 1 address
 // ...
+// NUM_OF_LINES_PER_BLOCK * LINE_BK_SIZE (3): start of line 0 usable memory
 
 const BLOCK_TAG = -107;
 // size of book keeping entries
@@ -1020,15 +1019,30 @@ const BLOCK_STATE_SLOT = 4;
 const BLOCK_LIVENESS_SLOT = 5;
 const NO_BLOCK_FOUND = -1;
 
-// changes
+// Expects root address in A
+// changes A, B
+// Final: RES = block address, B = last address + 1
 function NEW_BLOCK() {
-  A = BLOCK_TAG;
-  B = BLOCK_SIZE;
-  NEW();
-  HEAP[RES + FIRST_CHILD_SLOT] = 4;
-  HEAP[RES + LAST_CHILD_SLOT] = 6;
-  HEAP[RES + BLOCK_STATE_SLOT] = FREE;
-  HEAP[RES + BLOCK_LIVENESS_SLOT] = TO_RECYCLE;
+  HEAP[A] = BLOCK_TAG;
+  HEAP[A + SIZE_SLOT] = BLOCK_SIZE;
+  HEAP[A + FIRST_CHILD_SLOT] = 6;
+  HEAP[A + LAST_CHILD_SLOT] = 6 + (NUM_OF_LINES_PER_BLOCK - 1) * LINE_BK_SIZE;
+  // state slot will be used for mark status
+  HEAP[A + BLOCK_STATE_SLOT] = FREE;
+  // liveness slot will be left in but not used for now
+  HEAP[A + BLOCK_LIVENESS_SLOT] = FREE;
+  // store line address in B
+  B = HEAP[A + LAST_CHILD_SLOT] + LINE_BK_SIZE;
+  for (let i = 0; i < NUM_OF_LINES_PER_BLOCK; i = i + 1) {
+    // initialize line metadata
+    HEAP[HEAP[A + FIRST_CHILD_SLOT] + i * LINE_BK_SIZE + LINE_ADDRESS_SLOT] = B;
+    HEAP[HEAP[A + FIRST_CHILD_SLOT] + i * LINE_BK_SIZE + LINE_MARK_SLOT] = FREE;
+    HEAP[HEAP[A + FIRST_CHILD_SLOT] + i * LINE_BK_SIZE + LINE_LIMIT_SLOT] = B; // no occupied data yet
+    // update address to next line
+    B = B + LINE_SIZE;
+  }
+  // B now end of block
+  RES = A;
 }
 
 function GET_FREE_BLOCK() {
@@ -1648,7 +1662,7 @@ function run() {
 // print_program(P);
 // run();
 //
-initialize_machine(1000, 5, 10); // exactly 200 needed
+initialize_machine(20, 10, 1); // exactly 200 needed
 P = parse_and_compile(
   "             \
 const a = 2;                        \
