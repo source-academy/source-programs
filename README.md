@@ -59,3 +59,12 @@ The virtual machines in this section are SECD-style and follow a description in 
 
 ## Test
 * [`src/test/framework/main.js`](https://github.com/source-academy/source-programs/blob/master/src/test/framework/): test framework for Source programs, written in Source §4
+
+### License
+
+[![GPL 3][gpl3-image]][gpl3]
+All JavaScript programs in this repository are licensed under the 
+[GNU General Public License Version 3][gpl3].
+
+[gpl3]: https://www.gnu.org/licenses/gpl-3.0.en.html
+[gpl3-image]: https://upload.wikimedia.org/wikipedia/commons/thumb/7/79/License_icon-gpl.svg/50px-License_icon-gpl.svg.png
