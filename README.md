@@ -39,15 +39,15 @@ The virtual machines in this section are SECD-style and follow a description in 
 
 ## Tool Demos
 
-(click to run; for actual sources, go to [`src/tool-demos/stepper.js`](https://github.com/source-academy/source-programs/blob/master/src/tool-demos/))
+(click to run; for actual sources, go to [`src/tool-demos/`](https://github.com/source-academy/source-programs/blob/master/src/tool-demos/))
 
 * [`src/tool-demos/stepper.js`](https://tinyurl.com/SICPJS-stepper): stepper tool (small-step semantics, based on substitution)
 * [`src/tool-demos/box-and-pointer-diagrams.js`](https://tinyurl.com/SICPJS-box-and-pointer): box-and-pointer diagram visualizer for pairs and lists (following SICP JS chapter 2)
 * [`src/tool-demos/environment-model.js`](https://tinyurl.com/SICPJS-env-diagram): environment model visualizer (following SICP JS chapter 3)
 
-## Library Demos
+## Module Demos
 
-(click to run)
+(click to run; for actual sources, go to [`src/module-demos/`](https://github.com/source-academy/source-programs/blob/master/src/module-demos/))
 
 * [`src/module-demos/runes.js`](https://tinyurl.com/SICPJS-hearts): the "picture language" of SICP JS 2.2.4
 * [`src/module-demos/twist.js`](https://tinyurl.com/SICPJS-twist): some fun with the "picture language"
