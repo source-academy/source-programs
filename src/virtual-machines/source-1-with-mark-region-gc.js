@@ -753,7 +753,7 @@ let E = 0;
 let F = 0;
 let G = 0;
 let H = 0;
-let I = 0;
+let I = 0; // loop counter
 let J = 0;
 let K = 0;
 let L = 0;
@@ -794,7 +794,7 @@ let HEAP = NaN;
 // bump allocator pointers
 let BUMP_HEAD = -Infinity; // for insertion
 let BUMP_TAIL = -Infinity; // for free line size checking
-// scan pointer in Cheney
+// scan pointer in Immix
 let SCAN = -Infinity;
 // the size of the heap is fixed
 let HEAP_SIZE = -Infinity;
@@ -806,6 +806,7 @@ const TAG_SLOT = 0;
 const SIZE_SLOT = 1;
 const FIRST_CHILD_SLOT = 2;
 const LAST_CHILD_SLOT = 3;
+const MARK_SLOT = 4;
 
 // ///////////////////////////////////
 // Immix Mark-Region Garbage Collection
@@ -855,6 +856,9 @@ function NEW() {
   if (BUMP_HEAD + K > BUMP_TAIL) {
     display("Sweeeeep!");
     show_heap("");
+    // mark and free
+    MARK();
+    // get new bump and limit pointers
     // ALLOCATE_BUMP_HEAD();
     // ALLOCATE_BUMP_TAIL();
   } else {
@@ -870,6 +874,53 @@ function NEW() {
   BUMP_HEAD = BUMP_HEAD + K;
 }
 
+// Changes A, B, SCAN
+function MARK() {
+  // keep old TOP_RTS to prevent deleting stacks
+  B = TOP_RTS;
+  // init roots for dfs
+  for (I = 0; I <= B; I = I + 1) {
+    A = RTS[I];
+    PUSH_RTS();
+  }
+  while (B < TOP_RTS) {
+    POP_RTS();
+    SCAN = RES;
+    // mark node's block
+    A = math_floor(SCAN / BLOCK_SIZE) * BLOCK_SIZE;
+    HEAP[A + BLOCK_STATE_SLOT] = MARKED;
+    // mark node's start line to end line
+    A = SCAN;
+    GET_LINE();
+    HEAP[RES + LINE_MARK_SLOT] = MARKED;
+    for (
+      I = HEAP[SCAN + FIRST_CHILD_SLOT];
+      I <= HEAP[SCAN + LAST_CHILD_SLOT];
+      I = I + 1
+    ) {
+      A = HEAP[SCAN + I]; // address of child
+      GET_LINE();
+      if (HEAP[RES + LINE_MARK_SLOT] === MARKED) {
+        // TODO:
+        // What if object starts from markedline but extends beyond it?
+      } else {
+        A = HEAP[SCAN + I]; // address of child
+        PUSH_RTS();
+      }
+    }
+  }
+}
+
+// expects object address in A
+function GET_LINE() {
+  // TODO: remove constants
+  const blockaddress = math_floor(A / BLOCK_SIZE) * BLOCK_SIZE;
+  const startaddress =
+    HEAP[HEAP[blockaddress + FIRST_CHILD_SLOT] + LINE_ADDRESS_SLOT];
+  const lineNo = math_floor((A - startaddress) / LINE_SIZE);
+  RES = blockaddress + FIRST_CHILD_SLOT + lineNo * LINE_BK_SIZE;
+}
+
 // use tag slot as forwarding address;
 // the trick: since tags are negative, they
 // can never be confused with heap addresses
@@ -881,7 +932,7 @@ const FORWARDINGADDRESS = 0;
 function INITIALIZE_BLOCKS_AND_LINES() {
   // populate the heap space with blocks
   A = HEAPBOTTOM;
-  for (let i = 0; i < NUMBER_OF_BLOCKS; i = i + 1) {
+  for (I = 0; I < NUMBER_OF_BLOCKS; I = I + 1) {
     NEW_BLOCK();
     A = B;
   }
@@ -907,7 +958,7 @@ const OUT_OF_MEMORY_ERROR = 2;
 // stackframe node (-104)
 // operandstack node (-105)
 // undefined node (-106)
-// TODO: block node (-107)
+// block node (-107)
 
 // state of line and block
 const OCCUPIED = 0;
@@ -915,83 +966,18 @@ const RECYCLABLE = 1;
 const FREE = 2;
 
 // Liveness of line and block
-const LIVE = 0;
-const TO_RECYCLE = 1;
+const UNMARKED = 0;
+const MARKED = 1;
 
-// line nodes layout
-//
-// 0: tag  = -108
-// 1: size = 107
-// 2: offset of first child from the tag: 4
-// 3: offset of last child from the tag: 6
-// 4: block size
-// 5: state (free: 0, occupied: 1)
-// 6: liveness (live: 0, free: 1)
-
-const LINE_TAG = -108;
+// line nodes
 const LINE_BK_SIZE = 3;
-let LINE_SIZE = -Infinity;
-const PARENT_BLOCK_SLOT = 4;
-const LINE_STATE_SLOT = 5;
-const LINE_LIVENESS_SLOT = 6;
+
 const LINE_ADDRESS_SLOT = 0;
 const LINE_MARK_SLOT = 1;
 // TODO: better name for end of usable address
 const LINE_LIMIT_SLOT = 2;
 
-// expects parent block address in A
-// changes A, B, C
-function NEW_LINE() {
-  C = A;
-  A = LINE_TAG;
-  B = LINE_SIZE;
-  NEW();
-  HEAP[RES + FIRST_CHILD_SLOT] = 4;
-  HEAP[RES + LAST_CHILD_SLOT] = 6;
-  HEAP[RES + PARENT_BLOCK_SLOT] = C;
-  HEAP[RES + LINE_STATE_SLOT] = FREE;
-  HEAP[RES + LINE_LIVENESS_SLOT] = TO_RECYCLE;
-}
-
-function NEXT_FREE_LINE() {
-  A = CURR_BLOCK;
-  // if current line is the last line in the block
-  // go to next available block to find new free line
-  if (CURR_BLOCK + BLOCK_SIZE - CURR_LINE < LINE_SIZE) {
-    GET_NEXT_RECYCLABLE_BLOCK();
-    A = RES;
-  } else {
-  }
-  // a recyclable block is guaranteed to have free line
-  for (let i = 0; i < NUM_OF_LINES_PER_BLOCK; i = i + 1) {
-    display(A);
-    if (HEAP[A + LINE_STATE_SLOT] === FREE) {
-      RES = A;
-      break;
-    } else {
-    }
-  }
-}
-
-// for bump allocator (head)
-function ALLOCATE_BUMP_HEAD() {
-  NEXT_FREE_LINE();
-  BUMP_HEAD = RES;
-}
-
-// for bump allocator (tail)
-// returns the address of the last byte of contiguous free space in a block
-function ALLOCATE_BUMP_TAIL() {
-  A = CURR_BLOCK;
-  B = CURR_LINE;
-  while (
-    HEAP[B + LINE_STATE_SLOT] === FREE ||
-    HEAP[B + LINE_SIZE + TAG_SLOT] === LINE_TAG
-  ) {
-    B = B + LINE_SIZE;
-  }
-  BUMP_TAIL = B + LINE_SIZE - 1;
-}
+let LINE_SIZE = -Infinity;
 
 // block nodes layout
 //
@@ -999,10 +985,10 @@ function ALLOCATE_BUMP_TAIL() {
 // 1: size = total size of block
 // 2: offset of first child from the tag: 6
 // 3: offset of last child from the tag: (NUM_OF_LINES_PER_BLOCK - 1) * LINE_BK_SIZE (3)
-// 4: state (free: 0, occupied: 1)
+// 4: mark (free: 0, occupied: 1)
 // 5: liveness (live: 0, free: 1)
 // 6: line 0 address
-// 7: line 0 mark bit ()
+// 7: line 0 mark bit (marked: 1, unmarked: 0)
 // 8: line 0 start of free address
 // 9: line 1 address
 // ...
@@ -1036,7 +1022,9 @@ function NEW_BLOCK() {
   for (let i = 0; i < NUM_OF_LINES_PER_BLOCK; i = i + 1) {
     // initialize line metadata
     HEAP[HEAP[A + FIRST_CHILD_SLOT] + i * LINE_BK_SIZE + LINE_ADDRESS_SLOT] = B;
-    HEAP[HEAP[A + FIRST_CHILD_SLOT] + i * LINE_BK_SIZE + LINE_MARK_SLOT] = FREE;
+    HEAP[
+      HEAP[A + FIRST_CHILD_SLOT] + i * LINE_BK_SIZE + LINE_MARK_SLOT
+    ] = UNMARKED;
     HEAP[HEAP[A + FIRST_CHILD_SLOT] + i * LINE_BK_SIZE + LINE_LIMIT_SLOT] = B; // no occupied data yet
     // update address to next line
     B = B + LINE_SIZE;
@@ -1078,14 +1066,15 @@ function GET_NEXT_RECYCLABLE_BLOCK() {
 // number nodes layout
 //
 // 0: tag  = -100
-// 1: size = 5
+// 1: size = 6
 // 2: offset of first child from the tag: 6 (no children)
 // 3: offset of last child from the tag: 5 (must be less than first)
-// 4: value
+// 4: mark slot
+// 5: value
 
 const NUMBER_TAG = -100;
-const NUMBER_SIZE = 5;
-const NUMBER_VALUE_SLOT = 4;
+const NUMBER_SIZE = 6;
+const NUMBER_VALUE_SLOT = 5;
 
 // expects number in A
 // changes A, B, C, D, E, J, K
@@ -1096,6 +1085,7 @@ function NEW_NUMBER() {
   NEW();
   HEAP[RES + FIRST_CHILD_SLOT] = 6;
   HEAP[RES + LAST_CHILD_SLOT] = 5; // no children
+  HEAP[RES + MARK_SLOT] = UNMARKED;
   HEAP[RES + NUMBER_VALUE_SLOT] = E;
 }
 
@@ -1105,11 +1095,12 @@ function NEW_NUMBER() {
 // 1: size = 5
 // 2: offset of first child from the tag: 6 (no children)
 // 3: offset of last child from the tag: 5 (must be less than first)
-// 4: value
+// 4: mark slot
+// 5: value
 
 const BOOL_TAG = -101;
-const BOOL_SIZE = 5;
-const BOOL_VALUE_SLOT = 4;
+const BOOL_SIZE = 6;
+const BOOL_VALUE_SLOT = 5;
 
 // expects boolean in A
 // changes A, B, C, D, E, J, K
@@ -1120,18 +1111,20 @@ function NEW_BOOL() {
   NEW();
   HEAP[RES + FIRST_CHILD_SLOT] = 6;
   HEAP[RES + LAST_CHILD_SLOT] = 5; // no children
+  HEAP[RES + MARK_SLOT] = UNMARKED;
   HEAP[RES + BOOL_VALUE_SLOT] = E;
 }
 
 // undefined nodes layout
 //
 // 0: tag  = -106
-// 1: size = 4
+// 1: size = 5
 // 2: offset of first child from the tag: 5 (no children)
 // 3: offset of last child from the tag: 4 (must be less than first)
+// 4: mark slot
 
 const UNDEFINED_TAG = -106;
-const UNDEFINED_SIZE = 4;
+const UNDEFINED_SIZE = 5;
 
 // changes A, B, C, D, J, K
 function NEW_UNDEFINED() {
@@ -1140,6 +1133,7 @@ function NEW_UNDEFINED() {
   NEW();
   HEAP[RES + FIRST_CHILD_SLOT] = 5;
   HEAP[RES + LAST_CHILD_SLOT] = 4; // no children
+  HEAP[RES + MARK_SLOT] = UNMARKED;
 }
 
 // operandstack nodes layout
@@ -1148,8 +1142,9 @@ function NEW_UNDEFINED() {
 // 1: size = maximal number of entries + 4
 // 2: first child slot = 4
 // 3: last child slot = current top of stack; initially 3 (empty stack)
-// 4: first entry
-// 5: second entry
+// 4: mark slot
+// 5: first entry
+// 6: second entry
 // ...
 
 const OS_TAG = -105;
@@ -1159,11 +1154,12 @@ const OS_TAG = -105;
 function NEW_OS() {
   E = A;
   A = OS_TAG;
-  B = E + 4;
+  B = E + 5;
   NEW();
-  HEAP[RES + FIRST_CHILD_SLOT] = 4;
+  HEAP[RES + FIRST_CHILD_SLOT] = 5;
   // operand stack initially empty
-  HEAP[RES + LAST_CHILD_SLOT] = 3;
+  HEAP[RES + LAST_CHILD_SLOT] = 4;
+  HEAP[RES + MARK_SLOT] = UNMARKED;
 }
 
 // PUSH and POP are convenient subroutines that operate on
@@ -1190,19 +1186,20 @@ function POP_OS() {
 //
 // 0: tag  = -103
 // 1: size = 8
-// 2: offset of first child from the tag: 6 (only environment)
-// 3: offset of last child from the tag: 6
-// 4: stack size = max stack size needed for executing function body
-// 5: address = address of function
-// 6: environment
-// 7: extension count = number of entries by which to extend env
+// 2: offset of first child from the tag: 7 (only environment)
+// 3: offset of last child from the tag: 7
+// 4: mark slot
+// 5: stack size = max stack size needed for executing function body
+// 6: address = address of function
+// 7: environment
+// 8: extension count = number of entries by which to extend env
 
 const CLOSURE_TAG = -103;
-const CLOSURE_SIZE = 8;
-const CLOSURE_OS_SIZE_SLOT = 4;
-const CLOSURE_ADDRESS_SLOT = 5;
-const CLOSURE_ENV_SLOT = 6;
-const CLOSURE_ENV_EXTENSION_COUNT_SLOT = 7;
+const CLOSURE_SIZE = 9;
+const CLOSURE_OS_SIZE_SLOT = 5;
+const CLOSURE_ADDRESS_SLOT = 6;
+const CLOSURE_ENV_SLOT = 7;
+const CLOSURE_ENV_EXTENSION_COUNT_SLOT = 8;
 
 // expects stack size in A, P address in B, environment extension count in C
 // changes A, B, C, D, E, F, J, K
@@ -1215,6 +1212,7 @@ function NEW_CLOSURE() {
   NEW();
   HEAP[RES + FIRST_CHILD_SLOT] = CLOSURE_ENV_SLOT;
   HEAP[RES + LAST_CHILD_SLOT] = CLOSURE_ENV_SLOT;
+  HEAP[RES + MARK_SLOT] = UNMARKED;
   HEAP[RES + CLOSURE_OS_SIZE_SLOT] = D;
   HEAP[RES + CLOSURE_ADDRESS_SLOT] = E;
   HEAP[RES + CLOSURE_ENV_SLOT] = ENV;
@@ -1230,17 +1228,18 @@ function SET_CLOSURE_ENV() {
 //
 // 0: tag  = -104
 // 1: size = 7
-// 2: offset of first child from the tag: 5 (environment)
-// 3: offset of last child from the tag: 6 (operand stack)
-// 4: program counter = return address
-// 5: environment
-// 6: operand stack
+// 2: offset of first child from the tag: 6 (environment)
+// 3: offset of last child from the tag: 7 (operand stack)
+// 4: mark slot
+// 5: program counter = return address
+// 6: environment
+// 7: operand stack
 
 const RTS_FRAME_TAG = -104;
-const RTS_FRAME_SIZE = 7;
-const RTS_FRAME_PC_SLOT = 4;
-const RTS_FRAME_ENV_SLOT = 5;
-const RTS_FRAME_OS_SLOT = 6;
+const RTS_FRAME_SIZE = 8;
+const RTS_FRAME_PC_SLOT = 5;
+const RTS_FRAME_ENV_SLOT = 6;
+const RTS_FRAME_OS_SLOT = 7;
 
 // expects current PC, ENV, OS in their registers
 // changes A, B, C, D, J, K
@@ -1250,6 +1249,7 @@ function NEW_RTS_FRAME() {
   NEW();
   HEAP[RES + FIRST_CHILD_SLOT] = RTS_FRAME_ENV_SLOT;
   HEAP[RES + LAST_CHILD_SLOT] = RTS_FRAME_OS_SLOT;
+  HEAP[RES + MARK_SLOT] = UNMARKED;
   HEAP[RES + RTS_FRAME_PC_SLOT] = PC + 2; // next instruction!
   HEAP[RES + RTS_FRAME_ENV_SLOT] = ENV;
   HEAP[RES + RTS_FRAME_OS_SLOT] = OS;
@@ -1270,24 +1270,27 @@ function POP_RTS() {
 // environment nodes layout
 //
 // 0: tag  = -102
-// 1: size = number of entries + 4
-// 2: first child = 4
+// 1: size = number of entries + 5
+// 2: first child = 5
 // 3: last child
-// 4: first entry
-// 5: second entry
+// 4: mark slot
+// 5: first entry
+// 6: second entry
 // ...
 
 const ENV_TAG = -102;
+const ENV_BK_SIZE = 5;
 
 // expects number of env entries in A
 // changes A, B, C, D, J, K
 function NEW_ENVIRONMENT() {
   D = A;
   A = ENV_TAG;
-  B = D + 4;
+  B = D + ENV_BK_SIZE;
   NEW();
-  HEAP[RES + FIRST_CHILD_SLOT] = 4;
-  HEAP[RES + LAST_CHILD_SLOT] = 3 + D;
+  HEAP[RES + FIRST_CHILD_SLOT] = 5;
+  HEAP[RES + LAST_CHILD_SLOT] = 4 + D;
+  HEAP[RES + MARK_SLOT] = UNMARKED;
 }
 
 // expects env in A, by-how-many in B
@@ -1297,7 +1300,7 @@ function NEW_ENVIRONMENT() {
 // garbage collection happens in NEW_ENVIRONMENT
 function EXTEND() {
   TEMP_ROOT = A;
-  A = HEAP[A + SIZE_SLOT] - 4 + B;
+  A = HEAP[A + SIZE_SLOT] - ENV_BK_SIZE + B;
   NEW_ENVIRONMENT();
   for (
     B = HEAP[TEMP_ROOT + FIRST_CHILD_SLOT];
@@ -1330,8 +1333,6 @@ function node_kind(x) {
     ? "undefined"
     : x === BLOCK_TAG
     ? "block"
-    : x === LINE_TAG
-    ? "line"
     : " (unknown node kind)";
 }
 function show_heap(s) {
@@ -1662,7 +1663,7 @@ function run() {
 // print_program(P);
 // run();
 //
-initialize_machine(20, 10, 1); // exactly 200 needed
+initialize_machine(10, 20, 1); // exactly 200 needed
 P = parse_and_compile(
   "             \
 const a = 2;                        \
