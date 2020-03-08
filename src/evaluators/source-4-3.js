@@ -341,8 +341,6 @@ function analyze_distinct(stmt) {
 }
 
 function analyze(stmt) {
-    // display(stmt);
-    // display('==============');
     return is_amb(stmt) ?
         analyze_amb(stmt) :
         is_require(stmt) ?
@@ -635,10 +633,6 @@ function analyze_sequence(stmts) {
         return (env, succeed, fail) =>
             a(env,
                 (a_value, fail2) => {
-                    // display("zxxxx a_value: ");
-                    // display(a_value);
-                    // display(is_return_value(a_value));
-                    // display("zxxxx a_value: ");
                     if (is_return_value(a_value)) {
                         return succeed(return_value_content(a_value), fail2);
                     } else {
@@ -675,11 +669,8 @@ function analyze_return_statement(stmts) {
     const vfunc = analyze(return_statement_expression(stmts));
 
     return (env, succeed, fail) => {
-        // display(make_return_value(vfunc(env, succeed, fail)));
         vfunc(env,
             (val, fail2) => {
-                // display(make_return_value(val));
-                // make_return_value(val);
                 succeed(make_return_value(val), fail2);
             },
             fail);
