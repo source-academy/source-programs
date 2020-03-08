@@ -1,3 +1,36 @@
+/*
+Evaluator for language with booleans, conditionals,
+sequences, functions, constants, variables and blocks
+This is an evaluator for a language that lets you declare
+functions, variables and constants, apply functions, and
+carry out simple arithmetic calculations, boolean operations.
+The covered sublanguage of Source §2 is:
+
+program ::= statement 
+statement ::= const name = expression ; 
+    | function name ( parameters ) 
+    | return expression ; 
+    | block 
+    | expression ; 
+parameters ::=  | name ( , name ) 
+block ::= { program } 
+expression ::= number 
+    | true | false 
+    | null 
+    | string 
+    | name 
+    | expression binary-operator expression 
+    | unary-operator expression 
+    | expression ( expressions ) 
+    | ( name | ( parameters ) ) => expression 
+    | ( name | ( parameters ) ) => block 
+    | expression ? expression : expression 
+    | ( expression ) 
+binary-operator ::= + | - | * | / | % | === | !==
+    | > | < | >= | <= 
+unary-operator ::= ! | - 
+expressions ::=  | expression ( , expression ) 
+*/
 function is_true(x) {
     return x === true;
 }
@@ -93,6 +126,18 @@ function return_statement_expression(stmt) {
     return head(tail(stmt));
 }
 
+function make_return_value(content) {
+    return list("return_value", content);
+}
+
+function is_return_value(value) {
+    return is_tagged_list(value, "return_value");
+}
+
+function return_value_content(value) {
+    return head(tail(value));
+}
+
 function is_sequence(stmt) {
     return is_tagged_list(stmt, "sequence");
 }
@@ -121,7 +166,6 @@ function rest_statements(stmts) {
     return tail(stmts);
 }
 
-// ??
 function sequence_actions(stmts) {
     return head(tail(stmts));
 }
@@ -139,8 +183,8 @@ function local_names(stmt) {
         return is_constant_declaration(stmt) ?
             list(constant_declaration_name(stmt)) :
             is_variable_declaration(stmt) ?
-                list(variable_declaration_name(stmt)) :
-                null;
+            list(variable_declaration_name(stmt)) :
+            null;
     }
 }
 
@@ -148,8 +192,8 @@ function insert_all(xs, ys) {
     return is_null(xs) ?
         ys :
         is_null(member(head(xs), ys)) ?
-            pair(head(xs), insert_all(tail(xs), ys)) :
-            error(head(xs), "multiple declarations of: ");
+        pair(head(xs), insert_all(tail(xs), ys)) :
+        error(head(xs), "multiple declarations of: ");
 }
 
 function is_block(stmt) {
@@ -192,7 +236,7 @@ function make_primitive_function(impl) {
     return list("primitive", impl);
 }
 
-// ??
+
 function make_function(impl) {
     return list("function_defination", impl);
 }
@@ -281,10 +325,10 @@ function analyze_distinct(stmt) {
             return is_null(items) ?
                 true :
                 is_null(tail(items)) ?
-                    true :
-                    is_null(member(head(items), tail(items))) ?
-                        distinct(tail(items)) :
-                        false;
+                true :
+                is_null(member(head(items), tail(items))) ?
+                distinct(tail(items)) :
+                false;
         }
         return vfunc(env, (v, fail2) => {
             if (distinct(v)) {
@@ -297,35 +341,37 @@ function analyze_distinct(stmt) {
 }
 
 function analyze(stmt) {
+    // display(stmt);
+    // display('==============');
     return is_amb(stmt) ?
-    analyze_amb(stmt) :
-    is_require(stmt) ?
-    analyze_require(stmt) :
-    is_distinct(stmt) ?
-    analyze_distinct(stmt) :
-    is_self_evaluating(stmt) ?
-    analyze_self_evaluating(stmt) :
-    is_name(stmt) ?
-    analyze_name(stmt) :
-    is_constant_declaration(stmt) ?
-    analyze_constant_declaration(stmt) :
-    is_variable_declaration(stmt) ?
-    analyze_variable_declaration(stmt) :
-    is_assignment(stmt) ?
-    analyze_assignment(stmt) :
-    is_conditional_expression(stmt) ?
-    analyze_conditional_expression(stmt) :
-    is_function_definition(stmt) ?
-    analyze_function_definition(stmt) :
-    is_sequence(stmt) ?
-    analyze_sequence(sequence_actions(stmt)) :
-    is_block(stmt) ?
-    analyze_block(stmt) :
-    is_return_statement(stmt) ?
-    analyze_return_statement(stmt) :
-    is_application(stmt) ?
-    analyze_application(stmt) :
-    error(stmt, "Unknown statement type in analyze");
+        analyze_amb(stmt) :
+        is_require(stmt) ?
+        analyze_require(stmt) :
+        is_distinct(stmt) ?
+        analyze_distinct(stmt) :
+        is_self_evaluating(stmt) ?
+        analyze_self_evaluating(stmt) :
+        is_name(stmt) ?
+        analyze_name(stmt) :
+        is_constant_declaration(stmt) ?
+        analyze_constant_declaration(stmt) :
+        is_variable_declaration(stmt) ?
+        analyze_variable_declaration(stmt) :
+        is_assignment(stmt) ?
+        analyze_assignment(stmt) :
+        is_conditional_expression(stmt) ?
+        analyze_conditional_expression(stmt) :
+        is_function_definition(stmt) ?
+        analyze_function_definition(stmt) :
+        is_sequence(stmt) ?
+        analyze_sequence(sequence_actions(stmt)) :
+        is_block(stmt) ?
+        analyze_block(stmt) :
+        is_return_statement(stmt) ?
+        analyze_return_statement(stmt) :
+        is_application(stmt) ?
+        analyze_application(stmt) :
+        error(stmt, "Unknown statement type in analyze");
 }
 
 /* ENVIRONMENTS */
@@ -379,8 +425,8 @@ function set_name_value(name, val, env) {
         return is_null(names) ?
             error("internal error: name not found") :
             name === head(names) ?
-                set_head(head(vals), val) :
-                scan(tail(names), tail(vals));
+            set_head(head(vals), val) :
+            scan(tail(names), tail(vals));
     }
     const frame = first_frame(env);
     return scan(frame_names(frame),
@@ -398,8 +444,8 @@ function lookup_name_value(name, env) {
                 env_loop(
                     enclosing_environment(env)) :
                 name === head(names) ?
-                    head(head(vals)) :
-                    scan(tail(names), tail(vals));
+                head(head(vals)) :
+                scan(tail(names), tail(vals));
         }
         if (is_empty_environment(env)) {
             error(name, "Unbound name: ");
@@ -429,11 +475,11 @@ function assign_name_value(name, val, env) {
                 env_loop(
                     enclosing_environment(env)) :
                 name === head(names) ?
-                    (tail(head(vals)) ?
-                        set_head(head(vals), val) :
-                        error("no assignment " +
-                            "to constants allowed")) :
-                    scan(tail(names), tail(vals));
+                (tail(head(vals)) ?
+                    set_head(head(vals), val) :
+                    error("no assignment " +
+                        "to constants allowed")) :
+                scan(tail(names), tail(vals));
         }
         if (is_empty_environment(env)) {
             error(name, "Unbound name in assignment: ");
@@ -531,6 +577,8 @@ function setup_environment() {
 const the_global_environment = setup_environment();
 
 // below are amb related
+// some of the functions are taken from SICP JS text book with modifications
+// refer to textbook 4.3 https://sicp.comp.nus.edu.sg/chapters/85#top
 function is_amb(stmt) {
     return is_tagged_list(stmt, "application") &&
         is_name(operator(stmt)) &&
@@ -575,17 +623,28 @@ function analyze_conditional_expression(stmt) {
             // success continuation for evaluating the predicate
             // to obtain pred_value
             (pred_value, fail2) =>
-                is_true(pred_value) ?
-                    cfun(env, succeed, fail2) :
-                    afun(env, succeed, fail2),
+            is_true(pred_value) ?
+            cfun(env, succeed, fail2) :
+            afun(env, succeed, fail2),
             fail);
 }
 
 function analyze_sequence(stmts) {
     function sequentially(a, b) {
+
         return (env, succeed, fail) =>
             a(env,
-                (a_value, fail2) => b(env, succeed, fail2),
+                (a_value, fail2) => {
+                    // display("zxxxx a_value: ");
+                    // display(a_value);
+                    // display(is_return_value(a_value));
+                    // display("zxxxx a_value: ");
+                    if (is_return_value(a_value)) {
+                        return succeed(return_value_content(a_value), fail2);
+                    } else {
+                        return b(env, succeed, fail2);
+                    }
+                },
                 fail);
     }
 
@@ -593,7 +652,7 @@ function analyze_sequence(stmts) {
         return is_null(rest_funs) ?
             first_fun :
             loop(sequentially(first_fun,
-                head(rest_funs)),
+                    head(rest_funs)),
                 tail(rest_funs));
     }
     const funs = map(analyze, stmts);
@@ -602,7 +661,7 @@ function analyze_sequence(stmts) {
         loop(head(funs), tail(funs));
 }
 
-// ??
+
 function analyze_block(stmts) {
     const body = block_body(stmts);
     const locals = local_names(body);
@@ -611,18 +670,27 @@ function analyze_block(stmts) {
     return (env, succeed, fail) => analyze(body)(extend_environment(locals, temp_values, env), succeed, fail);
 }
 
-// ??
+
 function analyze_return_statement(stmts) {
     const vfunc = analyze(return_statement_expression(stmts));
-    return (env, succeed, fail) => vfunc(env, succeed, fail);
+
+    return (env, succeed, fail) => {
+        // display(make_return_value(vfunc(env, succeed, fail)));
+        vfunc(env,
+            (val, fail2) => {
+                // display(make_return_value(val));
+                // make_return_value(val);
+                succeed(make_return_value(val), fail2);
+            },
+            fail);
+    };
 }
 
-// ??
 function declare_variable(name, val, env) {
     set_name_value(name, val, env);
 }
 
-// ??
+
 function declare_constant(name, val, env) {
     set_name_value(name, val, env);
 }
@@ -634,7 +702,7 @@ function analyze_variable_declaration(stmt) {
         vfun(env,
             (val, fail2) => {
                 declare_variable(name, val, env);
-                succeed("ok", fail2);
+                succeed("variable declaration ok", fail2);
             },
             fail);
 }
@@ -648,7 +716,7 @@ function analyze_constant_declaration(stmt) {
         vfun(env,
             (val, fail2) => {
                 declare_constant(name, val, env);
-                succeed("ok", fail2);
+                succeed("constant declaration ok", fail2);
             },
             fail);
 }
@@ -661,7 +729,7 @@ function analyze_assignment(stmt) {
             (val, fail2) => { // *1*
                 const old_value = lookup_name_value(variable, env);
                 set_name_value(variable, val, env);
-                succeed("ok",
+                succeed("assignment ok",
                     () => { // *2*
                         set_name_value(variable, old_value, env);
                         fail2();
@@ -676,12 +744,12 @@ function analyze_application(stmt) {
     return (env, succeed, fail) =>
         ffun(env,
             (fun, fail2) =>
-                get_args(afuns,
-                    env,
-                    (args, fail3) =>
-                        execute_application(fun,
-                            args, succeed, fail3),
-                    fail2),
+            get_args(afuns,
+                env,
+                (args, fail3) =>
+                execute_application(fun,
+                    args, succeed, fail3),
+                fail2),
             fail);
 }
 
@@ -691,14 +759,14 @@ function get_args(afuns, env, succeed, fail) {
         head(afuns)(env,
             // success continuation for this afun
             (arg, fail2) =>
-                get_args(tail(afuns),
-                    env,
-                    // success continuation for
-                    // recursive call to get_args
-                    (args, fail3) =>
-                        succeed(pair(arg, args),
-                            fail3),
-                    fail2),
+            get_args(tail(afuns),
+                env,
+                // success continuation for
+                // recursive call to get_args
+                (args, fail3) =>
+                succeed(pair(arg, args),
+                    fail3),
+                fail2),
             fail);
 }
 
@@ -712,13 +780,18 @@ function execute_application(fun, args, succeed, fail) {
         const temp_values = map(x => no_value_yet, locals);
         const values = append(args, temp_values);
 
-        function_body(fun)(
+        const application_value = function_body(fun)(
             extend_environment(
                 names,
                 values,
                 function_environment(fun)),
             succeed,
             fail);
+        if (is_return_value(application_value)) {
+            return return_value_content(application_value);
+        } else {
+            return undefined;
+        }
     } else {
         error(fun, "unknown function type in " +
             "execute_application");
@@ -734,7 +807,7 @@ function analyze_amb(exp) {
                 head(choices)(env,
                     succeed,
                     () =>
-                        try_next(tail(choices)));
+                    try_next(tail(choices)));
         }
         return try_next(cfuns);
     };
@@ -806,3 +879,42 @@ function parse_and_run(str) {
             display(user_print(str));
         });
 }
+
+// parse_and_run('function a(){const b = 2; return b;} a();');
+// parse_and_run('function factorial(n) {\n' +
+//     '    return n === 1\n' +
+//     '        ? 1\n' +
+//     '        : factorial(n - 1) * n;\n' +
+//     '}' +
+//     'factorial(4);');
+
+// parse_and_run('function x() {\n' +
+//     '    const a = 1;\n' +
+//     '    return a;\n' +
+//     '    a = 2;\n' +
+//     '}\n' +
+//     'x();');
+
+parse_and_run(" \
+function multiple_dwelling() { \
+const baker = amb(1, 2, 3, 4, 5); \
+const cooper = amb(1, 2, 3, 4, 5); \
+const fletcher = amb(1, 2, 3, 4, 5); \
+const miller = amb(1, 2, 3, 4, 5); \
+const smith = amb(1, 2, 3, 4, 5); \
+require(distinct(list(baker, cooper, fletcher, miller, smith))); \
+require(! (baker === 5)); \
+require(! (cooper === 1)); \
+require(! (fletcher === 5)); \
+require(! (fletcher === 1)); \
+require(! (miller > cooper)); \
+require(! ((math_abs(smith - fletcher)) === 1)); \
+require(! ((math_abs(fletcher - cooper)) === 1)); \
+return list(list('baker', baker), \
+list('cooper', cooper), \
+list('fletcher', fletcher), \
+list('miller', miller), \
+list('smith', smith)); \
+} \
+multiple_dwelling(); \
+");
