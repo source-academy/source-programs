@@ -854,11 +854,12 @@ function NEW() {
   if (BUMP_HEAD + K > BUMP_TAIL) {
     display("Sweeeeep!");
     // mark and free
-    MARK();
-    FREE_REGION();
     // get new bump and limit pointers
-    // ALLOCATE_BUMP_HEAD();
-    // ALLOCATE_BUMP_TAIL();
+    MARK();
+    show_heap("");
+    FREE_REGION();
+    display(BUMP_HEAD, "bump head");
+    display(BUMP_TAIL, "bump tail");
   } else {
   }
   if (BUMP_HEAD + K > BUMP_TAIL) {
@@ -905,7 +906,7 @@ function MARK() {
     HEAP[SCAN + MARK_SLOT] = MARKED;
     // mark node's block
     A = math_floor(SCAN / BLOCK_SIZE) * BLOCK_SIZE;
-    HEAP[A + BLOCK_STATE_SLOT] = MARKED;
+    HEAP[A + MARK_SLOT] = MARKED;
     // mark node's start line to end line
     A = SCAN;
     GET_LINE();
@@ -956,6 +957,7 @@ function FREE_REGION() {
         if (HEAP[SCAN + LINE_MARK_SLOT] === MARKED) {
         } else {
           // free line
+          display(SCAN, "this line is free ==========================");
           HEAP[SCAN + LINE_LIMIT_SLOT] = HEAP[SCAN + LINE_ADDRESS_SLOT];
           // set block to recyclable
           HEAP[I * BLOCK_SIZE + BLOCK_STATE_SLOT] = RECYCLABLE;
@@ -1062,8 +1064,7 @@ const LINE_BK_SIZE = 3;
 
 const LINE_ADDRESS_SLOT = 0;
 const LINE_MARK_SLOT = 1;
-// TODO: better name for end of usable address
-const LINE_LIMIT_SLOT = 2;
+const LINE_LIMIT_SLOT = 2; // limit address === next line's start address if current line is full
 
 let LINE_SIZE = -Infinity;
 
@@ -1101,7 +1102,7 @@ function NEW_BLOCK() {
   HEAP[A + FIRST_CHILD_SLOT] = 6;
   HEAP[A + LAST_CHILD_SLOT] = 6 + (NUM_OF_LINES_PER_BLOCK - 1) * LINE_BK_SIZE;
   // state slot will be used for mark status
-  HEAP[A + BLOCK_STATE_SLOT] = FREE;
+  HEAP[A + MARK_SLOT] = UNMARKED;
   // liveness slot will be left in but not used for now
   HEAP[A + BLOCK_STATE_SLOT] = FREE;
   // store line address in B
@@ -1769,7 +1770,7 @@ function run() {
 // print_program(P);
 // run();
 //
-initialize_machine(10, 10, 1); // exactly 200 needed
+initialize_machine(5, 20, 1); // exactly 200 needed
 P = parse_and_compile(
   "             \
 const a = 2;                        \
