@@ -945,22 +945,27 @@ function FREE_REGION() {
     if (HEAP[I * BLOCK_SIZE + MARK_SLOT] === UNMARKED) {
       HEAP[I * BLOCK_SIZE + BLOCK_STATE_SLOT] = FREE;
     } else {
+      // assume occupied
+      HEAP[I * BLOCK_SIZE + BLOCK_STATE_SLOT] = OCCUPIED;
       for (
         // line pseudo node address in SCAN
         SCAN = HEAP[I * BLOCK_SIZE + FIRST_CHILD_SLOT];
         SCAN < HEAP[I * BLOCK_SIZE + LAST_CHILD_SLOT];
         SCAN = SCAN + LINE_BK_SIZE
       ) {
+        if (HEAP[SCAN + LINE_MARK_SLOT] === MARKED) {
+        } else {
+          // free line
+          HEAP[SCAN + LINE_LIMIT_SLOT] = HEAP[SCAN + LINE_ADDRESS_SLOT];
+          // set block to recyclable
+          HEAP[I * BLOCK_SIZE + BLOCK_STATE_SLOT] = RECYCLABLE;
+        }
         // unmark line
         HEAP[SCAN + LINE_MARK_SLOT] = UNMARKED;
-        // free line
-        HEAP[SCAN + LINE_LIMIT_SLOT] = HEAP[SCAN + LINE_ADDRESS_SLOT];
       }
-      // set block to recyclable
-      HEAP[I * BLOCK_SIZE + BLOCK_STATE_SLOT] = RECYCLABLE;
     }
     // unmark whole block
-    HEAP[I * BLOCK_SIZE + MARK_SLOT] = FREE;
+    HEAP[I * BLOCK_SIZE + MARK_SLOT] = UNMARKED;
   }
   // allocate new bump head and tail
   for (I = 0; I < NUMBER_OF_BLOCKS; I = I + 1) {
