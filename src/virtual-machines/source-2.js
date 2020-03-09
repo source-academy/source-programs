@@ -617,6 +617,15 @@ function parse_and_compile(string) {
     }
 
     function compile_application(expr, index_table) {
+        // handle variadic case
+        if (name_of_name(operator(expr)) === "list") {
+            const ops = operands(expr);
+            display(ops);
+            if (length(ops) === 0) {
+                display("Hi");
+                parse_and_compile("[null];");
+            } else {}
+        } else {}
         const max_stack_operator = compile(operator(expr),
                                        index_table, false);
         const max_stack_operands = compile_arguments(operands(expr),
@@ -916,7 +925,7 @@ function parse_and_compile(string) {
     add_unary_instruction(CALL, 0);
     add_nullary_instruction(DONE);
 
-    const locals = reverse(local_names(program));
+    const locals = reverse(append(list("list"), local_names(program)));
     const program_names_index_table =
          accumulate((s, it) => extend_index_table(it, s),
                     make_empty_index_table(),
@@ -1766,8 +1775,8 @@ run();
 // run();
 
 P = parse_and_compile("\
-const y = pair(1, pair(2, null));\
-display(y);\
+const y = list();\
+y;\
 ");
 print_program(P);
 run();
