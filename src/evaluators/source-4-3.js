@@ -154,10 +154,6 @@ function is_empty_sequence(stmts) {
     return is_null(stmts);
 }
 
-function is_last_statement(stmts) {
-    return is_null(tail(stmts));
-}
-
 function first_statement(stmts) {
     return head(stmts);
 }
@@ -220,25 +216,12 @@ function operands(stmt) {
     return head(tail(tail(stmt)));
 }
 
-function no_operands(ops) {
-    return is_null(ops);
-}
-
 function first_operand(ops) {
     return head(ops);
 }
 
-function rest_operands(ops) {
-    return tail(ops);
-}
-
 function make_primitive_function(impl) {
     return list("primitive", impl);
-}
-
-
-function make_function(impl) {
-    return list("function_defination", impl);
 }
 
 function make_compound_function(parameters, body, locals, env) {
@@ -456,35 +439,6 @@ function lookup_name_value(name, env) {
             } else {
                 return value;
             }
-        }
-    }
-    return env_loop(env);
-}
-
-// to assign a name to a new value in a specified environment,
-// we scan for the name, just as in lookup_name_value, and
-// change the corresponding value when we find it,
-// provided it is tagged as mutable
-
-function assign_name_value(name, val, env) {
-    function env_loop(env) {
-        function scan(names, vals) {
-            return is_null(names) ?
-                env_loop(
-                    enclosing_environment(env)) :
-                name === head(names) ?
-                (tail(head(vals)) ?
-                    set_head(head(vals), val) :
-                    error("no assignment " +
-                        "to constants allowed")) :
-                scan(tail(names), tail(vals));
-        }
-        if (is_empty_environment(env)) {
-            error(name, "Unbound name in assignment: ");
-        } else {
-            const frame = first_frame(env);
-            return scan(frame_names(frame),
-                frame_values(frame));
         }
     }
     return env_loop(env);
@@ -771,18 +725,20 @@ function execute_application(fun, args, succeed, fail) {
         const temp_values = map(x => no_value_yet, locals);
         const values = append(args, temp_values);
 
-        const application_value = function_body(fun)(
+        const application_value = body(
             extend_environment(
                 names,
                 values,
                 function_environment(fun)),
-            succeed,
+            (return_value, fail2) => {
+                if (is_return_value(return_value)) {
+
+                    return succeed(return_value_content(return_value),fail2);
+                } else {
+                    return succeed(undefined,fail2);
+                }
+            },
             fail);
-        if (is_return_value(application_value)) {
-            return return_value_content(application_value);
-        } else {
-            return undefined;
-        }
     } else {
         error(fun, "unknown function type in " +
             "execute_application");
