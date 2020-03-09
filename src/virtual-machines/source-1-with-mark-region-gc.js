@@ -856,10 +856,10 @@ function NEW() {
     // mark and free
     // get new bump and limit pointers
     MARK();
-    show_heap("");
     FREE_REGION();
-    display(BUMP_HEAD, "bump head");
-    display(BUMP_TAIL, "bump tail");
+    display(BUMP_HEAD, "new bump head");
+    display(BUMP_TAIL, "new bump tail");
+    display(K, "required size");
   } else {
   }
   if (BUMP_HEAD + K > BUMP_TAIL) {
@@ -926,6 +926,8 @@ function MARK() {
       A = HEAP[SCAN + I]; // address of child
       GET_LINE();
       A = HEAP[SCAN + I]; // address of child
+      display(A, "what address of child");
+      display(SCAN, "root node");
       if (
         // child is marked and corresponding line also marked
         HEAP[A + MARK_SLOT] === MARKED &&
@@ -957,7 +959,6 @@ function FREE_REGION() {
         if (HEAP[SCAN + LINE_MARK_SLOT] === MARKED) {
         } else {
           // free line
-          display(SCAN, "this line is free ==========================");
           HEAP[SCAN + LINE_LIMIT_SLOT] = HEAP[SCAN + LINE_ADDRESS_SLOT];
           // set block to recyclable
           HEAP[I * BLOCK_SIZE + BLOCK_STATE_SLOT] = RECYCLABLE;
@@ -985,11 +986,27 @@ function FREE_REGION() {
           BUMP_HEAD = HEAP[SCAN - LINE_BK_SIZE + LINE_ADDRESS_SLOT];
           A = BUMP_HEAD + K;
           GET_LINE();
-          if (HEAP[RES + LINE_LIMIT_SLOT] - BUMP_HEAD >= K) {
-            BUMP_TAIL = HEAP[RES + LINE_LIMIT_SLOT];
+          // FIXME: unable to determine occupying region
+          // patch: make sure target line also free
+          let allfree = true;
+          for (A = SCAN; A < RES; A = A + LINE_BK_SIZE) {
+            allfree =
+              allfree &&
+              HEAP[A + LINE_LIMIT_SLOT] === HEAP[A + LINE_ADDRESS_SLOT];
+          }
+          if (allfree) {
+            // hole found
+            // FIXME: not correct for multi-span lines
+            // HEAP[RES + LINE_LIMIT_SLOT] = BUMP_HEAD + K;
+            ALLOCATE_BUMP_TAIL();
             return undefined;
           } else {
-            SCAN = SCAN + LINE_BK_SIZE;
+            // hole not found, continue from end of gap
+            display(
+              RES,
+              "continue  ============== =========== =========== scanning"
+            );
+            SCAN = RES;
           }
         } else {
           SCAN = SCAN + LINE_BK_SIZE;
@@ -1000,9 +1017,21 @@ function FREE_REGION() {
   }
 }
 
+// finds bump tail based on bumphead
+function ALLOCATE_BUMP_TAIL() {
+  A = BUMP_HEAD;
+  GET_LINE();
+  A = RES + LINE_BK_SIZE;
+  while (HEAP[A + LINE_ADDRESS_SLOT] === HEAP[A + LINE_LIMIT_SLOT]) {
+    A = A + LINE_BK_SIZE;
+  }
+  BUMP_TAIL = HEAP[A + LINE_ADDRESS_SLOT] + LINE_SIZE;
+}
+
 // expects object address in A
 // returns line node address in RES
 function GET_LINE() {
+  display(A, "get line input");
   // block address in C
   C = math_floor(A / BLOCK_SIZE) * BLOCK_SIZE;
   // abuse RES to store start of addressable space
@@ -1010,6 +1039,11 @@ function GET_LINE() {
   // line number in A
   A = math_floor((A - RES) / LINE_SIZE);
   RES = HEAP[C + FIRST_CHILD_SLOT] + A * LINE_BK_SIZE;
+  display(RES, "getline output");
+  if (RES < 0) {
+    show_heap("1042");
+  } else {
+  }
 }
 
 // use tag slot as forwarding address;
