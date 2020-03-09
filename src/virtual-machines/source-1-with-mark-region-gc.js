@@ -855,6 +855,7 @@ function NEW() {
     display("Sweeeeep!");
     // mark and free
     MARK();
+    FREE_REGION();
     // get new bump and limit pointers
     // ALLOCATE_BUMP_HEAD();
     // ALLOCATE_BUMP_TAIL();
@@ -869,13 +870,26 @@ function NEW() {
   }
   HEAP[BUMP_HEAD + TAG_SLOT] = J;
   HEAP[BUMP_HEAD + SIZE_SLOT] = K;
-  // TODO: remove assigning mark slot from wrapper functions
+  // TODO: remove assigning mark slot from NEW_* functions
   HEAP[BUMP_HEAD + MARK_SLOT] = UNMARKED;
+  // update line limits
+  A = BUMP_HEAD;
+  GET_LINE();
+  A = RES;
+  while (
+    HEAP[A + LINE_ADDRESS_SLOT] + LINE_SIZE <=
+    BUMP_HEAD + HEAP[BUMP_HEAD + SIZE_SLOT]
+  ) {
+    HEAP[A + LINE_LIMIT_SLOT] = HEAP[A + LINE_ADDRESS_SLOT] + LINE_SIZE;
+    A = A + LINE_BK_SIZE;
+  }
+  HEAP[A + LINE_LIMIT_SLOT] = BUMP_HEAD + K;
+  // return
   RES = BUMP_HEAD;
   BUMP_HEAD = BUMP_HEAD + K;
 }
 
-// Changes A, B, SCAN
+// Changes A, B, C, I, SCAN
 function MARK() {
   // keep old TOP_RTS to prevent deleting stacks
   B = TOP_RTS;
@@ -909,11 +923,72 @@ function MARK() {
       I = I + 1
     ) {
       A = HEAP[SCAN + I]; // address of child
-      if (HEAP[A + LINE_MARK_SLOT] === MARKED) {
+      GET_LINE();
+      A = HEAP[SCAN + I]; // address of child
+      if (
+        // child is marked and corresponding line also marked
+        HEAP[A + MARK_SLOT] === MARKED &&
+        HEAP[RES + LINE_MARK_SLOT] === MARKED
+      ) {
       } else {
-        A = HEAP[SCAN + I]; // address of child
         PUSH_RTS();
       }
+    }
+  }
+}
+
+// set all blocks to be recyclable for now
+// expects hole-size in K
+function FREE_REGION() {
+  // implement free region
+  for (I = 0; I < NUMBER_OF_BLOCKS; I = I + 1) {
+    if (HEAP[I * BLOCK_SIZE + MARK_SLOT] === UNMARKED) {
+      HEAP[I * BLOCK_SIZE + BLOCK_STATE_SLOT] = FREE;
+    } else {
+      for (
+        // line pseudo node address in SCAN
+        SCAN = HEAP[I * BLOCK_SIZE + FIRST_CHILD_SLOT];
+        SCAN < HEAP[I * BLOCK_SIZE + LAST_CHILD_SLOT];
+        SCAN = SCAN + LINE_BK_SIZE
+      ) {
+        // unmark line
+        HEAP[SCAN + LINE_MARK_SLOT] = UNMARKED;
+        // free line
+        HEAP[SCAN + LINE_LIMIT_SLOT] = HEAP[SCAN + LINE_ADDRESS_SLOT];
+      }
+      // set block to recyclable
+      HEAP[I * BLOCK_SIZE + BLOCK_STATE_SLOT] = RECYCLABLE;
+    }
+    // unmark whole block
+    HEAP[I * BLOCK_SIZE + MARK_SLOT] = FREE;
+  }
+  // allocate new bump head and tail
+  for (I = 0; I < NUMBER_OF_BLOCKS; I = I + 1) {
+    if (
+      // if block is free or recyclable,
+      HEAP[I * BLOCK_SIZE + BLOCK_STATE_SLOT] === FREE ||
+      HEAP[I * BLOCK_SIZE + BLOCK_STATE_SLOT] === RECYCLABLE
+    ) {
+      // find k-sized hole
+      SCAN = HEAP[I * BLOCK_SIZE + FIRST_CHILD_SLOT];
+      while (SCAN < HEAP[I * BLOCK_SIZE + LAST_CHILD_SLOT]) {
+        if (HEAP[SCAN + LINE_LIMIT_SLOT] === HEAP[SCAN + LINE_ADDRESS_SLOT]) {
+          // if line is free/empty
+          // set bump head to end of previous line
+          BUMP_HEAD = HEAP[SCAN - LINE_BK_SIZE + LINE_ADDRESS_SLOT];
+          A = BUMP_HEAD + K;
+          GET_LINE();
+          if (HEAP[RES + LINE_LIMIT_SLOT] - BUMP_HEAD >= K) {
+            BUMP_TAIL = HEAP[RES + LINE_LIMIT_SLOT];
+            return undefined;
+          } else {
+            SCAN = SCAN + LINE_BK_SIZE;
+          }
+        } else {
+          SCAN = SCAN + LINE_BK_SIZE;
+        }
+      }
+    } else {
     }
   }
 }
@@ -921,12 +996,13 @@ function MARK() {
 // expects object address in A
 // returns line node address in RES
 function GET_LINE() {
-  // TODO: remove constants
-  const blockaddress = math_floor(A / BLOCK_SIZE) * BLOCK_SIZE;
-  const startaddress =
-    HEAP[HEAP[blockaddress + FIRST_CHILD_SLOT] + LINE_ADDRESS_SLOT];
-  const lineNo = math_floor((A - startaddress) / LINE_SIZE);
-  RES = HEAP[blockaddress + FIRST_CHILD_SLOT] + lineNo * LINE_BK_SIZE;
+  // block address in C
+  C = math_floor(A / BLOCK_SIZE) * BLOCK_SIZE;
+  // abuse RES to store start of addressable space
+  RES = HEAP[HEAP[C + FIRST_CHILD_SLOT] + LINE_ADDRESS_SLOT];
+  // line number in A
+  A = math_floor((A - RES) / LINE_SIZE);
+  RES = HEAP[C + FIRST_CHILD_SLOT] + A * LINE_BK_SIZE;
 }
 
 // use tag slot as forwarding address;
@@ -993,7 +1069,7 @@ let LINE_SIZE = -Infinity;
 // 2: offset of first child from the tag: 6
 // 3: offset of last child from the tag: (NUM_OF_LINES_PER_BLOCK - 1) * LINE_BK_SIZE (3)
 // 4: mark (free: 0, occupied: 1)
-// 5: liveness (live: 0, free: 1)
+// 5: block state (occupied: 0, recyclable: 1, free: 2)
 // 6: line 0 address
 // 7: line 0 mark bit (marked: 1, unmarked: 0)
 // 8: line 0 start of free address
@@ -1008,8 +1084,7 @@ let NUM_OF_LINES_PER_BLOCK = -Infinity;
 // total size of block
 let BLOCK_SIZE = -Infinity;
 
-const BLOCK_STATE_SLOT = 4;
-const BLOCK_LIVENESS_SLOT = 5;
+const BLOCK_STATE_SLOT = 5;
 const NO_BLOCK_FOUND = -1;
 
 // Expects root address in A
@@ -1023,7 +1098,7 @@ function NEW_BLOCK() {
   // state slot will be used for mark status
   HEAP[A + BLOCK_STATE_SLOT] = FREE;
   // liveness slot will be left in but not used for now
-  HEAP[A + BLOCK_LIVENESS_SLOT] = FREE;
+  HEAP[A + BLOCK_STATE_SLOT] = FREE;
   // store line address in B
   B = HEAP[A + LAST_CHILD_SLOT] + LINE_BK_SIZE;
   for (let i = 0; i < NUM_OF_LINES_PER_BLOCK; i = i + 1) {
