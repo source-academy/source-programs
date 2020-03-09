@@ -1,13 +1,10 @@
 /*
 Evaluator for language with booleans, conditionals,
 sequences, functions, constants, variables and blocks
-
 This is an evaluator for a language that lets you declare
 functions, variables and constants, apply functions, and
 carry out simple arithmetic calculations, boolean operations.
-
 The covered Source §1 sublanguage is:
-
 stmt    ::= const name = expr ; 
          |  let name = expr ; 
          |  function name(params) block
@@ -359,7 +356,15 @@ function list_of_delayed_args(exps, env) {
         : pair(delay_it(first_operand(exps), env),
           list_of_delayed_args(rest_operands(exps), env));
 }
-    
+
+function is_pair_constructor (fun){
+    return head(tail(operator(fun))) === "pair";
+}
+function construct_lazy_pair (args,env){
+    const head = delay_it (first_operand(args),env);
+    const tail = delay_it (first_operand(rest_operands(args)),env);
+    return pair (head,tail); 
+}
 // function application needs to distinguish between
 // primitive functions (which are evaluated using the
 // underlying JavaScript), and compound functions.
@@ -369,10 +374,9 @@ function list_of_delayed_args(exps, env) {
 // object's environment by a binding of the function
 // parameters to the arguments and of local names to
 // the special value no_value_yet
-
 function apply(fun, args, env) {
-   if (is_primitive_function(fun)) {
-      return apply_primitive_function(fun, list_of_arg_values(args, env));
+    if (is_primitive_function(fun)) {
+      return apply_primitive_function(fun, list_of_arg_values(args,env));
    } else if (is_compound_function(fun)) {
       const body = function_body(fun);
       const locals = local_names(body);
@@ -687,7 +691,8 @@ function evaluate(stmt, env) {
         : is_return_statement(stmt)
           ? eval_return_statement(stmt, env)
         : is_application(stmt)
-          ? apply(actual_value(operator(stmt), env),
+          ? is_pair_constructor(stmt) ? construct_lazy_pair(operands(stmt),env) 
+           : apply(actual_value(operator(stmt), env),
                   operands(stmt), env)
         : error(stmt, "Unknown statement type in evaluate: ");
 }
@@ -734,7 +739,8 @@ const primitive_functions = list(
        list(">",             (x,y) => x >   y),
        list(">=",            (x,y) => x >=  y),
        list("!",              x    =>   !   x),
-       list("head",           x    => head(x))
+       list("head",           x    => head(x)),
+       list ("tail",          x    => tail(x))
        );
 
 // the global environment also has bindings for all
@@ -784,11 +790,9 @@ parse_and_eval("1 + 1;");
 parse_and_eval("1 + 3 * 4;");
 parse_and_eval("(1 + 3) * 4;");
 parse_and_eval("1.4 / 2.3 + 70.4 * 18.3;");
-
 parse_and_eval("true;");
 parse_and_eval("! (1 === 1);");
 parse_and_eval("(! (1 === 1)) ? 1 : 2;");
-
 parse_and_eval("'hello' + ' ' + 'world';");
 */
 //parse_and_eval("function factorial(n) { return n === 1 ? 1 : n * factorial(n - 1);} factorial(4);");
@@ -822,8 +826,33 @@ function read_eval_print_loop(history) {
     }
 }
 
+const test1 = "function at(xs, n) {\
+   return n === 0\
+       ?  head(xs)\
+       :  at(tail(xs), n-1);\
+}\
+function intsfrom(n) {\
+   return pair(n, intsfrom(n+1));\
+}\
+function zipWith(f, xs, ys) {\
+   return xs === null\
+       ?  null\
+       :  ys === null\
+       ?  null\
+       :  pair(f(head(xs), head(ys)), zipWith(f, tail(xs), tail(ys)));\
+}\
+const facs = pair(1, zipWith((x, y) => x * y, intsfrom(1), facs));\
+function fac(n) {\
+   return at(facs, n);\
+}\
+fac(6);";
+//parse_and_eval(test1);
 
-read_eval_print_loop("");
-
-
-
+const list_func = "function list (x,y) {\
+                    return pair (x,pair (y,null));}";
+const map_func = "function map (f,xs) {\
+                    return xs === null ? xs\
+                    : pair (f(head(xs)), map (f,tail (xs)));\
+                    }";
+const test2 = map_func + "const a = pair(1,a); const b = map (x => x * x, a);head(tail(b));";
+parse_and_eval(test2);
