@@ -1035,7 +1035,7 @@ function GET_LINE() {
   // block address in C
   C = math_floor(A / BLOCK_SIZE) * BLOCK_SIZE;
   // abuse RES to store start of addressable space
-  RES = HEAP[HEAP[C + FIRST_CHILD_SLOT] + LINE_ADDRESS_SLOT];
+  RES = HEAP[C + HEAP[C + FIRST_CHILD_SLOT] + LINE_ADDRESS_SLOT];
   // line number in A
   A = math_floor((A - RES) / LINE_SIZE);
   RES = HEAP[C + FIRST_CHILD_SLOT] + A * LINE_BK_SIZE;
