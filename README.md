@@ -12,6 +12,7 @@ The evaluators in this section all follow the general style of SICP JS Chapter 4
 * [`src/evaluators/source-0pp.js`](https://github.com/source-academy/source-programs/blob/master/src/evaluators/source-0pp.js): evaluator for Source §0++ (calculator language plus conditionals, blocks and sequences)
 * [`src/evaluators/source-4-1.js`](https://github.com/source-academy/source-programs/blob/master/src/evaluators/source-1.js): evaluator for Source §1, described in SICP JS 4.1
 * [`src/evaluators/typed-source.js`](https://github.com/source-academy/source-programs/blob/master/src/evaluators/typed-source.js): evaluator for Typed Source (typed version of a Source §1 sublanguage)
+* [`src/evaluators/source-4-3.js`](https://github.com/source-academy/source-programs/blob/master/src/evaluators/source-4-3.js): meta-circular evaluator for Source §4.3 (non-deterministic programming)
 
 ## Steppers
 
