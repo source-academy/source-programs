@@ -1223,6 +1223,9 @@ function parse_and_compile(string) {
                    ? head(xs)\
                    : list_ref(tail(xs), n - 1);\
     }\
+    function is_empty_list(xs) {\
+        return is_null(xs);\
+    }\
     ";
 
     // prepend the program with pre-defined functions
@@ -2351,9 +2354,13 @@ run();
 */
 
 // P = parse_and_compile("                        \
-// function remove_duplicates(xs) {               \
-//     return filter(el => member(el, xs), xs);   \
-// }                                              \
+// function remove_duplicates(lst) {                                             \
+//     if(is_empty_list(lst)) {                                                  \
+//         return null;                                                          \
+//     } else {                                                                  \
+//         return accumulate((x, y) => pair(x, remove_all(y)), lst, lst);        \
+//     }                                                                         \
+// }                                                                             \
 // remove_duplicates(pair(2, enum_list(0, 3))); ");
 // //print_program(P);
 // run();
@@ -2361,10 +2368,10 @@ run();
 // P = parse_and_compile("                                                       \
 // function permutations(lst) {                                                  \
 //     if(is_empty_list(lst)) {                                                  \
-//         return list([]);                                                      \
+//         return pair(null, null);                                              \
 //     } else {                                                                  \
 //         const f = e => map(x => pair(e, x), permutations(remove(e, lst)));    \
-//         return accumulate((x,y) => append(f(x), y), [], lst);                 \
+//         return accumulate((x,y) => append(f(x), y), null, lst);               \
 //     }                                                                         \
 // }                                                                             \
 // permutations(enum_list(0, 3)); ");
@@ -2374,7 +2381,7 @@ run();
 // P = parse_and_compile("                                                       \
 // function subset(lst) {                                                        \
 //     if(is_empty_list(lst)) {                                                  \
-//         return list([]);                                                      \
+//         return pair(null, null);                                              \
 //     } else {                                                                  \
 //         const first = head(lst);                                              \
 //         const rest = subset(tail(lst));                                       \
