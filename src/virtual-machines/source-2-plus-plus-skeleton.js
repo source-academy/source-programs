@@ -860,13 +860,13 @@ function parse_and_compile(string) {
         const catch_address_address = insert_pointer - 1;
         const max_stack_size_1 = 
             compile(try_catch_statement_try_statement(expr),
-                    environment_index_table, insert_flag);
+                    environment_index_table, false);
         add_nullary_instruction(ENDTRY);
         let GOTO_address_address = NaN;
-        if (!insert_flag) {
-            add_unary_instruction(GOTO, NaN);
-            GOTO_address_address = insert_pointer - 1;
-        } else {}
+
+        add_unary_instruction(GOTO, NaN);
+        GOTO_address_address = insert_pointer - 1;
+
         machine_code[catch_address_address] = insert_pointer;
         const catch_name = name_of_name(try_catch_statement_exception_name(expr));
         const extended_index_table = 
@@ -874,9 +874,9 @@ function parse_and_compile(string) {
         const max_stack_size_2 =
             compile(try_catch_statement_catch_statement(expr),
                     extended_index_table, false);
-        if (!insert_flag) {
-            machine_code[GOTO_address_address] = insert_pointer;
-        } else {}
+
+        machine_code[GOTO_address_address] = insert_pointer;
+
         return math_max(max_stack_size_1, max_stack_size_2);
     }
     
@@ -957,6 +957,7 @@ function parse_and_compile(string) {
                         is_undefined_expression(expr) ||
                         is_application(expr) ||
                         is_primitive_application(expr) ||
+                        is_try_catch_statement(expr) ||
                         is_block(expr))
                       ) {
                 add_nullary_instruction(RTN);
@@ -1766,21 +1767,23 @@ f(3);                   ");
 
 /*
 const compiled = 
-parse_and_compile("                  \
-const r_1 = { A: 1, B: 2 };          \
-const r_2 = { A: 3, B: 4 };          \
-const r_3 = { B: 5, C: 5 };          \
-r_1 . A + r_2 . B + r_3 . C;         ");
+parse_and_compile("                                \
+const r_1 = { A: 11, B: { F: 22, G: 88 } };        \
+r_1 . B . G;                                       \
+const r_2 = { B: 55, C: 66, D: 77 };               \
+const r_3 = { A: 33, B: 44 };                      \
+r_1 . A + r_2 . B + r_3 . C;                       ");
 */
 
 
 const compiled = 
-parse_and_compile(" \
-try {               \
-    (1 + 2) / 0;    \
-} catch(e) {        \
-    22;             \
+parse_and_compile("  \
+try {                \
+    (1 + 2) / 1;     \
+} catch(e) {         \
+    true;            \
 }                   ");
+
 
 P = list_ref(compiled, 0);
 RECORD_INDEX_TABLE = list_ref(compiled, 1);
