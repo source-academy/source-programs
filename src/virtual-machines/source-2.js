@@ -1966,12 +1966,12 @@ M[LDNULL] = () =>    { NEW_NULL();
                     };
 
 M[RTN] = () =>     { POP_RTS();
-    H = RES;
-    PC = HEAP[H + RTS_FRAME_PC_SLOT];
-    ENV = HEAP[H + RTS_FRAME_ENV_SLOT];
-    POP_OS();
-    A = RES;
-    OS = HEAP[H + RTS_FRAME_OS_SLOT];
+                     H = RES;
+                     PC = HEAP[H + RTS_FRAME_PC_SLOT];
+                     ENV = HEAP[H + RTS_FRAME_ENV_SLOT];
+                     POP_OS();
+                     A = RES;
+                     OS = HEAP[H + RTS_FRAME_OS_SLOT];
                      PUSH_OS();
                     };
 
@@ -1981,8 +1981,36 @@ M[DONE] = () =>    { RUNNING = false;
 // ============================== INJECTED PRIMITIVE FUNCTIONS ========================
 // utilize underlying source functions
 
-M[IS_NUM]  = () => {
-                     POP_OS();
+function apply_nullary_primitive_return_number(f) {
+    A = f();
+    NEW_NUMBER();
+    A = f(RES);
+    PUSH_OS();
+    PC = PC + 1;
+}
+
+function apply_unary_primitive_return_number(f) {
+    POP_OS();
+    A = f(HEAP[RES + NUMBER_VALUE_SLOT]);
+    NEW_NUMBER();
+    A = RES;
+    PUSH_OS();
+    PC = PC + 1;
+}
+
+function apply_binary_primitive_return_number(f) {
+    POP_OS();
+    A = HEAP[RES + NUMBER_VALUE_SLOT];
+    POP_OS();
+    B = HEAP[RES + NUMBER_VALUE_SLOT];
+    A = f(A, B);
+    NEW_NUMBER();
+    A = RES;
+    PUSH_OS();
+    PC = PC + 1;
+}
+
+M[IS_NUM]  = () => { POP_OS();
                      A = HEAP[RES + TAG_SLOT] === NUMBER_TAG;
                      NEW_BOOL();
                      A = RES;
@@ -1990,8 +2018,7 @@ M[IS_NUM]  = () => {
                      PC = PC + 1;
                     };
 
-M[IS_PAIR] = () => {
-                     POP_OS(); // get address of the node being tested
+M[IS_PAIR] = () => { POP_OS(); // get address of the node being tested
                      if (HEAP[RES + TAG_SLOT] === ARRAY_TAG && HEAP[RES + SIZE_SLOT] === PAIR_SIZE) {
                          A = true;
                      } else {
@@ -2028,319 +2055,67 @@ M[ERROR]   = () => {
                      PC = PC + 1;
                    };
 
-M[ABS] = () => {
-                POP_OS();
-                A = HEAP[RES + NUMBER_VALUE_SLOT];
-                A = math_abs(A);
-                NEW_NUMBER();
-                A = RES;
-                PUSH_OS();
-                PC = PC + 1;
-            };
+M[ABS] = () => { apply_unary_primitive_return_number(math_abs) };
 
-M[ACOS] = () => {
-    POP_OS();
-    A = HEAP[RES + NUMBER_VALUE_SLOT];
-    A = math_acos(A);
-    NEW_NUMBER();
-    A = RES;
-    PUSH_OS();
-    PC = PC + 1;
-};
+M[ACOS] = () => { apply_unary_primitive_return_number(math_acos) };
 
-M[ACOSH] = () => {
-    POP_OS();
-    A = HEAP[RES + NUMBER_VALUE_SLOT];
-    A = math_acosh(A);
-    NEW_NUMBER();
-    A = RES;
-    PUSH_OS();
-    PC = PC + 1;
-};
+M[ACOSH] = () => { apply_unary_primitive_return_number(math_acosh) };
 
-M[ASIN] = () => {
-    POP_OS();
-    A = HEAP[RES + NUMBER_VALUE_SLOT];
-    A = math_asin(A);
-    NEW_NUMBER();
-    A = RES;
-    PUSH_OS();
-    PC = PC + 1;
-};
+M[ASIN] = () => { apply_unary_primitive_return_number(math_asin) };
 
-M[ASINH] = () => {
-    POP_OS();
-    A = HEAP[RES + NUMBER_VALUE_SLOT];
-    A = math_asinh(A);
-    NEW_NUMBER();
-    A = RES;
-    PUSH_OS();
-    PC = PC + 1;
-};
+M[ASINH] = () => { apply_unary_primitive_return_number(math_asinh) };
 
-M[ATAN] = () => {
-    POP_OS();
-    A = HEAP[RES + NUMBER_VALUE_SLOT];
-    A = math_atan(A);
-    NEW_NUMBER();
-    A = RES;
-    PUSH_OS();
-    PC = PC + 1;
-};
+M[ATAN] = () => { apply_unary_primitive_return_number(math_atan) };
 
-M[ATANH] = () => {
-    POP_OS();
-    A = HEAP[RES + NUMBER_VALUE_SLOT];
-    A = math_atanh(A);
-    NEW_NUMBER();
-    A = RES;
-    PUSH_OS();
-    PC = PC + 1;
-};
+M[ATANH] = () => { apply_unary_primitive_return_number(math_atanh) };
 
-M[ATAN2] = () => {
-    POP_OS();
-    A = HEAP[RES + NUMBER_VALUE_SLOT];
-    POP_OS();
-    B = HEAP[RES + NUMBER_VALUE_SLOT];
-    A = math_atan2(A, B);
-    NEW_NUMBER();
-    A = RES;
-    PUSH_OS();
-    PC = PC + 1;
-};
+M[ATAN2] = () => { apply_binary_primitive_return_number(math_atan2) };
 
-M[CBRT] = () => {
-    POP_OS();
-    A = HEAP[RES + NUMBER_VALUE_SLOT];
-    A = math_cbrt(A);
-    NEW_NUMBER();
-    A = RES;
-    PUSH_OS();
-    PC = PC + 1;
-};
+M[CBRT] = () => { apply_unary_primitive_return_number(math_cbrt) };
 
-M[CEIL] = () => {
-    POP_OS();
-    A = HEAP[RES + NUMBER_VALUE_SLOT];
-    A = math_ceil(A);
-    NEW_NUMBER();
-    A = RES;
-    PUSH_OS();
-    PC = PC + 1;
-};
+M[CEIL] = () => { apply_unary_primitive_return_number(math_ceil) };
 
-M[CLZ32] = () => {
-    POP_OS();
-    A = HEAP[RES + NUMBER_VALUE_SLOT];
-    A = math_clz32(A);
-    NEW_NUMBER();
-    A = RES;
-    PUSH_OS();
-    PC = PC + 1;
-};
+M[CLZ32] = () => { apply_unary_primitive_return_number(math_clz32) };
 
-M[COS] = () => {
-    POP_OS();
-    A = HEAP[RES + NUMBER_VALUE_SLOT];
-    A = math_cos(A);
-    NEW_NUMBER();
-    A = RES;
-    PUSH_OS();
-    PC = PC + 1;
-};
+M[COS] = () => { apply_unary_primitive_return_number(math_cos) };
 
-M[COSH] = () => {
-    POP_OS();
-    A = HEAP[RES + NUMBER_VALUE_SLOT];
-    A = math_cosh(A);
-    NEW_NUMBER();
-    A = RES;
-    PUSH_OS();
-    PC = PC + 1;
-};
+M[COSH] = () => { apply_unary_primitive_return_number(math_cosh) };
 
-M[EXP] = () => {
-    POP_OS();
-    A = HEAP[RES + NUMBER_VALUE_SLOT];
-    A = math_exp(A);
-    NEW_NUMBER();
-    A = RES;
-    PUSH_OS();
-    PC = PC + 1;
-};
+M[EXP] = () => { apply_unary_primitive_return_number(math_exp) };
 
-M[EXPM1] = () => {
-    POP_OS();
-    A = HEAP[RES + NUMBER_VALUE_SLOT];
-    A = math_expm1(A);
-    NEW_NUMBER();
-    A = RES;
-    PUSH_OS();
-    PC = PC + 1;
-};
+M[EXPM1] = () => { apply_unary_primitive_return_number(math_expm1) };
 
-M[FLOOR] = () => {
-    POP_OS();
-    A = HEAP[RES + NUMBER_VALUE_SLOT];
-    A = math_floor(A);
-    NEW_NUMBER();
-    A = RES;
-    PUSH_OS();
-    PC = PC + 1;
-};
+M[FLOOR] = () => { apply_unary_primitive_return_number(math_floor) };
 
-M[FROUND] = () => {
-    POP_OS();
-    A = HEAP[RES + NUMBER_VALUE_SLOT];
-    A = math_fround(A);
-    NEW_NUMBER();
-    A = RES;
-    PUSH_OS();
-    PC = PC + 1;
-};
+M[FROUND] = () => { apply_unary_primitive_return_number(math_fround) };
 
-M[IMUL] = () => {
-    POP_OS();
-    A = HEAP[RES + NUMBER_VALUE_SLOT];
-    POP_OS();
-    B = HEAP[RES + NUMBER_VALUE_SLOT];
-    A = math_imul(A, B);
-    NEW_NUMBER();
-    A = RES;
-    PUSH_OS();
-    PC = PC + 1;
-};
+M[IMUL] = () => { apply_binary_primitive_return_number(math_imul) };
 
-M[LOG] = () => {
-    POP_OS();
-    A = HEAP[RES + NUMBER_VALUE_SLOT];
-    A = math_log(A);
-    NEW_NUMBER();
-    A = RES;
-    PUSH_OS();
-    PC = PC + 1;
-};
+M[LOG] = () => { apply_unary_primitive_return_number(math_log) };
 
-M[LOG1P] = () => {
-    POP_OS();
-    A = HEAP[RES + NUMBER_VALUE_SLOT];
-    A = math_log1p(A);
-    NEW_NUMBER();
-    A = RES;
-    PUSH_OS();
-    PC = PC + 1;
-};
+M[LOG1P] = () => { apply_unary_primitive_return_number(math_log1p) };
 
-M[LOG10] = () => {
-    POP_OS();
-    A = HEAP[RES + NUMBER_VALUE_SLOT];
-    A = math_log10(A);
-    NEW_NUMBER();
-    A = RES;
-    PUSH_OS();
-    PC = PC + 1;
-};
+M[LOG10] = () => { apply_unary_primitive_return_number(math_log10) };
 
-M[LOG2] = () => {
-    POP_OS();
-    A = HEAP[RES + NUMBER_VALUE_SLOT];
-    A = math_log2(A);
-    NEW_NUMBER();
-    A = RES;
-    PUSH_OS();
-    PC = PC + 1;
-};
+M[LOG2] = () => { apply_unary_primitive_return_number(math_log2) };
 
-M[POW] = () => {
-    POP_OS();
-    A = HEAP[RES + NUMBER_VALUE_SLOT];
-    POP_OS();
-    B = HEAP[RES + NUMBER_VALUE_SLOT];
-    A = math_pow(A, B);
-    NEW_NUMBER();
-    A = RES;
-    PUSH_OS();
-    PC = PC + 1;
-};
+M[POW] = () => { apply_unary_primitive_return_number(math_pow) };
 
-M[RANDOM] = () => {
-    A = math_random();
-    NEW_NUMBER();
-    A = RES;
-    PUSH_OS();
-    PC = PC + 1;
-};
+M[RANDOM] = () => { apply_nullary_primitive_return_number(math_random) };
 
-M[SIGN] = () => {
-    POP_OS();
-    A = HEAP[RES + NUMBER_VALUE_SLOT];
-    A = math_sign(A);
-    NEW_NUMBER();
-    A = RES;
-    PUSH_OS();
-    PC = PC + 1;
-};
+M[SIGN] = () => { apply_unary_primitive_return_number(math_sign) };
 
-M[SIN] = () => {
-    POP_OS();
-    A = HEAP[RES + NUMBER_VALUE_SLOT];
-    A = math_sin(A);
-    NEW_NUMBER();
-    A = RES;
-    PUSH_OS();
-    PC = PC + 1;
-};
+M[SIN] = () => { apply_unary_primitive_return_number(math_sin) };
 
-M[SINH] = () => {
-    POP_OS();
-    A = HEAP[RES + NUMBER_VALUE_SLOT];
-    A = math_sinh(A);
-    NEW_NUMBER();
-    A = RES;
-    PUSH_OS();
-    PC = PC + 1;
-};
+M[SINH] = () => { apply_unary_primitive_return_number(math_sinh) };
 
-M[SQRT] = () => {
-    POP_OS();
-    A = HEAP[RES + NUMBER_VALUE_SLOT];
-    A = math_sqrt(A);
-    NEW_NUMBER();
-    A = RES;
-    PUSH_OS();
-    PC = PC + 1;
-};
+M[SQRT] = () => { apply_unary_primitive_return_number(math_sqrt) };
 
-M[TAN] = () => {
-    POP_OS();
-    A = HEAP[RES + NUMBER_VALUE_SLOT];
-    A = math_tan(A);
-    NEW_NUMBER();
-    A = RES;
-    PUSH_OS();
-    PC = PC + 1;
-};
+M[TAN] = () => { apply_unary_primitive_return_number(math_tan) };
 
-M[TANH] = () => {
-    POP_OS();
-    A = HEAP[RES + NUMBER_VALUE_SLOT];
-    A = math_tanh(A);
-    NEW_NUMBER();
-    A = RES;
-    PUSH_OS();
-    PC = PC + 1;
-};
+M[TANH] = () => { apply_unary_primitive_return_number(math_tanh) };
 
-M[TRUNC] = () => {
-    POP_OS();
-    A = HEAP[RES + NUMBER_VALUE_SLOT];
-    A = math_trunc(A);
-    NEW_NUMBER();
-    A = RES;
-    PUSH_OS();
-    PC = PC + 1;
-};
+M[TRUNC] = () => { apply_unary_primitive_return_number(math_trunc) };
 
 function run() {
     while (RUNNING) {
