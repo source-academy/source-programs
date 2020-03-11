@@ -889,7 +889,6 @@ function parse_and_compile(string) {
     }
 
     function compile(expr, environment_index_table, insert_flag) {
-        display(expr, "in compile: expr: ");
         let max_stack_size = 0;
         if (is_number(expr)) {
             add_unary_instruction(LDCN, expr);
@@ -948,8 +947,6 @@ function parse_and_compile(string) {
         } else {
             error(expr, "unknown statement:");
         }
-        
-        display(max_stack_size, "in compile: max_stack_size: ");
         
         // handling of return
         if (insert_flag) {
