@@ -2349,3 +2349,39 @@ function f(x) {         \
 f(3);                   ");
 run();
 */
+
+// P = parse_and_compile("                        \
+// function remove_duplicates(xs) {               \
+//     return filter(el => member(el, xs), xs);   \
+// }                                              \
+// remove_duplicates(pair(2, enum_list(0, 3))); ");
+// //print_program(P);
+// run();
+
+// P = parse_and_compile("                                                       \
+// function permutations(lst) {                                                  \
+//     if(is_empty_list(lst)) {                                                  \
+//         return list([]);                                                      \
+//     } else {                                                                  \
+//         const f = e => map(x => pair(e, x), permutations(remove(e, lst)));    \
+//         return accumulate((x,y) => append(f(x), y), [], lst);                 \
+//     }                                                                         \
+// }                                                                             \
+// permutations(enum_list(0, 3)); ");
+// //print_program(P);
+// run();
+
+// P = parse_and_compile("                                                       \
+// function subset(lst) {                                                        \
+//     if(is_empty_list(lst)) {                                                  \
+//         return list([]);                                                      \
+//     } else {                                                                  \
+//         const first = head(lst);                                              \
+//         const rest = subset(tail(lst));                                       \
+//         const with_first = map(l => pair(first, l), rest);                    \
+//         return append(with_first, rest);                                      \
+//     }                                                                         \
+// }                                                                             \
+// subset(enum_list(0, 3)); ");
+// //print_program(P);
+// run();
