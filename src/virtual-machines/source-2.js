@@ -228,43 +228,9 @@ function return_statement_expression(stmt) {
 
 function is_injected_primitive(expr) {
     const name = name_of_name(expr);
-    return name === "_math_abs"
-        || name === "_math_acos"
-        || name === "_math_acosh"
-        || name === "_math_asin"
-        || name === "_math_asinh"
-        || name === "_math_atan"
-        || name === "_math_atanh"
-        || name === "_math_atan2"
-        || name === "_math_cbrt"
-        || name === "_math_ceil"
-        || name === "_math_clz32"
-        || name === "_math_cos"
-        || name === "_math_cosh"
-        || name === "_math_exp"
-        || name === "_math_expm1"
-        || name === "_math_floor"
-        || name === "_math_fround"
-        || name === "_math_imul"
-        || name === "_math_log"
-        || name === "_math_log1p"
-        || name === "_math_log10"
-        || name === "_math_log2"
-        || name === "_math_pow"
-        || name === "_math_random"
-        || name === "_math_round"
-        || name === "_math_sign"
-        || name === "_math_sin"
-        || name === "_math_sinh"
-        || name === "_math_sqrt"
-        || name === "_math_tan"
-        || name === "_math_tanh"
-        || name === "_math_trunc"
-        || name === "_is_number"
-        || name === "_is_pair"
-        || name === "_is_null"
-        || name === "_display"
-        || name === "_error";
+    return accumulate((x, y) => name === injected_prim_func_placeholder(x) || y,
+                 false,
+                      primitives);
 }
 function injected_function_name(expr) {
     return head(tail(expr));
@@ -301,50 +267,89 @@ const IARRAY  = 22;
 const LARRAY  = 23;
 const AARRAY  = 24;
 const LDNULL  = 25;
-const RTN     = 26;
-const DONE    = 27;
-// primitive function bypassing limitation of source parser
-const IS_NUM  = 28;
-const IS_PAIR = 29;
-const IS_NULL = 30;
-const DISPLAY = 31;
-const ERROR   = 32;
-// math primitive functions
-const ABS     = 33;
-const ACOS    = 34;
-const ACOSH   = 35;
-const ASIN    = 36;
-const ASINH   = 37;
-const ATAN    = 38;
-const ATANH   = 39;
-const ATAN2   = 40;
-const CBRT    = 41;
-const CEIL    = 42;
-const CLZ32   = 43;
-const COS     = 44;
-const COSH    = 45;
-const EXP     = 46;
-const EXPM1   = 47;
-const FLOOR   = 48;
-const FROUND  = 49;
-const HYPOT   = 50;
-const IMUL    = 51;
-const LOG     = 52;
-const LOG1P   = 53;
-const LOG10   = 54;
-const LOG2    = 55;
-const MAX     = 56;
-const MIN     = 57;
-const POW     = 58;
-const RANDOM  = 59;
-const ROUND   = 60;
-const SIGN    = 61;
-const SIN     = 62;
-const SINH    = 63;
-const SQRT    = 64;
-const TAN     = 65;
-const TANH    = 66;
-const TRUNC   = 67;
+const RTN     = 27;
+const DONE    = 28;
+
+// ============================== Injected primitive functions =====================
+// follow the format:
+// name, opcode, built-in func, arguments, return
+const primitives = list(
+    list("_is_number"  , "IS_NUM ", 29, is_number  , list("any"), "bool"),
+    list("_is_pair"    , "IS_PAIR", 30, is_number  , list("any"), "bool"),
+    list("_is_null"    , "IS_NULL", 31, is_number  , list("any"), "bool"),
+    list("_display"    , "DISPLAY", 32, display    , list("any"), "undefined"),
+    list("_error"      , "ERROR  ", 33, error      , list("any"), "undefined"),
+    list("_math_random", "RANDOM ", 34, math_random, null, "num"),
+    list("_math_abs"   , "ABS    ", 35, math_abs   , list("num"), "num"),
+    list("_math_acos"  , "ACOS   ", 36, math_acos  , list("num"), "num"),
+    list("_math_acosh" , "ACOSH  ", 37, math_acosh , list("num"), "num"),
+    list("_math_asin"  , "ASIN   ", 38, math_asin  , list("num"), "num"),
+    list("_math_asinh" , "ASINH  ", 39, math_asinh , list("num"), "num"),
+    list("_math_atan"  , "ATAN   ", 40, math_atan  , list("num"), "num"),
+    list("_math_atanh" , "ATANH  ", 41, math_atanh , list("num"), "num"),
+    list("_math_cbrt"  , "CBRT   ", 42, math_cbrt  , list("num"), "num"),
+    list("_math_ceil"  , "CEIL   ", 43, math_ceil  , list("num"), "num"),
+    list("_math_clz32" , "CLZ32  ", 44, math_clz32 , list("num"), "num"),
+    list("_math_cos"   , "COS    ", 45, math_cos   , list("num"), "num"),
+    list("_math_cosh"  , "COSH   ", 46, math_cosh  , list("num"), "num"),
+    list("_math_exp"   , "EXP    ", 47, math_exp   , list("num"), "num"),
+    list("_math_expm1" , "EXPM1  ", 48, math_expm1 , list("num"), "num"),
+    list("_math_floor" , "FLOOR  ", 49, math_floor , list("num"), "num"),
+    list("_math_fround", "FROUND ", 50, math_fround, list("num"), "num"),
+    list("_math_log"   , "LOG    ", 51, math_log   , list("num"), "num"),
+    list("_math_log1p" , "LOG1P  ", 52, math_log1p , list("num"), "num"),
+    list("_math_log10" , "LOG10  ", 53, math_log10 , list("num"), "num"),
+    list("_math_log2"  , "LOG2   ", 54, math_log2  , list("num"), "num"),
+    list("_math_round" , "ROUND  ", 55, math_sign  , list("num"), "num"),
+    list("_math_sign"  , "SIGN   ", 56, math_sign  , list("num"), "num"),
+    list("_math_sin"   , "SIN    ", 57, math_sin   , list("num"), "num"),
+    list("_math_sinh"  , "SINH   ", 58, math_sinh  , list("num"), "num"),
+    list("_math_sqrt"  , "SQRT   ", 59, math_sqrt  , list("num"), "num"),
+    list("_math_tan"   , "TAN    ", 60, math_tan   , list("num"), "num"),
+    list("_math_tanh"  , "TANH   ", 61, math_tanh  , list("num"), "num"),
+    list("_math_trunc" , "TRUNC  ", 62, math_trunc , list("num"), "num"),
+    list("_math_atan2" , "ATAN2  ", 63, math_atan2 , list("num"), "num"),
+    list("_math_imul"  , "IMUL   ", 64, math_imul  , list("num", "num"), "num"),
+    list("_math_pow"   , "POW    ", 65, math_pow   , list("num", "num"), "num"),
+    list("_math_max"   , "MAX    ", 66, math_max   , list("num", "num"), "num"),
+    list("_math_min"   , "MIN    ", 67, math_min   , list("num", "num"), "num")
+);
+
+// auxiliary functions for injected primitive functions
+function injected_prim_func_placeholder(entry) {
+    return list_ref(entry, 0);
+}
+
+function injected_prim_func_name(entry) {
+    return list_ref(entry, 1);
+}
+
+function injected_prim_func_opcode(entry) {
+    return list_ref(entry, 2);
+}
+
+function injected_prim_func_builtin_func(entry) {
+    return list_ref(entry, 3);
+}
+
+function injected_prim_func_ops_types(entry) {
+    return list_ref(entry, 4);
+}
+
+function injected_prim_func_return_type(entry) {
+    return list_ref(entry, 5);
+}
+
+function lookup_injected_prim_func_by_placeholder(ph) {
+    function lookup(xs) {
+        return is_null(xs) || !is_pair(xs)
+                ? null
+                : injected_prim_func_placeholder(head(xs)) === ph
+                    ? head(xs)
+                    : lookup(tail(xs));
+    }
+    return lookup(primitives);
+}
 
 // some auxiliary constants
 // to keep track of the inline data
@@ -358,77 +363,40 @@ const LDCS_VALUE_OFFSET = 1;
 
 // printing opcodes for debugging
 
-const OPCODES = list(
-    pair(START,   "START  "),
-    pair(LDCN,    "LDCN   "),
-    pair(LDCB,    "LDCB   "),
-    pair(LDCS,    "LDCS   "),
-    pair(LDCU,    "LDCU   "),
-    pair(PLUS,    "PLUS   "),
-    pair(MINUS,   "MINUS  "),
-    pair(TIMES,   "TIMES  "),
-    pair(EQUAL,   "EQUAL  "),
-    pair(LESS,    "LESS   "),
-    pair(GREATER, "GREATER"),
-    pair(LEQ,     "LEQ    "),
-    pair(GEQ,     "GEQ    "),
-    pair(NOT,     "NOT    "),
-    pair(DIV,     "DIV    "),
-    pair(POP,     "POP    "),
-    pair(ASSIGN,  "ASSIGN "),
-    pair(JOF,     "JOF    "),
-    pair(GOTO,    "GOTO   "),
-    pair(LDF,     "LDF    "),
-    pair(CALL,    "CALL   "),
-    pair(LD,      "LD     "),
-    pair(IARRAY,  "IARRAY "), // Initiate ARRAY creation
-    pair(LARRAY,  "LARRAY "), // Load ARRAY (part of array creation)
-    pair(AARRAY,  "AARRAY "), // Access ARRAY
-    pair(LDNULL,  "LDNULL "),
-    pair(RTN,     "RTN    "),
-    pair(DONE,    "DONE   "),
-    // primitive function injection
-    pair(IS_NUM,  "IS_NUM "),
-    pair(IS_PAIR, "IS_PAIR"),
-    pair(IS_NULL, "IS_NULL"),
-    pair(DISPLAY, "DISPLAY"),
-    pair(ERROR,   "ERROR  "),
-    // math primitive function injection
-    pair(ABS,     "ABS    "),
-    pair(ACOS,    "ACOS   "),
-    pair(ACOSH,   "ACOSH  "),
-    pair(ASIN,    "ASIN   "),
-    pair(ASINH,   "ASINH  "),
-    pair(ATAN,    "ATAN   "),
-    pair(ATANH,   "ATANH  "),
-    pair(ATAN2,   "ATAN2  "),
-    pair(CBRT,    "CBRT   "),
-    pair(CEIL,    "CEIL   "),
-    pair(CLZ32,   "CLZ32  "),
-    pair(COS,     "COS    "),
-    pair(COSH,    "COSH   "),
-    pair(EXP,     "EXP    "),
-    pair(EXPM1,   "EXPM1  "),
-    pair(FLOOR,   "FLOOR  "),
-    pair(FROUND,  "FROUND "),
-    pair(HYPOT,   "HYPOT  "),
-    pair(IMUL,    "IMUL   "),
-    pair(LOG,     "LOG    "),
-    pair(LOG1P,   "LOG1P  "),
-    pair(LOG10,   "LOG10  "),
-    pair(LOG2,    "LOG2   "),
-    pair(MAX,     "MAX    "),
-    pair(MIN,     "MIN    "),
-    pair(POW,     "POW    "),
-    pair(RANDOM,  "RANDOM "),
-    pair(ROUND,   "ROUND  "),
-    pair(SIGN,    "SIGN   "),
-    pair(SIN,     "SIN    "),
-    pair(SINH,    "SINH   "),
-    pair(SQRT,    "SQRT   "),
-    pair(TAN,     "TAN    "),
-    pair(TANH,    "TANH   "),
-    pair(TRUNC,   "TRUNC  "));
+const OPCODES = append(
+    list(
+        pair(START,   "START  "),
+        pair(LDCN,    "LDCN   "),
+        pair(LDCB,    "LDCB   "),
+        pair(LDCS,    "LDCS   "),
+        pair(LDCU,    "LDCU   "),
+        pair(PLUS,    "PLUS   "),
+        pair(MINUS,   "MINUS  "),
+        pair(TIMES,   "TIMES  "),
+        pair(EQUAL,   "EQUAL  "),
+        pair(LESS,    "LESS   "),
+        pair(GREATER, "GREATER"),
+        pair(LEQ,     "LEQ    "),
+        pair(GEQ,     "GEQ    "),
+        pair(NOT,     "NOT    "),
+        pair(DIV,     "DIV    "),
+        pair(POP,     "POP    "),
+        pair(ASSIGN,  "ASSIGN "),
+        pair(JOF,     "JOF    "),
+        pair(GOTO,    "GOTO   "),
+        pair(LDF,     "LDF    "),
+        pair(CALL,    "CALL   "),
+        pair(LD,      "LD     "),
+        pair(IARRAY,  "IARRAY "), // Initiate ARRAY creation
+        pair(LARRAY,  "LARRAY "), // Load ARRAY (part of array creation)
+        pair(AARRAY,  "AARRAY "), // Access ARRAY
+        pair(LDNULL,  "LDNULL "),
+        pair(RTN,     "RTN    "),
+        pair(DONE,    "DONE   ")
+    ),
+    // appends injected primitive function opcodes and names
+    map(x => pair(injected_prim_func_opcode(x), injected_prim_func_name(x)), primitives)
+);
 
 // get a the name of an opcode, for debugging
 
@@ -452,7 +420,7 @@ function print_program(P) {
         s = s + ": " + get_name(P[i]);
         i = i + 1;
         if (op === LDCN || op === LDCB || op === LDCS || op === GOTO ||
-            op === JOF || op === ASSIGN || op === DISPLAY || op === ERROR ||
+            op === JOF || op === ASSIGN ||
             op === LDF || op === LD || op === CALL) {
             s = s + " " + stringify(P[i]);
             i = i + 1;
@@ -787,120 +755,15 @@ function parse_and_compile(string) {
 
     function compile_injected_primitive(expr, index_table) {
         const fn = injected_function_name(expr);
-        if (fn === "_math_abs") {
-            add_unary_instruction(LD, index_of(index_table, "x"));
-            add_nullary_instruction(ABS);
-        } else if (fn === "_math_acos") {
-            add_unary_instruction(LD, index_of(index_table, "x"));
-            add_nullary_instruction(ACOS);
-        } else if (fn === "_math_acosh") {
-            add_unary_instruction(LD, index_of(index_table, "x"));
-            add_nullary_instruction(ACOSH);
-        } else if (fn === "_math_asin") {
-            add_unary_instruction(LD, index_of(index_table, "x"));
-            add_nullary_instruction(ASIN);
-        } else if (fn === "_math_asinh") {
-            add_unary_instruction(LD, index_of(index_table, "x"));
-            add_nullary_instruction(ASINH);
-        } else if (fn === "_math_atan") {
-            add_unary_instruction(LD, index_of(index_table, "x"));
-            add_nullary_instruction(ATAN);
-        } else if (fn === "_math_atanh") {
-            add_unary_instruction(LD, index_of(index_table, "x"));
-            add_nullary_instruction(ATANH);
-        } else if (fn === "_math_atan2") {
-            add_unary_instruction(LD, index_of(index_table, "x"));
-            add_unary_instruction(LD, index_of(index_table, "y"));
-            add_nullary_instruction(ATAN2);
-        } else if (fn === "_math_cbrt") {
-            add_unary_instruction(LD, index_of(index_table, "x"));
-            add_nullary_instruction(CBRT);
-        } else if (fn === "_math_ceil") {
-            add_unary_instruction(LD, index_of(index_table, "x"));
-            add_nullary_instruction(CEIL);
-        } else if (fn === "_math_clz32") {
-            add_unary_instruction(LD, index_of(index_table, "x"));
-            add_nullary_instruction(CLZ32);
-        } else if (fn === "_math_cos") {
-            add_unary_instruction(LD, index_of(index_table, "x"));
-            add_nullary_instruction(COS);
-        } else if (fn === "_math_cosh") {
-            add_unary_instruction(LD, index_of(index_table, "x"));
-            add_nullary_instruction(COSH);
-        } else if (fn === "_math_exp") {
-            add_unary_instruction(LD, index_of(index_table, "x"));
-            add_nullary_instruction(EXP);
-        } else if (fn === "_math_expm1") {
-            add_unary_instruction(LD, index_of(index_table, "x"));
-            add_nullary_instruction(EXPM1);
-        } else if (fn === "_math_floor") {
-            add_unary_instruction(LD, index_of(index_table, "x"));
-            add_nullary_instruction(FLOOR);
-        } else if (fn === "_math_fround") {
-            add_unary_instruction(LD, index_of(index_table, "x"));
-            add_nullary_instruction(FROUND);
-        } else if (fn === "_math_imul") {
-            add_unary_instruction(LD, index_of(index_table, "x"));
-            add_unary_instruction(LD, index_of(index_table, "y"));
-            add_nullary_instruction(IMUL);
-        } else if (fn === "_math_log") {
-            add_unary_instruction(LD, index_of(index_table, "x"));
-            add_nullary_instruction(LOG);
-        } else if (fn === "_math_log1p") {
-            add_unary_instruction(LD, index_of(index_table, "x"));
-            add_nullary_instruction(LOG1P);
-        } else if (fn === "_math_log10") {
-            add_unary_instruction(LD, index_of(index_table, "x"));
-            add_nullary_instruction(LOG10);
-        } else if (fn === "_math_log2") {
-            add_unary_instruction(LD, index_of(index_table, "x"));
-            add_nullary_instruction(LOG2);
-        } else if (fn === "_math_pow") {
-            add_unary_instruction(LD, index_of(index_table, "x"));
-            add_unary_instruction(LD, index_of(index_table, "y"));
-            add_nullary_instruction(POW);
-        } else if (fn === "_math_random") {
-            add_nullary_instruction(RANDOM);
-        } else if (fn === "_math_round") {
-            add_unary_instruction(LD, index_of(index_table, "x"));
-            add_nullary_instruction(ROUND);
-        } else if (fn === "_math_sign") {
-            add_unary_instruction(LD, index_of(index_table, "x"));
-            add_nullary_instruction(SIGN);
-        } else if (fn === "_math_sin") {
-            add_unary_instruction(LD, index_of(index_table, "x"));
-            add_nullary_instruction(SIN);
-        } else if (fn === "_math_sinh") {
-            add_unary_instruction(LD, index_of(index_table, "x"));
-            add_nullary_instruction(SINH);
-        } else if (fn === "_math_sqrt") {
-            add_unary_instruction(LD, index_of(index_table, "x"));
-            add_nullary_instruction(SQRT);
-        } else if (fn === "_math_tan") {
-            add_unary_instruction(LD, index_of(index_table, "x"));
-            add_nullary_instruction(TAN);
-        } else if (fn === "_math_tanh") {
-            add_unary_instruction(LD, index_of(index_table, "x"));
-            add_nullary_instruction(TANH);
-        } else if (fn === "_math_trunc") {
-            add_unary_instruction(LD, index_of(index_table, "x"));
-            add_nullary_instruction(TRUNC);
-        } else if (fn === "_is_number") {
-            add_unary_instruction(LD, index_of(index_table, "v"));
-            add_nullary_instruction(IS_NUM);
-        } else if (fn === "_is_pair") {
-            add_unary_instruction(LD, index_of(index_table, "p"));
-            add_nullary_instruction(IS_PAIR);
-        } else if (fn === "_is_null") {
-            add_unary_instruction(LD, index_of(index_table, "p"));
-            add_nullary_instruction(IS_NULL);
-        } else if (fn === "_display") {
-            add_unary_instruction(LD, index_of(index_table, "v"));
-            add_nullary_instruction(DISPLAY);
-        } else if (fn === "_error") {
-            add_unary_instruction(LD, index_of(index_table, "e"));
-            add_nullary_instruction(ERROR);
-        } else {}
+        const entry = lookup_injected_prim_func_by_placeholder(fn);
+        const OP = injected_prim_func_opcode(entry);
+        const ops_types = injected_prim_func_ops_types(entry);
+        // generate LD instructions for identifiers
+        for (let i = 0; i < length(ops_types); i = i + 1) {
+            const id = "x" + stringify(i);  // identifier starts from x0 to xi for ith argument
+            add_unary_instruction(LD, index_of(index_table, id));
+        }
+        add_nullary_instruction(OP);
         return 1;
     }
 
@@ -986,7 +849,7 @@ function parse_and_compile(string) {
     }
 
     // primitive functions according to source 2 specifications
-    // TODO: math_hypot, math_max, math_min, list
+    // TODO: variadic functions: math_hypot, math_max, math_min, list etc.
     const math_prelude = "\
     const math_E = 2.718281828459045;\
     const math_LN10 = 2.302585092994046;\
@@ -997,112 +860,112 @@ function parse_and_compile(string) {
     const math_SQRT1_2 = 0.7071067811865476;\
     const math_SQRT2 = 1.4142135623730951;\
     \
-    function math_abs(x) {\
+    function math_abs(x0) {\
         return _math_abs;\
     }\
-    function math_acos(x) {\
+    function math_acos(x0) {\
         return _math_acos;\
     }\
-    function math_acosh(x) {\
+    function math_acosh(x0) {\
         return _math_acosh;\
     }\
-    function math_asin(x) {\
+    function math_asin(x0) {\
         return _math_asin;\
     }\
-    function math_asinh(x) {\
+    function math_asinh(x0) {\
         return _math_asinh;\
     }\
-    function math_atan(x) {\
+    function math_atan(x0) {\
         return _math_atan;\
     }\
-    function math_atanh(x) {\
+    function math_atanh(x0) {\
         return _math_atanh;\
     }\
-    function math_atan2(x, y) {\
+    function math_atan2(x0, x1) {\
         return _math_atan2;\
     }\
-    function math_cbrt(x) {\
+    function math_cbrt(x0) {\
         return _math_cbrt;\
     }\
-    function math_ceil(x) {\
+    function math_ceil(x0) {\
         return _math_ceil;\
     }\
-    function math_clz32(x) {\
+    function math_clz32(x0) {\
         return _math_clz32;\
     }\
-    function math_cos(x) {\
+    function math_cos(x0) {\
         return _math_cos;\
     }\
-    function math_cosh(x) {\
+    function math_cosh(x0) {\
         return _math_cosh;\
     }\
-    function math_exp(x) {\
+    function math_exp(x0) {\
         return _math_exp;\
     }\
-    function math_expm1(x) {\
+    function math_expm1(x0) {\
         return _math_expm1;\
     }\
-    function math_floor(x) {\
+    function math_floor(x0) {\
         return _math_floor;\
     }\
-    function math_fround(x) {\
+    function math_fround(x0) {\
         return _math_fround;\
     }\
-    function math_imul(x, y) {\
+    function math_imul(x0, x1) {\
         return _math_imul;\
     }\
-    function math_log(x) {\
+    function math_log(x0) {\
         return _math_log;\
     }\
-    function math_log1p(x) {\
+    function math_log1p(x0) {\
         return _math_log1p;\
     }\
-    function math_log10(x) {\
+    function math_log10(x0) {\
         return _math_log10;\
     }\
-    function math_log2(x) {\
+    function math_log2(x0) {\
         return _math_log2;\
     }\
-    function math_pow(x, y) {\
+    function math_pow(x0, x1) {\
         return _math_pow;\
     }\
     function math_random() {\
         return _math_random;\
     }\
-    function math_round(x) {\
+    function math_round(x0) {\
         return _math_round;\
     }\
-    function math_sign(x) {\
+    function math_sign(x0) {\
         return _math_sign;\
     }\
-    function math_sin(x) {\
+    function math_sin(x0) {\
         return _math_sin;\
     }\
-    function math_sinh(x) {\
+    function math_sinh(x0) {\
         return _math_sinh;\
     }\
-    function math_sqrt(x) {\
+    function math_sqrt(x0) {\
         return _math_sqrt;\
     }\
-    function math_tan(x) {\
+    function math_tan(x0) {\
         return _math_tan;\
     }\
-    function math_tanh(x) {\
+    function math_tanh(x0) {\
         return _math_tanh;\
     }\
-    function math_trunc(x) {\
+    function math_trunc(x0) {\
         return _math_trunc;\
     }\
     ";
 
     const predefined_functions = "\
-    function display(v) {\
+    function display(x0) {\
         return _display;\
     }\
-    function error(e) {\
+    function error(x0) {\
         return _error;\
     }\
-    function is_number(v) {\
+    function is_number(x0) {\
         return _is_number;\
     }\
     function is_boolean(v) {\
@@ -1111,7 +974,7 @@ function parse_and_compile(string) {
     function pair(h, t) {\
         return [h, t];\
     }\
-    function is_pair(p) {\
+    function is_pair(x0) {\
         return _is_pair;\
     }\
     function head(p) {\
@@ -1120,7 +983,7 @@ function parse_and_compile(string) {
     function tail(arr) { \
         return arr[1]; \
     }\
-    function is_null(p) {\
+    function is_null(x0) {\
         return _is_null;\
     }\
     function is_list(xs) {\
@@ -1222,9 +1085,6 @@ function parse_and_compile(string) {
         return n <= 0\
                    ? head(xs)\
                    : list_ref(tail(xs), n - 1);\
-    }\
-    function is_empty_list(xs) {\
-        return is_null(xs);\
     }\
     ";
 
@@ -1984,136 +1844,69 @@ M[DONE] = () =>    { RUNNING = false;
 // ============================== INJECTED PRIMITIVE FUNCTIONS ========================
 // utilize underlying source functions
 
-function insert_nullary_primitive(p) {
-    const OP = head(p);
-    const f = tail(p);
+function insert_primitive(p) {
+    const OP        = injected_prim_func_opcode(p);
+    const f         = injected_prim_func_builtin_func(p);
+    const ops_types = injected_prim_func_ops_types(p);
+    const rtn_type  = injected_prim_func_return_type(p);
     M[OP] = () => {
-        A = f();
-        NEW_NUMBER();
+        // gets arguments based on list of types
+        if (injected_prim_func_placeholder(p) === "_is_pair") {
+            POP_OS(); // get address of the node being tested
+            A = HEAP[RES + TAG_SLOT] === ARRAY_TAG
+                && HEAP[RES + SIZE_SLOT] === PAIR_SIZE;
+            NEW_BOOL();
+        } else if (injected_prim_func_placeholder(p) === "_is_null") {
+            POP_OS();
+            A = HEAP[RES + TAG_SLOT] === NULL_TAG;
+            NEW_BOOL();
+        } else {
+            const args =
+              map(x => {
+                    if (x === "num") {
+                        POP_OS();
+                        return HEAP[RES + NUMBER_VALUE_SLOT];
+                    } else {
+                    }
+                },
+                ops_types);
+            if (length(args) === 0) {
+                // nullary function
+                A = f();
+            } else if (length(args) === 1) {
+                // unary function
+                const arg1 = list_ref(args, 0);
+                A = f(arg1);
+            } else if (length(args) === 2) {
+                // binary function
+                const arg1 = list_ref(args, 0);
+                const arg2 = list_ref(args, 1);
+                A = f(arg1, arg2);
+            } else if (length(args) === 3) {
+                // ternary function
+                const arg1 = list_ref(args, 0);
+                const arg2 = list_ref(args, 1);
+                const arg3 = list_ref(args, 2);
+                A = f(arg1, arg2, arg3);
+            } else {
+                // beyond ternary functions...
+                return undefined;
+            }
+            if (rtn_type === "num") {
+                NEW_NUMBER();
+            } else if (rtn_type === "bool") {
+                NEW_BOOL();
+            } else {
+                NEW_UNDEFINED;
+            }
+        }
         A = RES;
         PUSH_OS();
         PC = PC + 1;
     };
 }
 
-function insert_unary_primitive(p) {
-    const OP = head(p);
-    const f = tail(p);
-    M[OP] = () => {
-        POP_OS();
-        A = HEAP[RES + NUMBER_VALUE_SLOT];
-        A = f(A);
-        NEW_NUMBER();
-        A = RES;
-        PUSH_OS();
-        PC = PC + 1;
-    };
-}
-
-function insert_binary_primitive(p) {
-    const OP = head(p);
-    const f = tail(p);
-    M[OP] = () => {
-        POP_OS();
-        A = HEAP[RES + NUMBER_VALUE_SLOT];
-        POP_OS();
-        B = HEAP[RES + NUMBER_VALUE_SLOT];
-        A = f(A, B);
-        NEW_NUMBER();
-        A = RES;
-        PUSH_OS();
-        PC = PC + 1;
-    };
-}
-
-const nullary_primitives = list(
-    pair(RANDOM, math_random)
-);
-
-const unary_primitives = list(
-    pair(ABS   , math_abs   ),
-    pair(ACOS  , math_acos  ),
-    pair(ACOSH , math_acosh ),
-    pair(ASIN  , math_asin  ),
-    pair(ASINH , math_asinh ),
-    pair(ATAN  , math_atan  ),
-    pair(ATANH , math_atanh ),
-    pair(CBRT  , math_cbrt  ),
-    pair(CEIL  , math_ceil  ),
-    pair(CLZ32 , math_clz32 ),
-    pair(COS   , math_cos   ),
-    pair(COSH  , math_cosh  ),
-    pair(EXP   , math_exp   ),
-    pair(EXPM1 , math_expm1 ),
-    pair(FLOOR , math_floor ),
-    pair(FROUND, math_fround),
-    pair(LOG   , math_log   ),
-    pair(LOG1P , math_log1p ),
-    pair(LOG10 , math_log10 ),
-    pair(LOG2  , math_log2  ),
-    pair(SIGN  , math_sign  ),
-    pair(SIN   , math_sin   ),
-    pair(SINH  , math_sinh  ),
-    pair(SQRT  , math_sqrt  ),
-    pair(TAN   , math_tan   ),
-    pair(TANH  , math_tanh  ),
-    pair(TRUNC , math_trunc )
-);
-
-const binary_primitives = list(
-    pair(ATAN2, math_atan2),
-    pair(IMUL , math_imul ),
-    pair(POW  , math_pow  )
-);
-
-for_each((p) => insert_nullary_primitive(p), nullary_primitives);
-for_each((p) => insert_unary_primitive(p), unary_primitives);
-for_each((p) => insert_binary_primitive(p), binary_primitives);
-
-M[IS_NUM]  = () => { POP_OS();
-                     A = HEAP[RES + TAG_SLOT] === NUMBER_TAG;
-                     NEW_BOOL();
-                     A = RES;
-                     PUSH_OS();
-                     PC = PC + 1;
-                    };
-
-M[IS_PAIR] = () => { POP_OS(); // get address of the node being tested
-                     if (HEAP[RES + TAG_SLOT] === ARRAY_TAG && HEAP[RES + SIZE_SLOT] === PAIR_SIZE) {
-                         A = true;
-                     } else {
-                         A = false;
-                     }
-                     NEW_BOOL();
-                     A = RES;
-                     PUSH_OS();
-                     PC = PC + 1;
-                   };
-
-M[IS_NULL] = () => {
-                     POP_OS();
-                     A = HEAP[RES + TAG_SLOT] === NULL_TAG;
-                     NEW_BOOL();
-                     A = RES;
-                     PUSH_OS();
-                     PC = PC + 1;
-                   };
-
-M[DISPLAY] = () => {
-                     POP_OS();
-                     if (HEAP[RES + TAG_SLOT] === ARRAY_TAG) {
-                         display(show_array_value(RES));
-                     } else {
-                         display(HEAP[RES + NUMBER_VALUE_SLOT]);
-                     }
-                     PC = PC + 1;
-                   };
-
-M[ERROR]   = () => {
-                     POP_OS();
-                     error(HEAP[RES + NUMBER_VALUE_SLOT]);
-                     PC = PC + 1;
-                   };
+for_each(p => insert_primitive(p), primitives);
 
 function run() {
     while (RUNNING) {
@@ -2173,10 +1966,7 @@ run();
 // run();
 
 P = parse_and_compile("\
-const x = math_sqrt(2);\
-x;\
-2;\
-x;\
+math_sqrt(9);\
 ");
 print_program(P);
 run();
