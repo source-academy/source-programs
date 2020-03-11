@@ -1981,34 +1981,91 @@ M[DONE] = () =>    { RUNNING = false;
 // ============================== INJECTED PRIMITIVE FUNCTIONS ========================
 // utilize underlying source functions
 
-function apply_nullary_primitive_return_number(f) {
-    A = f();
-    NEW_NUMBER();
-    A = f(RES);
-    PUSH_OS();
-    PC = PC + 1;
+function insert_nullary_primitive(p) {
+    const OP = head(p);
+    const f = tail(p);
+    M[OP] = () => {
+        A = f();
+        NEW_NUMBER();
+        A = RES;
+        PUSH_OS();
+        PC = PC + 1;
+    };
 }
 
-function apply_unary_primitive_return_number(f) {
-    POP_OS();
-    A = f(HEAP[RES + NUMBER_VALUE_SLOT]);
-    NEW_NUMBER();
-    A = RES;
-    PUSH_OS();
-    PC = PC + 1;
+function insert_unary_primitive(p) {
+    const OP = head(p);
+    const f = tail(p);
+    M[OP] = () => {
+        POP_OS();
+        A = HEAP[RES + NUMBER_VALUE_SLOT];
+        A = f(A);
+        NEW_NUMBER();
+        A = RES;
+        PUSH_OS();
+        PC = PC + 1;
+    };
 }
 
-function apply_binary_primitive_return_number(f) {
-    POP_OS();
-    A = HEAP[RES + NUMBER_VALUE_SLOT];
-    POP_OS();
-    B = HEAP[RES + NUMBER_VALUE_SLOT];
-    A = f(A, B);
-    NEW_NUMBER();
-    A = RES;
-    PUSH_OS();
-    PC = PC + 1;
+function insert_binary_primitive(p) {
+    const OP = head(p);
+    const f = tail(p);
+    M[OP] = () => {
+        POP_OS();
+        A = HEAP[RES + NUMBER_VALUE_SLOT];
+        POP_OS();
+        B = HEAP[RES + NUMBER_VALUE_SLOT];
+        A = f(A, B);
+        NEW_NUMBER();
+        A = RES;
+        PUSH_OS();
+        PC = PC + 1;
+    };
 }
+
+const nullary_primitives = list(
+    pair(RANDOM, math_random)
+);
+
+const unary_primitives = list(
+    pair(ABS   , math_abs   ),
+    pair(ACOS  , math_acos  ),
+    pair(ACOSH , math_acosh ),
+    pair(ASIN  , math_asin  ),
+    pair(ASINH , math_asinh ),
+    pair(ATAN  , math_atan  ),
+    pair(ATANH , math_atanh ),
+    pair(CBRT  , math_cbrt  ),
+    pair(CEIL  , math_ceil  ),
+    pair(CLZ32 , math_clz32 ),
+    pair(COS   , math_cos   ),
+    pair(COSH  , math_cosh  ),
+    pair(EXP   , math_exp   ),
+    pair(EXPM1 , math_expm1 ),
+    pair(FLOOR , math_floor ),
+    pair(FROUND, math_fround),
+    pair(LOG   , math_log   ),
+    pair(LOG1P , math_log1p ),
+    pair(LOG10 , math_log10 ),
+    pair(LOG2  , math_log2  ),
+    pair(SIGN  , math_sign  ),
+    pair(SIN   , math_sin   ),
+    pair(SINH  , math_sinh  ),
+    pair(SQRT  , math_sqrt  ),
+    pair(TAN   , math_tan   ),
+    pair(TANH  , math_tanh  ),
+    pair(TRUNC , math_trunc )
+);
+
+const binary_primitives = list(
+    pair(ATAN2, math_atan2),
+    pair(IMUL , math_imul ),
+    pair(POW  , math_pow  )
+);
+
+for_each((p) => insert_nullary_primitive(p), nullary_primitives);
+for_each((p) => insert_unary_primitive(p), unary_primitives);
+for_each((p) => insert_binary_primitive(p), binary_primitives);
 
 M[IS_NUM]  = () => { POP_OS();
                      A = HEAP[RES + TAG_SLOT] === NUMBER_TAG;
@@ -2054,68 +2111,6 @@ M[ERROR]   = () => {
                      error(HEAP[RES + NUMBER_VALUE_SLOT]);
                      PC = PC + 1;
                    };
-
-M[ABS] = () => { apply_unary_primitive_return_number(math_abs) };
-
-M[ACOS] = () => { apply_unary_primitive_return_number(math_acos) };
-
-M[ACOSH] = () => { apply_unary_primitive_return_number(math_acosh) };
-
-M[ASIN] = () => { apply_unary_primitive_return_number(math_asin) };
-
-M[ASINH] = () => { apply_unary_primitive_return_number(math_asinh) };
-
-M[ATAN] = () => { apply_unary_primitive_return_number(math_atan) };
-
-M[ATANH] = () => { apply_unary_primitive_return_number(math_atanh) };
-
-M[ATAN2] = () => { apply_binary_primitive_return_number(math_atan2) };
-
-M[CBRT] = () => { apply_unary_primitive_return_number(math_cbrt) };
-
-M[CEIL] = () => { apply_unary_primitive_return_number(math_ceil) };
-
-M[CLZ32] = () => { apply_unary_primitive_return_number(math_clz32) };
-
-M[COS] = () => { apply_unary_primitive_return_number(math_cos) };
-
-M[COSH] = () => { apply_unary_primitive_return_number(math_cosh) };
-
-M[EXP] = () => { apply_unary_primitive_return_number(math_exp) };
-
-M[EXPM1] = () => { apply_unary_primitive_return_number(math_expm1) };
-
-M[FLOOR] = () => { apply_unary_primitive_return_number(math_floor) };
-
-M[FROUND] = () => { apply_unary_primitive_return_number(math_fround) };
-
-M[IMUL] = () => { apply_binary_primitive_return_number(math_imul) };
-
-M[LOG] = () => { apply_unary_primitive_return_number(math_log) };
-
-M[LOG1P] = () => { apply_unary_primitive_return_number(math_log1p) };
-
-M[LOG10] = () => { apply_unary_primitive_return_number(math_log10) };
-
-M[LOG2] = () => { apply_unary_primitive_return_number(math_log2) };
-
-M[POW] = () => { apply_unary_primitive_return_number(math_pow) };
-
-M[RANDOM] = () => { apply_nullary_primitive_return_number(math_random) };
-
-M[SIGN] = () => { apply_unary_primitive_return_number(math_sign) };
-
-M[SIN] = () => { apply_unary_primitive_return_number(math_sin) };
-
-M[SINH] = () => { apply_unary_primitive_return_number(math_sinh) };
-
-M[SQRT] = () => { apply_unary_primitive_return_number(math_sqrt) };
-
-M[TAN] = () => { apply_unary_primitive_return_number(math_tan) };
-
-M[TANH] = () => { apply_unary_primitive_return_number(math_tanh) };
-
-M[TRUNC] = () => { apply_unary_primitive_return_number(math_trunc) };
 
 function run() {
     while (RUNNING) {
