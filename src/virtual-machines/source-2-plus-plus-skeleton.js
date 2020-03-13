@@ -957,6 +957,7 @@ function parse_and_compile(string) {
                         is_undefined_expression(expr) ||
                         is_application(expr) ||
                         is_primitive_application(expr) ||
+                        is_object_access(expr) || 
                         is_try_catch_statement(expr) ||
                         is_block(expr))
                       ) {
@@ -996,6 +997,9 @@ function parse_and_compile(string) {
     const div_by_zero_error_address = insert_pointer;
     
     compile(parse("throw {DivisionByZero: true};"), null, false);
+
+    display(IDP, "IDP:");
+    display(IDR, "IDR:");
     
     return list(machine_code, record_index_table, 
                 div_by_zero_error_address);
