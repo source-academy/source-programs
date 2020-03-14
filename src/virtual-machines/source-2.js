@@ -241,10 +241,17 @@ function is_injected_return(expr) {
     return list_ref(expr, 1) === "injected";
 }
 function name_of_injected_function_in_return(expr) {
+    display(expr);
     return head(tail(list_ref(expr, 2)));
 }
 function injected_function_name(expr) {
     return head(tail(expr));
+}
+function mark_injected_function_definition(expr) {
+    const params = function_definition_parameters(expr);
+    const rtn_stmt = function_definition_body(expr);
+    const marked_rtn_stmt = pair(head(rtn_stmt), pair("injected", tail(rtn_stmt)));
+    return make_function_definition(params, marked_rtn_stmt);
 }
 
 // OP-CODES
@@ -356,15 +363,12 @@ function lookup_injected_prim_func_by_string(name) {
     }
     return lookup(primitives);
 }
-function make_injected_prim_func_expr(entry) {
-    return list("injected", injected_prim_func_string(entry));
-}
 function generate_injected_prim_func_code(entry) {
     const fn = injected_prim_func_string(entry);
     const num_of_ops = length(injected_prim_func_ops_types(entry));
     let code = "function " + fn + "(";
     if (num_of_ops === 0) {
-        code = code + ") {}";
+        code = code + ") { return " + fn + "; }";
     } else {
         for (let i = 0; i < num_of_ops; i = i + 1) {
             if (i < num_of_ops - 1) {
@@ -717,13 +721,6 @@ function parse_and_compile(string) {
 
     function compile_application(expr, index_table) {
         // handle variadic case
-        const opr = operator(expr);
-        const ops = operands(expr);
-        if (is_injected_primitive(name_of_name(opr))) {
-            display(opr);
-            const entry = lookup_injected_prim_func_by_string(name_of_name(opr));
-            display(entry, "entry");
-        } else {}
         const max_stack_operator = compile(operator(expr),
                                        index_table, false);
         const max_stack_operands = compile_arguments(operands(expr),
@@ -733,11 +730,7 @@ function parse_and_compile(string) {
     }
 
     function compile_function_definition(expr, index_table) {
-        let body = function_definition_body(expr);
-        if (is_return_statement(body)
-            && is_injected_primitive(name_of_name(return_statement_expression(body)))) {
-            body = pair(head(body), pair("injected", tail(body)));
-        } else {}
+        const body = function_definition_body(expr);
         const locals = local_names(body);
         const parameters =
             map(x => name_of_name(x), function_definition_parameters(expr));
@@ -776,7 +769,14 @@ function parse_and_compile(string) {
     function compile_constant_declaration(expr, index_table) {
         const name = constant_declaration_name(expr);
         const index = index_of(index_table, name);
-        const max_stack_size = compile(constant_declaration_value(expr),
+        // primitive function injection
+        // inject keyword "injected" if it is the injected function declaration
+        let value = constant_declaration_value(expr);
+        display(name);
+        if (is_injected_primitive(name)) {
+            value = mark_injected_function_definition(value);
+        } else {}
+        const max_stack_size = compile(value,
                                        index_table, false);
         add_unary_instruction(ASSIGN, index);
         add_nullary_instruction(LDCU);
@@ -784,6 +784,7 @@ function parse_and_compile(string) {
     }
 
     function compile_injected_primitive(name, index_table) {
+      display(name, "injected name");
         const entry = lookup_injected_prim_func_by_string(name);
         const ops_types = injected_prim_func_ops_types(entry);
         const OP = injected_prim_func_opcode(entry);
@@ -791,7 +792,6 @@ function parse_and_compile(string) {
             add_unary_instruction(LD, index_of(index_table, "x" + stringify(i)));
         }
         add_nullary_instruction(OP);
-        add_nullary_instruction(RTN);
         return 1;
     }
 
@@ -804,6 +804,7 @@ function parse_and_compile(string) {
             add_unary_instruction(LDCB, expr);
             max_stack_size = 1;
         } else if (is_string(expr)) {
+            display(expr, "is string");
             add_unary_instruction(LDCS, expr);
             max_stack_size = 1;
         } else if (is_undefined_expression(expr)) {
@@ -846,14 +847,14 @@ function parse_and_compile(string) {
             max_stack_size =
             compile_constant_declaration(expr, index_table);
         } else if (is_return_statement(expr)) {
-            const rtn_stmt = return_statement_expression(expr);
             if (length(expr) > 1 && is_injected_return(expr)) {
                 display(expr, "rtn stmt");
                 display(name_of_injected_function_in_return(expr), "rtn stmt");
                 max_stack_size = compile_injected_primitive(name_of_injected_function_in_return(expr), index_table);
-            } else {}
-            max_stack_size = compile(return_statement_expression(expr),
-              index_table, false);
+            } else {
+                max_stack_size = compile(return_statement_expression(expr),
+                  index_table, false);
+            }
         } else {
             error(expr, "unknown expression:");
         }
@@ -1898,10 +1899,11 @@ run();
 // run();
 
 P = parse_and_compile("\
-function foo() {;\
+function foo() {\
     return math_pow;\
 }\
-foo()(2, 3);\
+foo()(2,3);\
+\
 \
 ");
 print_program(P);
