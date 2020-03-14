@@ -229,29 +229,28 @@ function return_statement_expression(stmt) {
 
 // handling injected primitive functions
 
-function injected_function_string(stmt) {
-    return head(tail(stmt));
-}
 function is_injected_primitive(name) {
     return accumulate((x, y) => name === injected_prim_func_string(x) || y,
                  false,
                       primitives);
 }
-function is_injected_return(expr) {
-    return list_ref(expr, 1) === "injected";
-}
-function name_of_injected_function_in_return(expr) {
-    display(expr);
-    return head(tail(list_ref(expr, 2)));
-}
-function injected_function_name(expr) {
-    return head(tail(expr));
-}
+// the AST is transformed from
+// ["return_statement", [["name", [<injected_func>, null]], null]]
+// to
+// ["return_statement", ["injected", [["name", [<injected_func>, null]], null]]]
+// such that user still could do function foo() { return <injected_func>; } after prelude
+// and prevent contamination of namespace
 function mark_injected_function_definition(expr) {
     const params = function_definition_parameters(expr);
     const rtn_stmt = function_definition_body(expr);
     const marked_rtn_stmt = pair(head(rtn_stmt), pair("injected", tail(rtn_stmt)));
     return make_function_definition(params, marked_rtn_stmt);
+}
+function name_of_injected_function_in_return(expr) {
+    return head(tail(list_ref(expr, 2)));
+}
+function is_injected_return(expr) {
+    return list_ref(expr, 1) === "injected";
 }
 
 // OP-CODES
@@ -330,8 +329,8 @@ const primitives = list(
     list("ATAN2  ", 63, math_atan2 , "math_atan2" , list("num", "num"), "num"),
     list("IMUL   ", 64, math_imul  , "math_imul"  , list("num", "num"), "num"),
     list("POW    ", 65, math_pow   , "math_pow"   , list("num", "num"), "num")
-    // list("MAX    ", 66, math_max   , "math_max"   , list("num", "num"), "num"),
-    // list("MIN    ", 67, math_min   , "math_min"   , list("num", "num"), "num")
+    // list("MAX    ", 66, math_max   , "math_max"   , list("var"), "num"),
+    // list("MIN    ", 67, math_min   , "math_min"   , list("var"), "num")
 );
 
 // auxiliary functions for injected primitive functions
@@ -363,6 +362,14 @@ function lookup_injected_prim_func_by_string(name) {
     }
     return lookup(primitives);
 }
+// generate code snippet for primitive function
+// to register them in the program
+// takes on the form
+// function foo() {
+//     return foo;
+// }
+// where the return statement is handled in
+// compile_constant_declaration and compile_injected_primitive
 function generate_injected_prim_func_code(entry) {
     const fn = injected_prim_func_string(entry);
     const num_of_ops = length(injected_prim_func_ops_types(entry));
@@ -426,7 +433,9 @@ const OPCODES = append(
         pair(DONE,    "DONE   ")
     ),
     // appends injected primitive function opcodes and names
-    map(x => pair(injected_prim_func_opcode(x), injected_prim_func_name(x)), primitives)
+    map(x => pair(injected_prim_func_opcode(x),
+                    injected_prim_func_name(x)),
+        primitives)
 );
 
 // get a the name of an opcode, for debugging
@@ -720,7 +729,7 @@ function parse_and_compile(string) {
     }
 
     function compile_application(expr, index_table) {
-        // handle variadic case
+        // TODO: handle variadic case
         const max_stack_operator = compile(operator(expr),
                                        index_table, false);
         const max_stack_operands = compile_arguments(operands(expr),
@@ -772,8 +781,8 @@ function parse_and_compile(string) {
         // primitive function injection
         // inject keyword "injected" if it is the injected function declaration
         let value = constant_declaration_value(expr);
-        display(name);
         if (is_injected_primitive(name)) {
+            // inject the function definition body
             value = mark_injected_function_definition(value);
         } else {}
         const max_stack_size = compile(value,
@@ -783,8 +792,9 @@ function parse_and_compile(string) {
         return max_stack_size;
     }
 
+    // compile injected primitive name
+    // TODO: handle variadic cases
     function compile_injected_primitive(name, index_table) {
-      display(name, "injected name");
         const entry = lookup_injected_prim_func_by_string(name);
         const ops_types = injected_prim_func_ops_types(entry);
         const OP = injected_prim_func_opcode(entry);
@@ -804,7 +814,6 @@ function parse_and_compile(string) {
             add_unary_instruction(LDCB, expr);
             max_stack_size = 1;
         } else if (is_string(expr)) {
-            display(expr, "is string");
             add_unary_instruction(LDCS, expr);
             max_stack_size = 1;
         } else if (is_undefined_expression(expr)) {
@@ -847,9 +856,9 @@ function parse_and_compile(string) {
             max_stack_size =
             compile_constant_declaration(expr, index_table);
         } else if (is_return_statement(expr)) {
+            // when the return statement is injected with "injected" clause
+            // handle it at compile_injected_primitive()
             if (length(expr) > 1 && is_injected_return(expr)) {
-                display(expr, "rtn stmt");
-                display(name_of_injected_function_in_return(expr), "rtn stmt");
                 max_stack_size = compile_injected_primitive(name_of_injected_function_in_return(expr), index_table);
             } else {
                 max_stack_size = compile(return_statement_expression(expr),
@@ -896,7 +905,6 @@ function parse_and_compile(string) {
     const math_prelude = math_consts + accumulate((x, y) => y + generate_injected_prim_func_code(x) + " ",
                                                   " ",
                                                   primitives);
-    display(parse(math_prelude));
 
     const predefined_functions = "\
     function is_boolean(v) {\
