@@ -1453,7 +1453,7 @@ function show_heap_value(address) {
         let display_text = "result: heap node of type = " +
                            node_kind(HEAP[address]) + ", value = " +
                            show_array_value(address);
-        display(undefined, display_text + "]");
+        display(undefined, display_text);
     } else {
         display(undefined, "result: heap node of type = " +
                 node_kind(HEAP[address]) +
@@ -1470,12 +1470,15 @@ function show_array_value(address) {
         const value_type = node_kind(HEAP[addr]);
         display_text = display_text +
                        (value_type === "number"
-                           ? stringify(HEAP[addr + NUMBER_VALUE_SLOT]) + ", "
+                           ? stringify(HEAP[addr + NUMBER_VALUE_SLOT])
                            : (value_type === "array"
-                               ? show_array_value(addr) + ", "
+                               ? show_array_value(addr)
                                : (value_type === "null"
                                    ? "null"
                                    : "unknown type")));
+        if (i < size - 5) {
+            display_text = display_text + ", ";
+        } else {}
     }
     display_text = display_text + "]";
     return display_text;
@@ -1911,7 +1914,7 @@ function foo() {\
     return math_pow;\
 }\
 foo()(2,3);\
-\
+pair(1, pair(1, null));\
 \
 ");
 print_program(P);
