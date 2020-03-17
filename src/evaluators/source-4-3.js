@@ -816,8 +816,6 @@ function parse_and_run(str) {
         the_global_environment,
         // ambeval success
         (val, next_alternative) => {
-            announce_output(output_prompt);
-            display(user_print(val));
             final_result = val;
             
             // assign a function to try_again so that when called,
