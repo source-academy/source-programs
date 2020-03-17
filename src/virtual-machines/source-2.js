@@ -1818,7 +1818,7 @@ M[HEAD] = () =>     {   POP_OS();
                         PUSH_OS();
                     }
 
-M[HEAD] = () =>     {   POP_OS();
+M[TAIL] = () =>     {   POP_OS();
                         G = RES;
                         A = HEAP[G + HEAP[G + FIRST_CHILD_SLOT] + 1];
                         PUSH_OS();
