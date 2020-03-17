@@ -834,6 +834,7 @@ function parse_and_run(str) {
                 "// There are no more values of");
             display(user_print(str));
         });
+    return final_result;
 }
 
 // parse_and_run('function a(){const b = 2; return b;} a();');
