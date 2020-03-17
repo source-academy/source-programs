@@ -285,8 +285,11 @@ const IARRAY  = 23;
 const LARRAY  = 24;
 const AARRAY  = 25;
 const LDNULL  = 26;
-const RTN     = 27;
-const DONE    = 28;
+const PAIR    = 27;
+const HEAD    = 28;
+const TAIL    = 29;
+const RTN     = 30;
+const DONE    = 31;
 
 // ============================== Injected primitive functions =====================
 // follow the format:
@@ -429,6 +432,9 @@ const OPCODES = append(
         pair(LARRAY,  "LARRAY "), // Load ARRAY (part of array creation)
         pair(AARRAY,  "AARRAY "), // Access ARRAY
         pair(LDNULL,  "LDNULL "),
+        pair(PAIR,    "PAIR   "),
+        pair(HEAD,    "HEAD   "),
+        pair(TAIL,    "TAIL   "),
         pair(RTN,     "RTN    "),
         pair(DONE,    "DONE   ")
     ),
@@ -1265,7 +1271,8 @@ function NEW_STRING() {
 
 const ARRAY_TAG = -107;
 // constants for pairs
-const PAIR_SIZE = 6;
+// number of elements in a pair
+const PAIR_SIZE = 2;
 
 // expects array size in A
 function NEW_ARRAY() {
@@ -1274,9 +1281,9 @@ function NEW_ARRAY() {
     NEW();
     HEAP[RES + FIRST_CHILD_SLOT] = 4;
     HEAP[RES + LAST_CHILD_SLOT] = B - 1;
-    for (let i = 0; i < B; i = i + 1) {
-        HEAP[RES + HEAP[RES + FIRST_CHILD_SLOT] + i] = 0;
-    }
+    // for (let i = 0; i < B; i = i + 1) {
+    //     HEAP[RES + HEAP[RES + FIRST_CHILD_SLOT] + i] = 0;
+    // }
 }
 
 // null nodes layout
@@ -1792,6 +1799,30 @@ M[LDNULL] = () =>    { NEW_NULL();
                      PUSH_OS();
                      PC = PC + 1;
                     };
+
+M[PAIR] = () =>     {   A = PAIR_SIZE;
+                        NEW_ARRAY();
+                        G = RES;
+                        POP_OS();
+                        HEAP[G + HEAP[G + FIRST_CHILD_SLOT] + 0] = RES;
+                        POP_OS();
+                        HEAP[G + HEAP[G + FIRST_CHILD_SLOT] + 1] = RES;
+                        A = G;
+                        PUSH_OS();
+                    }
+                    
+
+M[HEAD] = () =>     {   POP_OS();
+                        G = RES;
+                        A = HEAP[G + HEAP[G + FIRST_CHILD_SLOT] + 0];
+                        PUSH_OS();
+                    }
+
+M[HEAD] = () =>     {   POP_OS();
+                        G = RES;
+                        A = HEAP[G + HEAP[G + FIRST_CHILD_SLOT] + 1];
+                        PUSH_OS();
+                    }
 
 M[RTN] = () =>     { POP_RTS();
                      H = RES;
