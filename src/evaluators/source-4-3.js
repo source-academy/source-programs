@@ -808,6 +808,7 @@ function user_print(object) {
 }
 
 let try_again = null;
+let final_result = undefined; // stores the final result of the program, useful for testing.
 
 function parse_and_run(str) {
     const exprs = make_block(parse(str));
@@ -817,10 +818,18 @@ function parse_and_run(str) {
         (val, next_alternative) => {
             announce_output(output_prompt);
             display(user_print(val));
-            try_again = next_alternative;
+            final_result = val;
+            
+            // assign a function to try_again so that when called,
+            // the result value is returned
+            try_again = () => {
+                next_alternative();
+                return final_result;
+            };
         },
         // ambeval failure
         () => {
+            final_result = undefined;
             announce_output(
                 "// There are no more values of");
             display(user_print(str));
