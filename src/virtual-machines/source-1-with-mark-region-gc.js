@@ -857,16 +857,12 @@ function NEW() {
     // get new bump and limit pointers
     MARK();
     FREE_REGION();
-    display(BUMP_HEAD, "new bump head");
-    display(BUMP_TAIL, "new bump tail");
-    display(K, "required size");
   } else {
   }
   if (BUMP_HEAD + K > BUMP_TAIL) {
     STATE = OUT_OF_MEMORY_ERROR;
     RUNNING = false;
-    show_executing("");
-    display(RUNNING);
+    display("reached oom");
   } else {
   }
   HEAP[BUMP_HEAD + TAG_SLOT] = J;
@@ -877,9 +873,12 @@ function NEW() {
   A = BUMP_HEAD;
   GET_LINE();
   A = RES;
+  GET_BLOCK();
+
   while (
+    A <= HEAP[RES + LAST_CHILD_SLOT] &&
     HEAP[A + LINE_ADDRESS_SLOT] + LINE_SIZE <=
-    BUMP_HEAD + HEAP[BUMP_HEAD + SIZE_SLOT]
+      BUMP_HEAD + HEAP[BUMP_HEAD + SIZE_SLOT]
   ) {
     HEAP[A + LINE_LIMIT_SLOT] = HEAP[A + LINE_ADDRESS_SLOT] + LINE_SIZE;
     A = A + LINE_BK_SIZE;
@@ -896,24 +895,29 @@ function MARK() {
   B = TOP_RTS;
   // init roots for dfs
   for (I = 0; I <= B; I = I + 1) {
-    A = RTS[I];
+    A = RTS[I]; // add all rts stacks
     PUSH_RTS();
   }
+  A = OS;
+  PUSH_RTS(); // add current os
+  A = ENV;
+  PUSH_RTS(); // add current env
+
   while (B < TOP_RTS) {
     POP_RTS();
     SCAN = RES;
     // mark node
     HEAP[SCAN + MARK_SLOT] = MARKED;
     // mark node's block
-    A = math_floor(SCAN / BLOCK_SIZE) * BLOCK_SIZE;
-    HEAP[A + MARK_SLOT] = MARKED;
+    CURR_BLOCK = math_floor(SCAN / BLOCK_SIZE) * BLOCK_SIZE;
+    HEAP[CURR_BLOCK + MARK_SLOT] = MARKED;
     // mark node's start line to end line
     A = SCAN;
     GET_LINE();
     A = RES;
     while (
-      HEAP[A + LINE_ADDRESS_SLOT] + LINE_SIZE <=
-      SCAN + HEAP[SCAN + SIZE_SLOT]
+      A <= HEAP[CURR_BLOCK + LAST_CHILD_SLOT] &&
+      HEAP[A + LINE_ADDRESS_SLOT] <= SCAN + HEAP[SCAN + SIZE_SLOT]
     ) {
       HEAP[A + LINE_MARK_SLOT] = MARKED;
       A = A + LINE_BK_SIZE;
@@ -926,8 +930,6 @@ function MARK() {
       A = HEAP[SCAN + I]; // address of child
       GET_LINE();
       A = HEAP[SCAN + I]; // address of child
-      display(A, "what address of child");
-      display(SCAN, "root node");
       if (
         // child is marked and corresponding line also marked
         HEAP[A + MARK_SLOT] === MARKED &&
@@ -946,6 +948,7 @@ function FREE_REGION() {
   // implement free region
   for (I = 0; I < NUMBER_OF_BLOCKS; I = I + 1) {
     if (HEAP[I * BLOCK_SIZE + MARK_SLOT] === UNMARKED) {
+      // if block is not marked, set state to free
       HEAP[I * BLOCK_SIZE + BLOCK_STATE_SLOT] = FREE;
     } else {
       // assume occupied
@@ -956,12 +959,12 @@ function FREE_REGION() {
         SCAN < HEAP[I * BLOCK_SIZE + LAST_CHILD_SLOT];
         SCAN = SCAN + LINE_BK_SIZE
       ) {
-        if (HEAP[SCAN + LINE_MARK_SLOT] === MARKED) {
-        } else {
+        if (HEAP[SCAN + LINE_MARK_SLOT] === UNMARKED) {
           // free line
           HEAP[SCAN + LINE_LIMIT_SLOT] = HEAP[SCAN + LINE_ADDRESS_SLOT];
           // set block to recyclable
           HEAP[I * BLOCK_SIZE + BLOCK_STATE_SLOT] = RECYCLABLE;
+        } else {
         }
         // unmark line
         HEAP[SCAN + LINE_MARK_SLOT] = UNMARKED;
@@ -979,34 +982,18 @@ function FREE_REGION() {
     ) {
       // find k-sized hole
       SCAN = HEAP[I * BLOCK_SIZE + FIRST_CHILD_SLOT];
-      while (SCAN < HEAP[I * BLOCK_SIZE + LAST_CHILD_SLOT]) {
+      while (SCAN <= HEAP[I * BLOCK_SIZE + LAST_CHILD_SLOT]) {
+        // if line is free/empty
         if (HEAP[SCAN + LINE_LIMIT_SLOT] === HEAP[SCAN + LINE_ADDRESS_SLOT]) {
-          // if line is free/empty
           // set bump head to end of previous line
-          BUMP_HEAD = HEAP[SCAN - LINE_BK_SIZE + LINE_ADDRESS_SLOT];
-          A = BUMP_HEAD + K;
-          GET_LINE();
-          // FIXME: unable to determine occupying region
-          // patch: make sure target line also free
-          let allfree = true;
-          for (A = SCAN; A < RES; A = A + LINE_BK_SIZE) {
-            allfree =
-              allfree &&
-              HEAP[A + LINE_LIMIT_SLOT] === HEAP[A + LINE_ADDRESS_SLOT];
-          }
-          if (allfree) {
-            // hole found
-            // FIXME: not correct for multi-span lines
-            // HEAP[RES + LINE_LIMIT_SLOT] = BUMP_HEAD + K;
-            ALLOCATE_BUMP_TAIL();
+          BUMP_HEAD = HEAP[SCAN - LINE_BK_SIZE + LINE_LIMIT_SLOT];
+          ALLOCATE_BUMP_TAIL();
+          if (BUMP_HEAD + K <= BUMP_TAIL) {
             return undefined;
           } else {
-            // hole not found, continue from end of gap
-            display(
-              RES,
-              "continue  ============== =========== =========== scanning"
-            );
-            SCAN = RES;
+            A = BUMP_TAIL - 1; // since bump_tail is exclusive, may return undefined
+            GET_LINE();
+            SCAN = RES + LINE_BK_SIZE; // get previous line but increment manually
           }
         } else {
           SCAN = SCAN + LINE_BK_SIZE;
@@ -1025,13 +1012,19 @@ function ALLOCATE_BUMP_TAIL() {
   while (HEAP[A + LINE_ADDRESS_SLOT] === HEAP[A + LINE_LIMIT_SLOT]) {
     A = A + LINE_BK_SIZE;
   }
-  BUMP_TAIL = HEAP[A + LINE_ADDRESS_SLOT] + LINE_SIZE;
+  BUMP_TAIL = HEAP[A - LINE_BK_SIZE + LINE_ADDRESS_SLOT] + LINE_SIZE; // take max of previous line (for edge case where A is last line)
+}
+
+// expects object address in A
+// sets RES = block address
+function GET_BLOCK() {
+  RES = math_floor(A / BLOCK_SIZE) * BLOCK_SIZE;
 }
 
 // expects object address in A
 // returns line node address in RES
+// FIXME: need a special case for when bump tail === length of buffer
 function GET_LINE() {
-  display(A, "get line input");
   // block address in C
   C = math_floor(A / BLOCK_SIZE) * BLOCK_SIZE;
   // abuse RES to store start of addressable space
@@ -1039,9 +1032,9 @@ function GET_LINE() {
   // line number in A
   A = math_floor((A - RES) / LINE_SIZE);
   RES = HEAP[C + FIRST_CHILD_SLOT] + A * LINE_BK_SIZE;
-  display(RES, "getline output");
   if (RES < 0) {
-    show_heap("1042");
+    // show_heap("");
+    error(RES, "negative line number");
   } else {
   }
 }
@@ -1115,7 +1108,7 @@ let LINE_SIZE = -Infinity;
 // 8: line 0 start of free address
 // 9: line 1 address
 // ...
-// NUM_OF_LINES_PER_BLOCK * LINE_BK_SIZE (3): start of line 0 usable memory
+// NUM_OF_LINES_PER_BLOCK * LINE_BK_SIZE + BLOCK_BK_SIZE: start of line 0 usable memory
 
 const BLOCK_TAG = -107;
 // size of book keeping entries
@@ -1349,7 +1342,7 @@ function SET_CLOSURE_ENV() {
 // stackframe nodes layout
 //
 // 0: tag  = -104
-// 1: size = 7
+// 1: size = 8
 // 2: offset of first child from the tag: 6 (environment)
 // 3: offset of last child from the tag: 7 (operand stack)
 // 4: mark slot
@@ -1804,7 +1797,7 @@ function run() {
 // print_program(P);
 // run();
 //
-initialize_machine(5, 20, 1); // exactly 200 needed
+initialize_machine(8, 20, 1); // exactly 200 needed
 P = parse_and_compile(
   "             \
 const a = 2;                        \
@@ -1817,7 +1810,6 @@ function f(x, y) {                  \
 f(30, 10);                          "
 );
 run();
-show_heap("");
 //
 // initialize_machine(290);
 // P = parse_and_compile("         \
@@ -1926,3 +1918,6 @@ show_heap("");
 // }                       \
 // x(2)();                 ");
 // run();
+
+// cmd to run from pwd=source-program
+// node ../js-slang/dist/repl/cli.js src/virtual-machines/source-1-with-mark-region-gc.js
