@@ -1447,7 +1447,7 @@ function show_heap_value(address) {
     }
 }
 
-function is_denotable_value(addr) {
+function is_primitive_value(addr) {
     return node_kind(HEAP[addr]) === "number"
         || node_kind(HEAP[addr]) === "string"
         || node_kind(HEAP[addr]) === "bool";
@@ -1462,7 +1462,7 @@ function show_pair_value(address) {
     let display_text = "[";
     const h_addr = HEAP[address + HEAD_VALUE_SLOT];
     const t_addr = HEAP[address + TAIL_VALUE_SLOT];
-    if (is_denotable_value(h_addr)) {
+    if (is_primitive_value(h_addr)) {
         display_text = display_text + stringify(HEAP[h_addr + NUMBER_VALUE_SLOT]);
     } else if (is_null_value(h_addr)) {
         display_text = display_text + "null";
@@ -1472,7 +1472,7 @@ function show_pair_value(address) {
         display_text = display_text + "undefined_value";
     }
     display_text = display_text + ",";
-    if (is_denotable_value(t_addr)) {
+    if (is_primitive_value(t_addr)) {
         display_text = display_text + stringify(HEAP[t_addr + NUMBER_VALUE_SLOT]);
     } else if (is_null_value(t_addr)) {
         display_text = display_text + "null";
