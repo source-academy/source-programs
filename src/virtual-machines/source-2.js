@@ -334,7 +334,8 @@ const primitives = list(
     list("MIN    ", 81, math_min   , "math_min"   , list("var"), "num"),
     list("HYPOT  ", 82, math_hypot , "math_hypot" , list("var"), "num"),
     list("RUNTIME", 83, runtime    , "runtime"    , null, "num"),
-    list("STRINGI", 84, stringify  , "stringify"  , list("num"), "str")
+    list("STRINGI", 84, stringify  , "stringify"  , list("num"), "str"),
+    list("LIST   ", 85, list       , "list"       , list("var"), "pair")
 // list("PROMPT ", 84, prompt     , "prompt"     , null, "string")
 );
 
@@ -1778,6 +1779,9 @@ M[DONE] = () =>    { RUNNING = false;
 
 // ============================== INJECTED PRIMITIVE FUNCTIONS ========================
 // utilize underlying source functions
+// special cases handled are:
+// is_pair, is_null, pair access and list
+// as they cannot simply utilize the underlying source functions in the VM
 
 function insert_primitive(p) {
     const OP        = injected_prim_func_opcode(p);
@@ -1800,6 +1804,23 @@ function insert_primitive(p) {
         } else if (injected_prim_func_string(p) === "tail") {
             POP_OS();
             RES = HEAP[RES + TAIL_VALUE_SLOT];
+        } else if (injected_prim_func_string(p) === "list") {
+            // list is a variadic function
+            const num_of_args = HEAP[OS + SIZE_SLOT] - 4;
+            NEW_NULL(); // null at the end of list
+            B = RES;
+            // we look into OS and load from the start to end instead of popping it
+            for (E = 0; E < num_of_args; E = E + 1) {
+                A = HEAP[OS + HEAP[OS + FIRST_CHILD_SLOT] + E];
+                NEW_PAIR();
+                B = RES;
+            }
+            G = B;
+            // clean up OS
+            for (E = 0; E < num_of_args; E = E + 1) {
+                POP_OS();
+            }
+            RES = G;
         } else {
             if (is_variadic_function(injected_prim_func_string(p))) {
                 const num_of_args = HEAP[OS + SIZE_SLOT] - 4;
@@ -1910,7 +1931,7 @@ run();
 // run();
 
 P = parse_and_compile("\
-stringify(1000000000000000000000000000000000000000000000000000000);\
+reverse(list(1, 2, 3));\
 \
 ");
 print_program(P);
