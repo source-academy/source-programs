@@ -809,11 +809,18 @@ const LAST_CHILD_SLOT = 3;
 const MARK_SLOT = 4;
 
 // ///////////////////////////////////
-// Immix Mark-Region Garbage Collection
+// Immix Mark-Region Garbage Collector
 // ///////////////////////////////////
+// Mark-Region Garbage Collection is a modern granular garbage collection algorithm that has similar characteristics
+// of both Mark-and-Sweep and Copying algorithms, yet performing better than both in a large heap space.
+// TODO: Detail documentation at: https://github.com/source-academy/source-programs/wiki/
 
+// General metadata for Immix Garbage Collector
+// In Immix, usually a 2.5% of the blocks are reserved in the Headroom for evacuation, similar to Cheney's copying
+// algorithm, but much less than 50%. In this mimicked version of Immix, we allocate 1 block for evacuation.
 // initialize header info for Mark-Region algorithm
 let NUMBER_OF_BLOCKS = -Infinity;
+let HEADROOM = -Infinity;
 // address of current working block
 let CURR_BLOCK = -Infinity;
 // address of meta data of current working line
@@ -825,8 +832,7 @@ function initialize_machine(linesize, linenumber, blocknumber) {
   LINE_SIZE = linesize;
   NUM_OF_LINES_PER_BLOCK = linenumber;
   NUMBER_OF_BLOCKS = blocknumber;
-  BLOCK_SIZE =
-    (linesize + LINE_BK_SIZE) * NUM_OF_LINES_PER_BLOCK + BLOCK_BK_SIZE;
+  BLOCK_SIZE = (linesize + LINE_BK_SIZE) * NUM_OF_LINES_PER_BLOCK + BLOCK_BK_SIZE;
   HEAP_SIZE = BLOCK_SIZE * blocknumber;
   display(HEAP_SIZE, "\nRunning VM with heap size:");
   display(linesize * linenumber * blocknumber, "\nEffective memory size:");
@@ -846,47 +852,88 @@ function initialize_machine(linesize, linenumber, blocknumber) {
 // the to-space.
 let TEMP_ROOT = -Infinity;
 
+
 // NEW expects tag in A and size in B
 // changes A, B, C, J, K
 function NEW() {
   J = A;
   K = B;
   if (BUMP_HEAD + K > BUMP_TAIL) {
-    display("Sweeeeep!");
-    // mark and free
-    // get new bump and limit pointers
-    MARK();
-    FREE_REGION();
-  } else {
-  }
-  if (BUMP_HEAD + K > BUMP_TAIL) {
-    STATE = OUT_OF_MEMORY_ERROR;
-    RUNNING = false;
-    display("reached oom");
-  } else {
-  }
+    // if the hole is too small for the new node
+    visualize_heap("hello");
+    // TODO: overflow allocator
+    // go to next recyclable block or free block
+    A = BUMP_TAIL;
+    GET_BLOCK();
+    HEAP[RES + BLOCK_STATE_SLOT] = OCCUPIED;
+    GET_NEXT_RECYCLABLE_BLOCK();
+    if (RES === NO_BLOCK_FOUND) {
+      // no block is recyclable
+      GET_FREE_BLOCK();
+      if (RES === NO_BLOCK_FOUND) {
+        // no block is either recyclable or free
+        // mark and granular sweep
+        MARK();
+        FREE_REGION();
+        GET_NEXT_RECYCLABLE_BLOCK();
+        if (RES === NO_BLOCK_FOUND) {
+          GET_FREE_BLOCK();
+          if (RES === NO_BLOCK_FOUND) {
+            // if still no recyclable or free block found
+            STATE = OUT_OF_MEMORY_ERROR;
+            RUNNING = false;
+            display("reached oom");
+          } else {}
+        } else {}
+      } else {}
+    } else {}
+    A = RES;
+    // reallocate bump head and tail in the new block
+    ALLOCATE_BUMP_HEAD_AND_TAIL();
+  } else {}
   HEAP[BUMP_HEAD + TAG_SLOT] = J;
   HEAP[BUMP_HEAD + SIZE_SLOT] = K;
   // TODO: remove assigning mark slot from NEW_* functions
   HEAP[BUMP_HEAD + MARK_SLOT] = UNMARKED;
+
   // update line limits
   A = BUMP_HEAD;
   GET_LINE();
   A = RES;
-  GET_BLOCK();
-
+  GET_BLOCK(); // block address in RES
+  HEAP[RES + BLOCK_STATE_SLOT] = RECYCLABLE;
   while (
+    // loop through all lines and set line limits
     A <= HEAP[RES + LAST_CHILD_SLOT] &&
-    HEAP[A + LINE_ADDRESS_SLOT] + LINE_SIZE <=
-      BUMP_HEAD + HEAP[BUMP_HEAD + SIZE_SLOT]
+    HEAP[A + LINE_ADDRESS_SLOT] + LINE_SIZE <= BUMP_HEAD + HEAP[BUMP_HEAD + SIZE_SLOT]
   ) {
+    // lines are filled
     HEAP[A + LINE_LIMIT_SLOT] = HEAP[A + LINE_ADDRESS_SLOT] + LINE_SIZE;
     A = A + LINE_BK_SIZE;
   }
+  // update the last line to the actual occupied size
   HEAP[A + LINE_LIMIT_SLOT] = BUMP_HEAD + K;
+
   // return
   RES = BUMP_HEAD;
   BUMP_HEAD = BUMP_HEAD + K;
+}
+
+// expects free/recyclable block address in A, size to expect in K
+function ALLOCATE_BUMP_HEAD_AND_TAIL() {
+  // finds a hole (one or more free lines) and allocate new bump head and tail
+  SCAN = A + HEAP[A + FIRST_CHILD_SLOT];
+  while (SCAN <= A + HEAP[A + LAST_CHILD_SLOT]) {
+    // if line is free/empty
+    if (HEAP[SCAN + LINE_LIMIT_SLOT] === HEAP[SCAN + LINE_ADDRESS_SLOT]) {
+      // set bump head to end of previous line
+      BUMP_HEAD = HEAP[SCAN + LINE_ADDRESS_SLOT];
+      ALLOCATE_BUMP_TAIL();
+      break;
+    } else {
+      SCAN = SCAN + LINE_BK_SIZE;
+    }
+  }
 }
 
 // Changes A, B, C, I, SCAN
@@ -942,17 +989,20 @@ function MARK() {
   }
 }
 
-// set all blocks to be recyclable for now
 // expects hole-size in K
 function FREE_REGION() {
-  // implement free region
+  // granular collection
+  // free blocks
   for (I = 0; I < NUMBER_OF_BLOCKS; I = I + 1) {
     if (HEAP[I * BLOCK_SIZE + MARK_SLOT] === UNMARKED) {
-      // if block is not marked, set state to free
+      // if block is not MARKED, set state to FREE
+      display("FREEEEEE");
       HEAP[I * BLOCK_SIZE + BLOCK_STATE_SLOT] = FREE;
     } else {
-      // assume occupied
+      // assume OCCUPIED
       HEAP[I * BLOCK_SIZE + BLOCK_STATE_SLOT] = OCCUPIED;
+
+      // free lines in non-free block
       for (
         // line pseudo node address in SCAN
         SCAN = HEAP[I * BLOCK_SIZE + FIRST_CHILD_SLOT];
@@ -960,12 +1010,12 @@ function FREE_REGION() {
         SCAN = SCAN + LINE_BK_SIZE
       ) {
         if (HEAP[SCAN + LINE_MARK_SLOT] === UNMARKED) {
-          // free line
+          // free line not marked
+          display("FREEEEEE");
           HEAP[SCAN + LINE_LIMIT_SLOT] = HEAP[SCAN + LINE_ADDRESS_SLOT];
           // set block to recyclable
           HEAP[I * BLOCK_SIZE + BLOCK_STATE_SLOT] = RECYCLABLE;
-        } else {
-        }
+        } else {}
         // unmark line
         HEAP[SCAN + LINE_MARK_SLOT] = UNMARKED;
       }
@@ -973,7 +1023,8 @@ function FREE_REGION() {
     // unmark whole block
     HEAP[I * BLOCK_SIZE + MARK_SLOT] = UNMARKED;
   }
-  // allocate new bump head and tail
+
+  // finds a hole of at least k size and allocate new bump head and tail
   for (I = 0; I < NUMBER_OF_BLOCKS; I = I + 1) {
     if (
       // if block is free or recyclable,
@@ -988,6 +1039,7 @@ function FREE_REGION() {
           // set bump head to end of previous line
           BUMP_HEAD = HEAP[SCAN - LINE_BK_SIZE + LINE_LIMIT_SLOT];
           ALLOCATE_BUMP_TAIL();
+
           if (BUMP_HEAD + K <= BUMP_TAIL) {
             return undefined;
           } else {
@@ -999,12 +1051,11 @@ function FREE_REGION() {
           SCAN = SCAN + LINE_BK_SIZE;
         }
       }
-    } else {
-    }
+    } else {}
   }
 }
 
-// finds bump tail based on bumphead
+// finds bump tail based on bump_head
 function ALLOCATE_BUMP_TAIL() {
   A = BUMP_HEAD;
   GET_LINE();
@@ -1012,11 +1063,12 @@ function ALLOCATE_BUMP_TAIL() {
   while (HEAP[A + LINE_ADDRESS_SLOT] === HEAP[A + LINE_LIMIT_SLOT]) {
     A = A + LINE_BK_SIZE;
   }
-  BUMP_TAIL = HEAP[A - LINE_BK_SIZE + LINE_ADDRESS_SLOT] + LINE_SIZE; // take max of previous line (for edge case where A is last line)
+  BUMP_TAIL = HEAP[A - LINE_BK_SIZE + LINE_ADDRESS_SLOT] + LINE_SIZE - 1;
+  // take max of previous line (for edge case where A is last line)
 }
 
 // expects object address in A
-// sets RES = block address
+// returns block node address in RES
 function GET_BLOCK() {
   RES = math_floor(A / BLOCK_SIZE) * BLOCK_SIZE;
 }
@@ -1025,18 +1077,13 @@ function GET_BLOCK() {
 // returns line node address in RES
 // FIXME: need a special case for when bump tail === length of buffer
 function GET_LINE() {
-  // block address in C
-  C = math_floor(A / BLOCK_SIZE) * BLOCK_SIZE;
-  // abuse RES to store start of addressable space
-  RES = HEAP[C + HEAP[C + FIRST_CHILD_SLOT] + LINE_ADDRESS_SLOT];
-  // line number in A
-  A = math_floor((A - RES) / LINE_SIZE);
-  RES = HEAP[C + FIRST_CHILD_SLOT] + A * LINE_BK_SIZE;
+  C = math_floor(A / BLOCK_SIZE) * BLOCK_SIZE;                 // block address in C
+  RES = HEAP[C + HEAP[C + FIRST_CHILD_SLOT] + LINE_ADDRESS_SLOT]; // start of addressable space in RES
+  A = math_floor((A - RES) / LINE_SIZE);                       // line number in A
+  RES = HEAP[C + FIRST_CHILD_SLOT] + A * LINE_BK_SIZE;            // line node address in RES
   if (RES < 0) {
-    // show_heap("");
     error(RES, "negative line number");
-  } else {
-  }
+  } else {}
 }
 
 // use tag slot as forwarding address;
@@ -1054,11 +1101,13 @@ function INITIALIZE_BLOCKS_AND_LINES() {
     NEW_BLOCK();
     A = B;
   }
+  HEADROOM = RES; // last block dedicated as Headroom
   CURR_BLOCK = HEAPBOTTOM;
+  CURR_LINE = CURR_BLOCK + FIRST_CHILD_SLOT;
+
   // reallocate bump pointers for actual use
   BUMP_HEAD = HEAP[HEAP[CURR_BLOCK + FIRST_CHILD_SLOT]];
-  BUMP_TAIL = CURR_BLOCK + BLOCK_SIZE;
-  CURR_LINE = CURR_BLOCK + FIRST_CHILD_SLOT;
+  BUMP_TAIL = CURR_BLOCK + BLOCK_SIZE - 1;
 }
 
 // machine states
@@ -1067,7 +1116,8 @@ const NORMAL = 0;
 const DIV_ERROR = 1;
 const OUT_OF_MEMORY_ERROR = 2;
 
-// nodes available so far (v0.1)
+// NODEs available so far (v0.1)
+//
 // number node (-100)
 // bool node (-101)
 // environment node (-102)
@@ -1086,15 +1136,18 @@ const FREE = 2;
 const UNMARKED = 0;
 const MARKED = 1;
 
-// line nodes
-const LINE_BK_SIZE = 3;
-
-const LINE_ADDRESS_SLOT = 0;
-const LINE_MARK_SLOT = 1;
-const LINE_LIMIT_SLOT = 2; // limit address === next line's start address if current line is full
-
-let LINE_SIZE = -Infinity;
-
+// ** BLOCK NODE DESIGN **
+//
+// Immix GC partitions the heap space of a program into large size blocks in order to achieve granular collection and,
+// at the same time, not to waste as much space as copying algorithm like Cheney's. A block in Immix has three states:
+// free (all lines are free), recyclable (some but not all lines are free) and occupied (all lines are occupied).
+// It utilizes fast bump allocation to get free hole (one or more lines) in either a free or recyclable block to achieve
+// fast allocation.
+//
+// Since Immix allows multi-line allocation but not multi-block allocation,
+// the block exists as an actual node that demarcates the block region,
+// and the lines exist as virtual nodes whose metadata is stored at the block header
+//
 // block nodes layout
 //
 // 0: tag  = -107
@@ -1105,21 +1158,27 @@ let LINE_SIZE = -Infinity;
 // 5: block state (occupied: 0, recyclable: 1, free: 2)
 // 6: line 0 address
 // 7: line 0 mark bit (marked: 1, unmarked: 0)
-// 8: line 0 start of free address
+// 8: line 0 start of free address (for block occupancy profiling purpose)
 // 9: line 1 address
 // ...
 // NUM_OF_LINES_PER_BLOCK * LINE_BK_SIZE + BLOCK_BK_SIZE: start of line 0 usable memory
 
 const BLOCK_TAG = -107;
-// size of book keeping entries
-const BLOCK_BK_SIZE = 6;
+const BLOCK_BK_SIZE = 6; // size of book keeping entries
 let NUM_OF_LINES_PER_BLOCK = -Infinity;
-// total size of block
-let BLOCK_SIZE = -Infinity;
-
+let BLOCK_SIZE = -Infinity; // actual size of the block
 const BLOCK_STATE_SLOT = 5;
 const NO_BLOCK_FOUND = -1;
 
+// virtual line nodes
+const LINE_BK_SIZE = 3;
+const LINE_ADDRESS_SLOT = 0;
+const LINE_MARK_SLOT = 1;
+const LINE_LIMIT_SLOT = 2; // limit address === next line's start address if current line is full
+let LINE_SIZE = -Infinity;
+
+// Allocates new block at the start of the program (initialization)
+//
 // Expects root address in A
 // changes A, B
 // Final: RES = block address, B = last address + 1
@@ -1128,26 +1187,25 @@ function NEW_BLOCK() {
   HEAP[A + SIZE_SLOT] = BLOCK_SIZE;
   HEAP[A + FIRST_CHILD_SLOT] = 6;
   HEAP[A + LAST_CHILD_SLOT] = 6 + (NUM_OF_LINES_PER_BLOCK - 1) * LINE_BK_SIZE;
-  // state slot will be used for mark status
-  HEAP[A + MARK_SLOT] = UNMARKED;
-  // liveness slot will be left in but not used for now
-  HEAP[A + BLOCK_STATE_SLOT] = FREE;
+  HEAP[A + MARK_SLOT] = UNMARKED; // state slot will be used for mark status
+  HEAP[A + BLOCK_STATE_SLOT] = FREE; // liveness slot will be left in but not used for now
+
   // store line address in B
-  B = HEAP[A + LAST_CHILD_SLOT] + LINE_BK_SIZE;
+  B = A + HEAP[A + LAST_CHILD_SLOT] + LINE_BK_SIZE;
+  // initialize line metadata
   for (let i = 0; i < NUM_OF_LINES_PER_BLOCK; i = i + 1) {
-    // initialize line metadata
-    HEAP[HEAP[A + FIRST_CHILD_SLOT] + i * LINE_BK_SIZE + LINE_ADDRESS_SLOT] = B;
-    HEAP[
-      HEAP[A + FIRST_CHILD_SLOT] + i * LINE_BK_SIZE + LINE_MARK_SLOT
-    ] = UNMARKED;
-    HEAP[HEAP[A + FIRST_CHILD_SLOT] + i * LINE_BK_SIZE + LINE_LIMIT_SLOT] = B; // no occupied data yet
+    C = A + HEAP[A + FIRST_CHILD_SLOT] + i * LINE_BK_SIZE; // C points at the virtual line node
+    HEAP[C + LINE_ADDRESS_SLOT] = B;
+    HEAP[C + LINE_MARK_SLOT] = UNMARKED;
+    HEAP[C + LINE_LIMIT_SLOT] = B; // no occupied data yet
     // update address to next line
     B = B + LINE_SIZE;
   }
-  // B now end of block
+  // B is now pointing at end of the block
   RES = A;
 }
 
+// Returns the address of the first free block scanning from the first block
 function GET_FREE_BLOCK() {
   let BLOCK_ITER = HEAPBOTTOM;
   for (let i = 0; i <= NUMBER_OF_BLOCKS; i = i + 1) {
@@ -1163,6 +1221,7 @@ function GET_FREE_BLOCK() {
   }
 }
 
+// Returns the address of the first recyclable block scanning from the first block
 function GET_NEXT_RECYCLABLE_BLOCK() {
   let BLOCK_ITER = HEAPBOTTOM;
   for (let i = 0; i <= NUMBER_OF_BLOCKS; i = i + 1) {
@@ -1464,6 +1523,31 @@ function show_heap(s) {
           : "")
     );
     i = i + 1;
+  }
+}
+function visualize_heap(s) {
+  const len = array_length(HEAP);
+  display(len);
+  let i = 0;
+  display("--- HEAP --- " + s);
+  let demarc = -1;
+  while (i < len) {
+    if (is_number(HEAP[i]) && is_node_tag(HEAP[i])) {
+      display("=====================================");
+      demarc = HEAP[i+SIZE_SLOT];
+    } else if (demarc === 0) {
+      display("=====================================");
+    } else {}
+    display(
+      stringify(i) +
+      ": " +
+      stringify(HEAP[i]) +
+      (is_number(HEAP[i]) && is_node_tag(HEAP[i])
+        ? " (" + node_kind(HEAP[i]) + ")"
+        : "")
+    );
+    i = i + 1;
+    demarc = demarc >= 0 ? (demarc-1) : demarc;
   }
 }
 
@@ -1797,7 +1881,7 @@ function run() {
 // print_program(P);
 // run();
 //
-initialize_machine(8, 20, 1); // exactly 200 needed
+initialize_machine(8, 15, 3); // exactly 200 needed
 P = parse_and_compile(
   "             \
 const a = 2;                        \
@@ -1807,7 +1891,8 @@ function f(x, y) {                  \
     const d = 500;                  \
     return x - y * a + b - c + d;   \
 }                                   \
-f(30, 10);                          "
+f(30, 10);                          \
+  3;"
 );
 run();
 //
