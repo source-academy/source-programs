@@ -1374,33 +1374,41 @@ function POP_RTS() {
 // 1: size = number of entries + 4
 // 2: first child = 4
 // 3: last child
-// 4: first entry
-// 5: second entry
+// 4: parent environment
+// 5: first entry
+// 6: second entry
 // ...
 
 const ENV_TAG = -102;
+const PARENT_ENVIRONMENT_SLOT = 4;
 
 // expects number of env entries in A
 // changes B
 function NEW_ENVIRONMENT() {
     C = A;
     A = ENV_TAG;
-    B = C + 4;
+    B = C + 5;
     NEW();
-    HEAP[RES + FIRST_CHILD_SLOT] = 4;
-    HEAP[RES + LAST_CHILD_SLOT] = 3 + C;
+    HEAP[RES + FIRST_CHILD_SLOT] = 5;
+    HEAP[RES + LAST_CHILD_SLOT] = 4 + C;
+    HEAP[RES + PARENT_ENVIRONMENT_SLOT] = ENV;
 }
 
 // expects env in A, by-how-many in B
+// changes A, B, C, D
+// Using TEMP_ROOT to make sure the
+// origin on copying is updated when
+// garbage collection happens in NEW_ENVIRONMENT
 function EXTEND() {
-    D = A;
-    A = HEAP[A + SIZE_SLOT] - 4 + B;
+    // TEMP_ROOT = A;
+    A = B;
     NEW_ENVIRONMENT();
-    for (B = HEAP[D + FIRST_CHILD_SLOT];
-         B <= HEAP[D + LAST_CHILD_SLOT];
-         B = B + 1) {
-        HEAP[RES + B] = HEAP[D + B];
-    }
+    // // for (B = HEAP[TEMP_ROOT + FIRST_CHILD_SLOT];
+    // //      B <= HEAP[TEMP_ROOT + LAST_CHILD_SLOT];
+    // //      B = B + 1) {
+    // //     HEAP[RES + B] = HEAP[TEMP_ROOT + B];
+    // // }
+    // TEMP_ROOT = -1;
 }
 
 // debugging: show current heap
@@ -1448,6 +1456,7 @@ function show_heap_value(address) {
 }
 
 function is_primitive_value(addr) {
+    display(addr);
     return node_kind(HEAP[addr]) === "number"
         || node_kind(HEAP[addr]) === "string"
         || node_kind(HEAP[addr]) === "bool";
@@ -1459,6 +1468,8 @@ function is_pair_value(addr) {
     return node_kind(HEAP[addr]) === "pair";
 }
 function show_pair_value(address) {
+    show_heap("");
+    display(address);
     let display_text = "[";
     const h_addr = HEAP[address + HEAD_VALUE_SLOT];
     const t_addr = HEAP[address + TAIL_VALUE_SLOT];
@@ -1547,6 +1558,8 @@ M[PLUS] = () =>    { POP_OS();
                      // Overloading + operator for strings at VM level.
                      // Might be better to leave it at compile time as a concatenation function
 
+                     show_heap("");
+                     display(RES);
                      // if operands are both strings
                      if (HEAP[RES + TAG_SLOT] === STRING_TAG) {
                          A = HEAP[RES + STRING_VALUE_SLOT];
@@ -1685,7 +1698,11 @@ M[LDF] = () =>     { A = P[PC + LDF_MAX_OS_SIZE_OFFSET];
                      PC = PC + 4;
                    };
 
-M[LD] = () =>      { A = HEAP[ENV + HEAP[ENV + FIRST_CHILD_SLOT]
+M[LD] = () =>      { // look up previous environment frames if name not found
+                     display(P[PC + 1], "PC? ");
+                     E = ENV;
+                     print_program(P);
+                     A = HEAP[ENV + HEAP[ENV + FIRST_CHILD_SLOT]
                                   + P[PC + 1]];
                      PUSH_OS();
                      PC = PC + 2;
@@ -1705,6 +1722,8 @@ M[CALL] = () =>    { G = P[PC + 1];  // lets keep number of arguments in G
                      F = HEAP[OS + HEAP[OS + LAST_CHILD_SLOT] - G];
                      // prep for EXTEND
                      A = HEAP[F + CLOSURE_ENV_SLOT];
+                     show_heap("");
+                     display(A);
                      // A is now env to be extended
                      H = HEAP[A + LAST_CHILD_SLOT];
                      // H is now offset of last child slot
@@ -1741,7 +1760,7 @@ M[CALLVAR] = () =>  { G = P[PC + 1];  // lets keep number of arguments in G
                     // B is now the environment extension count
                     EXTEND(); // after this, RES is new env
                     E = RES;
-                    H = E + H + G;
+                    H = E + HEAP[E + SIZE_SLOT] - 1;
                     // H is now address where last argument goes in new env
                     for (C = H; C > H - G; C = C - 1) {
                         POP_OS(); // now RES has the address of the next arg
@@ -1931,8 +1950,11 @@ run();
 // run();
 
 P = parse_and_compile("\
-reverse(list(1, 2, 3));\
-\
+const z = 3;\
+function foo(x, y) {\
+    return x + z;\
+}\
+foo(2);\
 ");
 print_program(P);
 run();
