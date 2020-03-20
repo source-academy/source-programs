@@ -1,7 +1,7 @@
 /*
 Included here:
 * compiler S1- to sVML
-* sVM implementation with Cheney garbage collection
+* sVM implementation with mark-region garbage collection
 * examples
 */
 
@@ -863,9 +863,9 @@ function NEW() {
     visualize_heap("hello");
     // TODO: overflow allocator
     // go to next recyclable block or free block
-    A = BUMP_TAIL;
+    A = BUMP_HEAD;
     GET_BLOCK();
-    HEAP[RES + BLOCK_STATE_SLOT] = OCCUPIED;
+    HEAP[RES + BLOCK_STATE_SLOT] = OCCUPIED; // mark current
     GET_NEXT_RECYCLABLE_BLOCK();
     if (RES === NO_BLOCK_FOUND) {
       // no block is recyclable
