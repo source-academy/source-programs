@@ -59,13 +59,13 @@ function is_undefined_expression(stmt) {
 // and have "name" and "value" properties
 
 function is_constant_declaration(stmt) {
-   return is_tagged_list(stmt, "constant_declaration");
+    return is_tagged_list(stmt, "constant_declaration");
 }
 function constant_declaration_name(stmt) {
-   return head(tail(head(tail(stmt))));
+    return head(tail(head(tail(stmt))));
 }
 function constant_declaration_value(stmt) {
-   return head(tail(tail(stmt)));
+    return head(tail(tail(stmt)));
 }
 
 // applications are tagged with "application"
@@ -79,9 +79,9 @@ function is_application(expr) {
 
 function is_primitive_application(expr) {
     return is_tagged_list(expr, "application") &&
-        ! is_null(member(primitive_operator_name(expr),
-                         list("!", "+", "-", "*", "/", "===",
-                              "!==", "<", ">", "<=", ">=")));
+      ! is_null(member(primitive_operator_name(expr),
+        list("!", "+", "-", "*", "/", "===",
+          "!==", "<", ">", "<=", ">=")));
 }
 function primitive_operator_name(expr) {
     return head(tail(head(tail(expr))));
@@ -106,7 +106,7 @@ function rest_operands(ops) {
 // with "array_expression"
 function is_array_expression(expr) {
     return is_tagged_list(expr,
-                  "array_expression");
+      "array_expression");
 }
 function arr_elements(expr) {
     return head(tail(expr));
@@ -125,7 +125,7 @@ function no_arr_elements(ops) {
 // with "array_access"
 function is_array_access(expr) {
     return is_tagged_list(expr,
-                  "array_access");
+      "array_access");
 }
 function array_name(expr) {
     return head(tail(expr));
@@ -149,7 +149,7 @@ function boolean_operator_name(expr) {
 
 function is_conditional_expression(expr) {
     return is_tagged_list(expr,
-                "conditional_expression");
+      "conditional_expression");
 }
 function cond_expr_pred(expr) {
     return list_ref(expr, 1);
@@ -162,31 +162,31 @@ function cond_expr_alt(expr) {
 }
 function make_conditional_expression(expr1, expr2, expr3) {
     return list("conditional_expression",
-                expr1, expr2, expr3);
+      expr1, expr2, expr3);
 }
 
 function to_string(expr) {
     return (is_number(expr) || is_boolean(expr))
-            ? stringify(expr)
-            : length(operands(expr)) === 1
-            ? "(" + operator(expr) +
-                    to_string(list_ref(operands(expr), 0)) + ")"
-            : "(" + to_string(list_ref(operands(expr), 0)) +
-                    operator(expr) +
-                    to_string(list_ref(operands(expr), 1)) + ")";
+      ? stringify(expr)
+      : length(operands(expr)) === 1
+        ? "(" + operator(expr) +
+        to_string(list_ref(operands(expr), 0)) + ")"
+        : "(" + to_string(list_ref(operands(expr), 0)) +
+        operator(expr) +
+        to_string(list_ref(operands(expr), 1)) + ")";
 }
 
 // function definitions are tagged with "function_definition"
 // have a list of "parameters" and a "body" statement
 
 function is_function_definition(stmt) {
-   return is_tagged_list(stmt, "function_definition");
+    return is_tagged_list(stmt, "function_definition");
 }
 function function_definition_parameters(stmt) {
-   return head(tail(stmt));
+    return head(tail(stmt));
 }
 function function_definition_body(stmt) {
-   return head(tail(tail(stmt)));
+    return head(tail(tail(stmt)));
 }
 function make_function_definition(params, body) {
     return list("function_definition", params, body);
@@ -196,43 +196,43 @@ function make_function_definition(params, body) {
 // by tagged lists of statements by the parser.
 
 function is_sequence(stmt) {
-   return is_tagged_list(stmt, "sequence");
+    return is_tagged_list(stmt, "sequence");
 }
 function make_sequence(stmts) {
-   return list("sequence", stmts);
+    return list("sequence", stmts);
 }
 function sequence_statements(stmt) {
-   return head(tail(stmt));
+    return head(tail(stmt));
 }
 function is_empty_sequence(stmts) {
-   return is_null(stmts);
+    return is_null(stmts);
 }
 function is_last_statement(stmts) {
-   return is_null(tail(stmts));
+    return is_null(tail(stmts));
 }
 function first_statement(stmts) {
-   return head(stmts);
+    return head(stmts);
 }
 function rest_statements(stmts) {
-   return tail(stmts);
+    return tail(stmts);
 }
 
 // functions return the value that results from
 // evaluating their expression
 
 function is_return_statement(stmt) {
-   return is_tagged_list(stmt, "return_statement");
+    return is_tagged_list(stmt, "return_statement");
 }
 function return_statement_expression(stmt) {
-   return head(tail(stmt));
+    return head(tail(stmt));
 }
 
 // handling injected primitive functions
 
 function is_injected_primitive(name) {
     return accumulate((x, y) => name === injected_prim_func_string(x) || y,
-                 false,
-                      primitives);
+      false,
+      primitives);
 }
 // the AST is transformed from
 // ["return_statement", [["name", [<injected_func>, null]], null]]
@@ -290,52 +290,52 @@ const DONE    = 28;
 // follow the format:
 // name, opcode, built-in func, arguments, return
 const primitives = list(
-    list("PAIR   ", 40, pair       , "pair"       , list("addr", "addr"), "pair"),
-    list("HEAD   ", 41, head       , "head"       , list("pair"), "addr"),
-    list("TAIL   ", 42, tail       , "tail"       , list("pair"), "addr"),
-    list("IS_NUM ", 43, is_number  , "is_number"  , list("any"), "bool"),
-    list("IS_PAIR", 44, is_pair    , "is_pair"    , list("any"), "bool"),
-    list("IS_NULL", 45, is_null    , "is_null"    , list("any"), "bool"),
-    list("DISPLAY", 46, display    , "display"    , list("var"), "undefined"),
-    list("ERROR  ", 47, error      , "error"      , list("any"), "undefined"),
-    list("RANDOM ", 48, math_random, "math_random", null, "num"),
-    list("ABS    ", 49, math_abs   , "math_abs"   , list("num"), "num"),
-    list("ACOS   ", 50, math_acos  , "math_acos"  , list("num"), "num"),
-    list("ACOSH  ", 51, math_acosh , "math_acosh" , list("num"), "num"),
-    list("ASIN   ", 52, math_asin  , "math_asin"  , list("num"), "num"),
-    list("ASINH  ", 53, math_asinh , "math_asinh" , list("num"), "num"),
-    list("ATAN   ", 54, math_atan  , "math_atan"  , list("num"), "num"),
-    list("ATANH  ", 55, math_atanh , "math_atanh" , list("num"), "num"),
-    list("CBRT   ", 56, math_cbrt  , "math_cbrt"  , list("num"), "num"),
-    list("CEIL   ", 57, math_ceil  , "math_ceil"  , list("num"), "num"),
-    list("CLZ32  ", 58, math_clz32 , "math_clz32" , list("num"), "num"),
-    list("COS    ", 59, math_cos   , "math_cos"   , list("num"), "num"),
-    list("COSH   ", 60, math_cosh  , "math_cosh"  , list("num"), "num"),
-    list("EXP    ", 61, math_exp   , "math_exp"   , list("num"), "num"),
-    list("EXPM1  ", 62, math_expm1 , "math_expm1" , list("num"), "num"),
-    list("FLOOR  ", 63, math_floor , "math_floor" , list("num"), "num"),
-    list("FROUND ", 64, math_fround, "math_fround", list("num"), "num"),
-    list("LOG    ", 65, math_log   , "math_log"   , list("num"), "num"),
-    list("LOG1P  ", 66, math_log1p , "math_log1p" , list("num"), "num"),
-    list("LOG10  ", 67, math_log10 , "math_log10" , list("num"), "num"),
-    list("LOG2   ", 68, math_log2  , "math_log2"  , list("num"), "num"),
-    list("ROUND  ", 69, math_round , "math_round" , list("num"), "num"),
-    list("SIGN   ", 70, math_sign  , "math_sign"  , list("num"), "num"),
-    list("SIN    ", 71, math_sin   , "math_sin"   , list("num"), "num"),
-    list("SINH   ", 72, math_sinh  , "math_sinh"  , list("num"), "num"),
-    list("SQRT   ", 73, math_sqrt  , "math_sqrt"  , list("num"), "num"),
-    list("TAN    ", 74, math_tan   , "math_tan"   , list("num"), "num"),
-    list("TANH   ", 75, math_tanh  , "math_tanh"  , list("num"), "num"),
-    list("TRUNC  ", 76, math_trunc , "math_trunc" , list("num"), "num"),
-    list("ATAN2  ", 77, math_atan2 , "math_atan2" , list("num", "num"), "num"),
-    list("IMUL   ", 78, math_imul  , "math_imul"  , list("num", "num"), "num"),
-    list("POW    ", 79, math_pow   , "math_pow"   , list("num", "num"), "num"),
-    list("MAX    ", 80, math_max   , "math_max"   , list("var"), "num"),
-    list("MIN    ", 81, math_min   , "math_min"   , list("var"), "num"),
-    list("HYPOT  ", 82, math_hypot , "math_hypot" , list("var"), "num"),
-    list("RUNTIME", 83, runtime    , "runtime"    , null, "num"),
-    list("STRINGI", 84, stringify  , "stringify"  , list("num"), "str"),
-    list("LIST   ", 85, list       , "list"       , list("var"), "pair")
+  list("PAIR   ", 40, pair       , "pair"       , list("addr", "addr"), "pair"),
+  list("HEAD   ", 41, head       , "head"       , list("pair"), "addr"),
+  list("TAIL   ", 42, tail       , "tail"       , list("pair"), "addr"),
+  list("IS_NUM ", 43, is_number  , "is_number"  , list("any"), "bool"),
+  list("IS_PAIR", 44, is_pair    , "is_pair"    , list("any"), "bool"),
+  list("IS_NULL", 45, is_null    , "is_null"    , list("any"), "bool"),
+  list("DISPLAY", 46, display    , "display"    , list("var"), "undefined"),
+  list("ERROR  ", 47, error      , "error"      , list("any"), "undefined"),
+  list("RANDOM ", 48, math_random, "math_random", null, "num"),
+  list("ABS    ", 49, math_abs   , "math_abs"   , list("num"), "num"),
+  list("ACOS   ", 50, math_acos  , "math_acos"  , list("num"), "num"),
+  list("ACOSH  ", 51, math_acosh , "math_acosh" , list("num"), "num"),
+  list("ASIN   ", 52, math_asin  , "math_asin"  , list("num"), "num"),
+  list("ASINH  ", 53, math_asinh , "math_asinh" , list("num"), "num"),
+  list("ATAN   ", 54, math_atan  , "math_atan"  , list("num"), "num"),
+  list("ATANH  ", 55, math_atanh , "math_atanh" , list("num"), "num"),
+  list("CBRT   ", 56, math_cbrt  , "math_cbrt"  , list("num"), "num"),
+  list("CEIL   ", 57, math_ceil  , "math_ceil"  , list("num"), "num"),
+  list("CLZ32  ", 58, math_clz32 , "math_clz32" , list("num"), "num"),
+  list("COS    ", 59, math_cos   , "math_cos"   , list("num"), "num"),
+  list("COSH   ", 60, math_cosh  , "math_cosh"  , list("num"), "num"),
+  list("EXP    ", 61, math_exp   , "math_exp"   , list("num"), "num"),
+  list("EXPM1  ", 62, math_expm1 , "math_expm1" , list("num"), "num"),
+  list("FLOOR  ", 63, math_floor , "math_floor" , list("num"), "num"),
+  list("FROUND ", 64, math_fround, "math_fround", list("num"), "num"),
+  list("LOG    ", 65, math_log   , "math_log"   , list("num"), "num"),
+  list("LOG1P  ", 66, math_log1p , "math_log1p" , list("num"), "num"),
+  list("LOG10  ", 67, math_log10 , "math_log10" , list("num"), "num"),
+  list("LOG2   ", 68, math_log2  , "math_log2"  , list("num"), "num"),
+  list("ROUND  ", 69, math_round , "math_round" , list("num"), "num"),
+  list("SIGN   ", 70, math_sign  , "math_sign"  , list("num"), "num"),
+  list("SIN    ", 71, math_sin   , "math_sin"   , list("num"), "num"),
+  list("SINH   ", 72, math_sinh  , "math_sinh"  , list("num"), "num"),
+  list("SQRT   ", 73, math_sqrt  , "math_sqrt"  , list("num"), "num"),
+  list("TAN    ", 74, math_tan   , "math_tan"   , list("num"), "num"),
+  list("TANH   ", 75, math_tanh  , "math_tanh"  , list("num"), "num"),
+  list("TRUNC  ", 76, math_trunc , "math_trunc" , list("num"), "num"),
+  list("ATAN2  ", 77, math_atan2 , "math_atan2" , list("num", "num"), "num"),
+  list("IMUL   ", 78, math_imul  , "math_imul"  , list("num", "num"), "num"),
+  list("POW    ", 79, math_pow   , "math_pow"   , list("num", "num"), "num"),
+  list("MAX    ", 80, math_max   , "math_max"   , list("var"), "num"),
+  list("MIN    ", 81, math_min   , "math_min"   , list("var"), "num"),
+  list("HYPOT  ", 82, math_hypot , "math_hypot" , list("var"), "num"),
+  list("RUNTIME", 83, runtime    , "runtime"    , null, "num"),
+  list("STRINGI", 84, stringify  , "stringify"  , list("num"), "str"),
+  list("LIST   ", 85, list       , "list"       , list("var"), "pair")
 // list("PROMPT ", 84, prompt     , "prompt"     , null, "string")
 );
 
@@ -361,18 +361,18 @@ function injected_prim_func_return_type(entry) {
 function lookup_injected_prim_func_by_string(name) {
     function lookup(xs) {
         return is_null(xs) || !is_pair(xs)
-                ? null
-                : injected_prim_func_string(head(xs)) === name
-                    ? head(xs)
-                    : lookup(tail(xs));
+          ? null
+          : injected_prim_func_string(head(xs)) === name
+            ? head(xs)
+            : lookup(tail(xs));
     }
     return lookup(primitives);
 }
 function is_variadic_function(name) {
     // only checks injected primitive
     return is_injected_primitive(name) &&
-            !is_null(member("var",
-                            injected_prim_func_ops_types(lookup_injected_prim_func_by_string(name))));
+      !is_null(member("var",
+        injected_prim_func_ops_types(lookup_injected_prim_func_by_string(name))));
 }
 // generate code snippet for primitive function
 // to register them in the program
@@ -413,39 +413,39 @@ const LDCS_VALUE_OFFSET = 1;
 // printing opcodes for debugging
 
 const OPCODES = append(
-    list(
-        pair(START,   "START  "),
-        pair(LDCN,    "LDCN   "),
-        pair(LDCB,    "LDCB   "),
-        pair(LDCS,    "LDCS   "),
-        pair(LDCU,    "LDCU   "),
-        pair(PLUS,    "PLUS   "),
-        pair(MINUS,   "MINUS  "),
-        pair(TIMES,   "TIMES  "),
-        pair(EQUAL,   "EQUAL  "),
-        pair(LESS,    "LESS   "),
-        pair(GREATER, "GREATER"),
-        pair(LEQ,     "LEQ    "),
-        pair(GEQ,     "GEQ    "),
-        pair(NOT,     "NOT    "),
-        pair(DIV,     "DIV    "),
-        pair(POP,     "POP    "),
-        pair(ASSIGN,  "ASSIGN "),
-        pair(JOF,     "JOF    "),
-        pair(GOTO,    "GOTO   "),
-        pair(LDF,     "LDF    "),
-        pair(CALL,    "CALL   "),
-        pair(CALLVAR, "CALLVAR"),
-        pair(LD,      "LD     "),
-        pair(LDV,     "LDV    "),
-        pair(LDNULL,  "LDNULL "),
-        pair(RTN,     "RTN    "),
-        pair(DONE,    "DONE   ")
-    ),
-    // appends injected primitive function opcodes and names
-    map(x => pair(injected_prim_func_opcode(x),
-                    injected_prim_func_name(x)),
-        primitives)
+  list(
+    pair(START,   "START  "),
+    pair(LDCN,    "LDCN   "),
+    pair(LDCB,    "LDCB   "),
+    pair(LDCS,    "LDCS   "),
+    pair(LDCU,    "LDCU   "),
+    pair(PLUS,    "PLUS   "),
+    pair(MINUS,   "MINUS  "),
+    pair(TIMES,   "TIMES  "),
+    pair(EQUAL,   "EQUAL  "),
+    pair(LESS,    "LESS   "),
+    pair(GREATER, "GREATER"),
+    pair(LEQ,     "LEQ    "),
+    pair(GEQ,     "GEQ    "),
+    pair(NOT,     "NOT    "),
+    pair(DIV,     "DIV    "),
+    pair(POP,     "POP    "),
+    pair(ASSIGN,  "ASSIGN "),
+    pair(JOF,     "JOF    "),
+    pair(GOTO,    "GOTO   "),
+    pair(LDF,     "LDF    "),
+    pair(CALL,    "CALL   "),
+    pair(CALLVAR, "CALLVAR"),
+    pair(LD,      "LD     "),
+    pair(LDV,     "LDV    "),
+    pair(LDNULL,  "LDNULL "),
+    pair(RTN,     "RTN    "),
+    pair(DONE,    "DONE   ")
+  ),
+  // appends injected primitive function opcodes and names
+  map(x => pair(injected_prim_func_opcode(x),
+    injected_prim_func_name(x)),
+    primitives)
 );
 
 // get a the name of an opcode, for debugging
@@ -453,7 +453,7 @@ const OPCODES = append(
 function get_name(op) {
     function lookup(opcodes) {
         return is_null(opcodes) ? error(op, "unknown opcode")
-            : op === head(head(opcodes))
+          : op === head(head(opcodes))
             ? tail(head(opcodes))
             : lookup(tail(opcodes));
     }
@@ -470,14 +470,14 @@ function print_program(P) {
         s = s + ": " + get_name(P[i]);
         i = i + 1;
         if (op === LDCN || op === LDCB || op === LDCS || op === GOTO ||
-            op === JOF || op === ASSIGN ||
-            op === LDF || op === LD || op === CALL) {
+          op === JOF || op === ASSIGN ||
+          op === LDF || op === LD || op === CALL) {
             s = s + " " + stringify(P[i]);
             i = i + 1;
         } else {}
         if (op === LDF) {
             s = s + " " + stringify(P[i]) + " " +
-                stringify(P[i + 1]);
+              stringify(P[i + 1]);
             i = i + 2;
         } else {}
         display(undefined, s);
@@ -550,10 +550,10 @@ function parse_and_compile(string) {
     // function body to the given addresses.
 
     function make_to_compile_task(
-                 function_body, max_stack_size_address,
-                 address_address, index_table) {
+      function_body, max_stack_size_address,
+      address_address, index_table) {
         return list(function_body, max_stack_size_address,
-                    address_address, index_table);
+          address_address, index_table);
     }
     function to_compile_task_body(to_compile_task) {
         return list_ref(to_compile_task, 0);
@@ -575,13 +575,13 @@ function parse_and_compile(string) {
     }
     function extend_index_table(t, s) {
         return is_null(t)
-            ? list(pair(s, 0))
-            : pair(pair(s, tail(head(t)) + 1), t);
+          ? list(pair(s, 0))
+          : pair(pair(s, tail(head(t)) + 1), t);
     }
     function index_of(t, s) {
         return is_null(t)
-            ? error(s, "name not found:")
-            : head(head(t)) === s
+          ? error(s, "name not found:")
+          : head(head(t)) === s
             ? tail(head(t))
             : index_of(tail(t), s);
     }
@@ -594,18 +594,18 @@ function parse_and_compile(string) {
         while (! is_null(to_compile)) {
             const next_to_compile = pop_to_compile();
             const address_address =
-                      to_compile_task_address_address(next_to_compile);
+              to_compile_task_address_address(next_to_compile);
             machine_code[address_address] = insert_pointer;
             const index_table =
-                      to_compile_task_index_table(next_to_compile);
+              to_compile_task_index_table(next_to_compile);
             const max_stack_size_address =
-                      to_compile_task_max_stack_size_address(
-                          next_to_compile);
+              to_compile_task_max_stack_size_address(
+                next_to_compile);
             const body = to_compile_task_body(next_to_compile);
             const max_stack_size =
-                      compile(body, index_table, true);
+              compile(body, index_table, true);
             machine_code[max_stack_size_address] =
-                      max_stack_size;
+              max_stack_size;
             toplevel = false;
         }
     }
@@ -614,15 +614,15 @@ function parse_and_compile(string) {
         if (is_sequence(stmt)) {
             const stmts = sequence_statements(stmt);
             return is_empty_sequence(stmts)
-                ? null
-                : append(
-                    local_names(first_statement(stmts)),
-                    local_names(make_sequence(
-		               rest_statements(stmts))));
+              ? null
+              : append(
+                local_names(first_statement(stmts)),
+                local_names(make_sequence(
+                  rest_statements(stmts))));
         } else {
             return is_constant_declaration(stmt)
-                ? list(constant_declaration_name(stmt))
-                : null;
+              ? list(constant_declaration_name(stmt))
+              : null;
         }
     }
 
@@ -637,9 +637,9 @@ function parse_and_compile(string) {
         let max_stack_size = 0;
         while (i < s) {
             max_stack_size = math_max(i +
-                                      compile(head(exprs), index_table,
-                                          false),
-                                      max_stack_size);
+              compile(head(exprs), index_table,
+                false),
+              max_stack_size);
             i = i + 1;
             exprs = tail(exprs);
         }
@@ -649,34 +649,34 @@ function parse_and_compile(string) {
     function compile_boolean_operation(expr, index_table) {
         if (boolean_operator_name(expr) === "&&") {
             return compile(make_conditional_expression(
-                                         first_operand(
-                                             operands(expr)),
-                                         first_operand(
-                                             rest_operands(
-                                                 operands(expr))),
-                                         false),
-                                     index_table,
-                                     false);
+              first_operand(
+                operands(expr)),
+              first_operand(
+                rest_operands(
+                  operands(expr))),
+              false),
+              index_table,
+              false);
         } else {
             return compile(make_conditional_expression(
-                                         first_operand(
-                                             operands(expr)),
-                                         true,
-                                         first_operand(
-                                             rest_operands(
-                                                 operands(expr)))),
-                                     index_table,
-                                     false);
+              first_operand(
+                operands(expr)),
+              true,
+              first_operand(
+                rest_operands(
+                  operands(expr)))),
+              index_table,
+              false);
         }
     }
 
     function compile_conditional_expression(expr, index_table, insert_flag) {
         const m_1 = compile(cond_expr_pred(expr),
-                            index_table, false);
+          index_table, false);
         add_unary_instruction(JOF, NaN);
         const JOF_address_address = insert_pointer - 1;
         const m_2 = compile(cond_expr_cons(expr),
-                            index_table, insert_flag);
+          index_table, insert_flag);
         let GOTO_address_address = NaN;
         if (!insert_flag) {
             add_unary_instruction(GOTO, NaN);
@@ -684,7 +684,7 @@ function parse_and_compile(string) {
         } else {}
         machine_code[JOF_address_address] = insert_pointer;
         const m_3 = compile(cond_expr_alt(expr),
-                            index_table, insert_flag);
+          index_table, insert_flag);
         if (!insert_flag) {
             machine_code[GOTO_address_address] = insert_pointer;
         } else {}
@@ -702,15 +702,15 @@ function parse_and_compile(string) {
         } else {
             const operand_2 = first_operand(rest_operands(ops));
             const op_code = op === "+" ? PLUS
-                          : op === "-" ? MINUS
-                          : op === "*" ? TIMES
-                          : op === "/" ? DIV
-                          : op === "===" ? EQUAL
-                          : op === "<" ? LESS
-                          : op === "<=" ? LEQ
+              : op === "-" ? MINUS
+                : op === "*" ? TIMES
+                  : op === "/" ? DIV
+                    : op === "===" ? EQUAL
+                      : op === "<" ? LESS
+                        : op === "<=" ? LEQ
                           : op === ">" ? GREATER
-                          : op === ">=" ? GEQ
-                          : error(op, "unknown operator:");
+                            : op === ">=" ? GEQ
+                              : error(op, "unknown operator:");
             const m_1 = compile(operand_1, index_table, false);
             const m_2 = compile(operand_2, index_table, false);
             add_nullary_instruction(op_code);
@@ -721,9 +721,9 @@ function parse_and_compile(string) {
     function compile_application(expr, index_table) {
         // TODO: handle variadic case
         const max_stack_operator = compile(operator(expr),
-                                       index_table, false);
+          index_table, false);
         const max_stack_operands = compile_arguments(operands(expr),
-                                       index_table);
+          index_table);
         if (is_variadic_function(name_of_name(operator(expr)))) {
             add_unary_instruction(CALLVAR, length(operands(expr)));
         } else {
@@ -736,19 +736,19 @@ function parse_and_compile(string) {
         const body = function_definition_body(expr);
         const locals = local_names(body);
         const parameters =
-            map(x => name_of_name(x), function_definition_parameters(expr));
+          map(x => name_of_name(x), function_definition_parameters(expr));
         const extended_index_table =
-            accumulate((s, it) => extend_index_table(it, s),
-                       index_table,
-                       append(reverse(locals),
-                       reverse(parameters)));
+          accumulate((s, it) => extend_index_table(it, s),
+            index_table,
+            append(reverse(locals),
+              reverse(parameters)));
         add_ternary_instruction(LDF, NaN, NaN,
-                               length(parameters) + length(locals));
+          length(parameters) + length(locals));
         const max_stack_size_address = insert_pointer - 3;
         const address_address = insert_pointer - 2;
         push_to_compile(make_to_compile_task(
-                            body, max_stack_size_address,
-                            address_address, extended_index_table));
+          body, max_stack_size_address,
+          address_address, extended_index_table));
         return 1;
     }
 
@@ -758,13 +758,13 @@ function parse_and_compile(string) {
             return 0;
         } else if (is_last_statement(statements)) {
             return compile(first_statement(statements),
-                           index_table, insert_flag);
+              index_table, insert_flag);
         } else {
             const m_1 = compile(first_statement(statements),
-                                index_table, false);
+              index_table, false);
             add_nullary_instruction(POP);
             const m_2 = compile(make_sequence(rest_statements(statements)),
-                                index_table, insert_flag);
+              index_table, insert_flag);
             return math_max(m_1, m_2);
         }
     }
@@ -780,7 +780,7 @@ function parse_and_compile(string) {
             value = mark_injected_function_definition(value);
         } else {}
         const max_stack_size = compile(value,
-                                       index_table, false);
+          index_table, false);
         add_unary_instruction(ASSIGN, index);
         add_nullary_instruction(LDCU);
         return max_stack_size;
@@ -819,34 +819,34 @@ function parse_and_compile(string) {
             max_stack_size = 1;
         } else if (is_boolean_operation(expr)) {
             max_stack_size =
-            compile_boolean_operation(expr, index_table);
+              compile_boolean_operation(expr, index_table);
         } else if (is_conditional_expression(expr)) {
             max_stack_size =
-            compile_conditional_expression(expr, index_table, insert_flag);
+              compile_conditional_expression(expr, index_table, insert_flag);
             insert_flag = false;
         } else if (is_primitive_application(expr)) {
             max_stack_size =
-            compile_primitive_application(expr, index_table);
+              compile_primitive_application(expr, index_table);
         } else if (is_null(expr)) {
             add_nullary_instruction(LDNULL);
             max_stack_size = 1;
         } else if (is_application(expr)) {
             max_stack_size =
-            compile_application(expr, index_table);
+              compile_application(expr, index_table);
         } else if (is_function_definition(expr)) {
             max_stack_size =
-            compile_function_definition(expr, index_table);
+              compile_function_definition(expr, index_table);
         } else if (is_name(expr)) {
             add_unary_instruction(LD, index_of(index_table,
-                                  name_of_name(expr)));
+              name_of_name(expr)));
             max_stack_size = 1;
         } else if (is_sequence(expr)) {
             max_stack_size =
-            compile_sequence(expr, index_table, insert_flag);
+              compile_sequence(expr, index_table, insert_flag);
             insert_flag = false;
         } else if (is_constant_declaration(expr)) {
             max_stack_size =
-            compile_constant_declaration(expr, index_table);
+              compile_constant_declaration(expr, index_table);
         } else if (is_return_statement(expr)) {
             // when the return statement is injected with "injected" clause
             // handle it at compile_injected_primitive()
@@ -865,11 +865,11 @@ function parse_and_compile(string) {
             if (is_return_statement(expr)) {
                 add_nullary_instruction(RTN);
             } else if (toplevel &&
-                       (is_self_evaluating(expr) ||
-                        is_undefined_expression(expr) ||
-                        is_application(expr) ||
-                        is_primitive_application(expr))
-                      ) {
+              (is_self_evaluating(expr) ||
+                is_undefined_expression(expr) ||
+                is_application(expr) ||
+                is_primitive_application(expr))
+            ) {
                 add_nullary_instruction(RTN);
             } else {
                 add_nullary_instruction(LDCU);
@@ -895,8 +895,8 @@ function parse_and_compile(string) {
 
     // prepend math prelude with predefined functions
     const math_prelude = math_consts + accumulate((x, y) => y + generate_injected_prim_func_code(x) + " ",
-                                                  " ",
-                                                  primitives);
+      " ",
+      primitives);
 
     const predefined_functions = "\
     function is_boolean(v) {\
@@ -1009,7 +1009,7 @@ function parse_and_compile(string) {
     const program = parse(prepended_string);
     add_nullary_instruction(START);
     add_ternary_instruction(LDF, NaN, NaN,
-                            length(local_names(program)));
+      length(local_names(program)));
     const LDF_max_stack_size_address = insert_pointer - 3;
     const LDF_address_address = insert_pointer - 2;
     add_unary_instruction(CALL, 0);
@@ -1017,15 +1017,15 @@ function parse_and_compile(string) {
 
     const locals = reverse(local_names(program));
     const program_names_index_table =
-         accumulate((s, it) => extend_index_table(it, s),
-                    make_empty_index_table(),
-                    locals);
+      accumulate((s, it) => extend_index_table(it, s),
+        make_empty_index_table(),
+        locals);
 
     push_to_compile(make_to_compile_task(
-                        program,
-                        LDF_max_stack_size_address,
-                        LDF_address_address,
-                        program_names_index_table));
+      program,
+      LDF_max_stack_size_address,
+      LDF_address_address,
+      program_names_index_table));
     continue_to_compile();
     return machine_code;
 }
@@ -1223,12 +1223,6 @@ function FLIP() {
              I <= HEAP[SCAN + LAST_CHILD_SLOT];
              I = I + 1) {
             A = HEAP[SCAN + I];
-            if (A < 0) {
-                show_heap("");
-                display(SCAN, "SCAN");
-                display(I, "I");
-                display(A, "A");
-            } else {}
             COPY();
             HEAP[SCAN + I] = RES;
         }
@@ -1350,9 +1344,9 @@ function NEW_OS() {
     A = OS_TAG;
     B = C + 4;
     NEW();
-	HEAP[RES + FIRST_CHILD_SLOT] = 4;
-	// operand stack initially empty
-	HEAP[RES + LAST_CHILD_SLOT] = 3;
+    HEAP[RES + FIRST_CHILD_SLOT] = 4;
+    // operand stack initially empty
+    HEAP[RES + LAST_CHILD_SLOT] = 3;
 }
 
 // PUSH and POP are convenient subroutines that operate on
@@ -1469,10 +1463,10 @@ function NEW_CLOSURE() {
     NEW();
     A = E;
     B = F;
-	  HEAP[RES + FIRST_CHILD_SLOT] = CLOSURE_ENV_SLOT;
-	  HEAP[RES + LAST_CHILD_SLOT] = CLOSURE_ENV_SLOT;
-	  HEAP[RES + CLOSURE_OS_SIZE_SLOT] = A;
-	  HEAP[RES + CLOSURE_ADDRESS_SLOT] = B;
+    HEAP[RES + FIRST_CHILD_SLOT] = CLOSURE_ENV_SLOT;
+    HEAP[RES + LAST_CHILD_SLOT] = CLOSURE_ENV_SLOT;
+    HEAP[RES + CLOSURE_OS_SIZE_SLOT] = A;
+    HEAP[RES + CLOSURE_ADDRESS_SLOT] = B;
     HEAP[RES + CLOSURE_ENV_SLOT] = ENV;
     HEAP[RES + CLOSURE_ENV_EXTENSION_COUNT_SLOT] = C;
 }
@@ -1503,10 +1497,10 @@ function NEW_RTS_FRAME() {
     A = RTS_FRAME_TAG;
     B = RTS_FRAME_SIZE;
     NEW();
-	  HEAP[RES + FIRST_CHILD_SLOT] = RTS_FRAME_ENV_SLOT;
-	  HEAP[RES + LAST_CHILD_SLOT] = RTS_FRAME_OS_SLOT;
-	  HEAP[RES + RTS_FRAME_PC_SLOT] = PC + 2; // next instruction!
-	  HEAP[RES + RTS_FRAME_ENV_SLOT] = ENV;
+    HEAP[RES + FIRST_CHILD_SLOT] = RTS_FRAME_ENV_SLOT;
+    HEAP[RES + LAST_CHILD_SLOT] = RTS_FRAME_OS_SLOT;
+    HEAP[RES + RTS_FRAME_PC_SLOT] = PC + 2; // next instruction!
+    HEAP[RES + RTS_FRAME_ENV_SLOT] = ENV;
     HEAP[RES + RTS_FRAME_OS_SLOT] = OS;
 }
 
@@ -1566,16 +1560,16 @@ function is_node_tag(x) {
 }
 function node_kind(x) {
     return x ===      NUMBER_TAG ? "number"
-         : x ===        BOOL_TAG ? "bool"
-         : x ===      STRING_TAG ? "string"
-         : x ===     CLOSURE_TAG ? "closure"
-         : x ===   RTS_FRAME_TAG ? "RTS frame"
-         : x ===          OS_TAG ? "OS"
-         : x ===         ENV_TAG ? "environment"
-         : x ===   UNDEFINED_TAG ? "undefined"
-         : x ===        PAIR_TAG ? "pair"
-         : x ===        NULL_TAG ? "null"
-         : " (unknown node kind)";
+      : x ===        BOOL_TAG ? "bool"
+        : x ===      STRING_TAG ? "string"
+          : x ===     CLOSURE_TAG ? "closure"
+            : x ===   RTS_FRAME_TAG ? "RTS frame"
+              : x ===          OS_TAG ? "OS"
+                : x ===         ENV_TAG ? "environment"
+                  : x ===   UNDEFINED_TAG ? "undefined"
+                    : x ===        PAIR_TAG ? "pair"
+                      : x ===        NULL_TAG ? "null"
+                        : " (unknown node kind)";
 }
 function show_heap(s) {
     const len = array_length(HEAP);
@@ -1583,9 +1577,9 @@ function show_heap(s) {
     display(undefined, "--- HEAP --- " + s);
     while (i < len) {
         display(undefined, stringify(i) + ": " + stringify(HEAP[i]) +
-                    (is_number(HEAP[i]) && is_node_tag(HEAP[i])
-                     ? " ("+node_kind(HEAP[i])+")"
-                     : ""));
+          (is_number(HEAP[i]) && is_node_tag(HEAP[i])
+            ? " ("+node_kind(HEAP[i])+")"
+            : ""));
         i = i + 1;
     }
 }
@@ -1593,21 +1587,21 @@ function show_heap(s) {
 function show_heap_value(address) {
     if (node_kind(HEAP[address])=== "pair") {
         let display_text = "result: heap node of type = " +
-                           node_kind(HEAP[address]) + ", value = " +
-                           show_pair_value(address);
+          node_kind(HEAP[address]) + ", value = " +
+          show_pair_value(address);
         display(undefined, display_text);
     } else {
         display(undefined, "result: heap node of type = " +
-                node_kind(HEAP[address]) +
-                ", value = " +
-                stringify(HEAP[address + NUMBER_VALUE_SLOT]));
+          node_kind(HEAP[address]) +
+          ", value = " +
+          stringify(HEAP[address + NUMBER_VALUE_SLOT]));
     }
 }
 
 function is_primitive_value(addr) {
     return node_kind(HEAP[addr]) === "number"
-        || node_kind(HEAP[addr]) === "string"
-        || node_kind(HEAP[addr]) === "bool";
+      || node_kind(HEAP[addr]) === "string"
+      || node_kind(HEAP[addr]) === "bool";
 }
 function is_null_value(addr) {
     return node_kind(HEAP[addr]) === "null";
@@ -1665,274 +1659,274 @@ function show_pair_value(address) {
 const M = [];
 
 M[START] = () =>   { A = 1; // first OS only needs to hold one closure
-                     NEW_OS();
-                     OS = RES;
-                     A = 0;
-                     NEW_ENVIRONMENT();
-                     ENV = RES;
-                     PC = PC + 1;
-                   };
+    NEW_OS();
+    OS = RES;
+    A = 0;
+    NEW_ENVIRONMENT();
+    ENV = RES;
+    PC = PC + 1;
+};
 
 M[LDCN] = () =>    { A = P[PC + LDCN_VALUE_OFFSET];
-                     NEW_NUMBER();
-                     A = RES;
-                     PUSH_OS();
-                     PC = PC + 2;
-                   };
+    NEW_NUMBER();
+    A = RES;
+    PUSH_OS();
+    PC = PC + 2;
+};
 
 M[LDCB] = () =>    { A = P[PC + LDCB_VALUE_OFFSET];
-                     NEW_BOOL();
-                     A = RES;
-                     PUSH_OS();
-                     PC = PC + 2;
-                   };
+    NEW_BOOL();
+    A = RES;
+    PUSH_OS();
+    PC = PC + 2;
+};
 
 M[LDCS] = () =>    { A = P[PC + LDCS_VALUE_OFFSET];
-                     NEW_STRING();
-                     A = RES;
-                     PUSH_OS();
-                     PC = PC + 2;
-                   };
+    NEW_STRING();
+    A = RES;
+    PUSH_OS();
+    PC = PC + 2;
+};
 
 M[LDCU] = () =>    { NEW_UNDEFINED();
-                     A = RES;
-                     PUSH_OS();
-                     PC = PC + 1;
-                   };
+    A = RES;
+    PUSH_OS();
+    PC = PC + 1;
+};
 
 M[PLUS] = () =>    { POP_OS();
-                     // Overloading + operator for strings at VM level.
-                     // Might be better to leave it at compile time as a concatenation function
+    // Overloading + operator for strings at VM level.
+    // Might be better to leave it at compile time as a concatenation function
 
-                     // if operands are both strings
-                     if (HEAP[RES + TAG_SLOT] === STRING_TAG) {
-                         A = HEAP[RES + STRING_VALUE_SLOT];
-                         POP_OS();
-                         A = HEAP[RES + STRING_VALUE_SLOT] + A;
-                         NEW_STRING();
-                     } else {
-                         // else assume they are both numbers
-                         A = HEAP[RES + NUMBER_VALUE_SLOT];
-                         POP_OS();
-                         A = HEAP[RES + NUMBER_VALUE_SLOT] + A;
-                         NEW_NUMBER();
-                     }
-                     A = RES;
-                     PUSH_OS();
-                     PC = PC + 1;
-                   };
+    // if operands are both strings
+    if (HEAP[RES + TAG_SLOT] === STRING_TAG) {
+        A = HEAP[RES + STRING_VALUE_SLOT];
+        POP_OS();
+        A = HEAP[RES + STRING_VALUE_SLOT] + A;
+        NEW_STRING();
+    } else {
+        // else assume they are both numbers
+        A = HEAP[RES + NUMBER_VALUE_SLOT];
+        POP_OS();
+        A = HEAP[RES + NUMBER_VALUE_SLOT] + A;
+        NEW_NUMBER();
+    }
+    A = RES;
+    PUSH_OS();
+    PC = PC + 1;
+};
 
 M[MINUS] = () =>   { POP_OS();
-                     A = HEAP[RES + NUMBER_VALUE_SLOT];
-                     POP_OS();
-                     A = HEAP[RES + NUMBER_VALUE_SLOT] - A;
-                     NEW_NUMBER();
-                     A = RES;
-                     PUSH_OS();
-                     PC = PC + 1;
-                   };
+    A = HEAP[RES + NUMBER_VALUE_SLOT];
+    POP_OS();
+    A = HEAP[RES + NUMBER_VALUE_SLOT] - A;
+    NEW_NUMBER();
+    A = RES;
+    PUSH_OS();
+    PC = PC + 1;
+};
 
 M[TIMES] = () =>   { POP_OS();
-                     A = HEAP[RES + NUMBER_VALUE_SLOT];
-                     POP_OS();
-                     A = HEAP[RES + NUMBER_VALUE_SLOT] * A;
-                     NEW_NUMBER();
-                     A = RES;
-                     PUSH_OS();
-                     PC = PC + 1;
-                   };
+    A = HEAP[RES + NUMBER_VALUE_SLOT];
+    POP_OS();
+    A = HEAP[RES + NUMBER_VALUE_SLOT] * A;
+    NEW_NUMBER();
+    A = RES;
+    PUSH_OS();
+    PC = PC + 1;
+};
 
 M[EQUAL] = () =>   { POP_OS();
-                     A = HEAP[RES + NUMBER_VALUE_SLOT];
-                     POP_OS();
-                     A = HEAP[RES + NUMBER_VALUE_SLOT] === A;
-                     NEW_BOOL();
-                     A = RES;
-                     PUSH_OS();
-                     PC = PC + 1;
-                   };
+    A = HEAP[RES + NUMBER_VALUE_SLOT];
+    POP_OS();
+    A = HEAP[RES + NUMBER_VALUE_SLOT] === A;
+    NEW_BOOL();
+    A = RES;
+    PUSH_OS();
+    PC = PC + 1;
+};
 
 M[LESS] = () =>    { POP_OS();
-                     A = HEAP[RES + NUMBER_VALUE_SLOT];
-                     POP_OS();
-                     A = HEAP[RES + NUMBER_VALUE_SLOT] < A;
-                     NEW_BOOL();
-                     A = RES;
-                     PUSH_OS();
-                     PC = PC + 1;
-                   };
+    A = HEAP[RES + NUMBER_VALUE_SLOT];
+    POP_OS();
+    A = HEAP[RES + NUMBER_VALUE_SLOT] < A;
+    NEW_BOOL();
+    A = RES;
+    PUSH_OS();
+    PC = PC + 1;
+};
 
 M[GEQ] = () =>     { POP_OS();
-                     A = HEAP[RES + NUMBER_VALUE_SLOT];
-                     POP_OS();
-                     A = HEAP[RES + NUMBER_VALUE_SLOT] >= A;
-                     NEW_BOOL();
-                     A = RES;
-                     PUSH_OS();
-                     PC = PC + 1;
-                   };
+    A = HEAP[RES + NUMBER_VALUE_SLOT];
+    POP_OS();
+    A = HEAP[RES + NUMBER_VALUE_SLOT] >= A;
+    NEW_BOOL();
+    A = RES;
+    PUSH_OS();
+    PC = PC + 1;
+};
 
 M[LEQ] = () =>     { POP_OS();
-                     A = HEAP[RES + NUMBER_VALUE_SLOT];
-                     POP_OS();
-                     A = HEAP[RES + NUMBER_VALUE_SLOT] <= A;
-                     NEW_BOOL();
-                     A = RES;
-                     PUSH_OS();
-                     PC = PC + 1;
-                   };
+    A = HEAP[RES + NUMBER_VALUE_SLOT];
+    POP_OS();
+    A = HEAP[RES + NUMBER_VALUE_SLOT] <= A;
+    NEW_BOOL();
+    A = RES;
+    PUSH_OS();
+    PC = PC + 1;
+};
 
 M[GREATER] = () => { POP_OS();
-                     A = HEAP[RES + NUMBER_VALUE_SLOT];
-                     POP_OS();
-                     A = HEAP[RES + NUMBER_VALUE_SLOT] > A;
-                     NEW_BOOL();
-                     A = RES;
-                     PUSH_OS();
-                     PC = PC + 1;
-                   };
+    A = HEAP[RES + NUMBER_VALUE_SLOT];
+    POP_OS();
+    A = HEAP[RES + NUMBER_VALUE_SLOT] > A;
+    NEW_BOOL();
+    A = RES;
+    PUSH_OS();
+    PC = PC + 1;
+};
 
 M[NOT] = () =>     { POP_OS();
-                     A = ! HEAP[RES + BOOL_VALUE_SLOT];
-                     NEW_BOOL();
-                     A = RES;
-                     PUSH_OS();
-                     PC = PC + 1;
-                   };
+    A = ! HEAP[RES + BOOL_VALUE_SLOT];
+    NEW_BOOL();
+    A = RES;
+    PUSH_OS();
+    PC = PC + 1;
+};
 
 M[DIV] = () =>     { POP_OS();
-                     A = HEAP[RES + NUMBER_VALUE_SLOT];
-                     E = A;
-                     POP_OS();
-                     A = HEAP[RES + NUMBER_VALUE_SLOT] / A;
-                     NEW_NUMBER();
-                     A = RES;
-                     PUSH_OS();
-                     PC = PC + 1;
-                     E = E === 0;
-                     if (E) { STATE = DIV_ERROR; } else {}
-                     if (E) { RUNNING = false; } else {}
-                   };
+    A = HEAP[RES + NUMBER_VALUE_SLOT];
+    E = A;
+    POP_OS();
+    A = HEAP[RES + NUMBER_VALUE_SLOT] / A;
+    NEW_NUMBER();
+    A = RES;
+    PUSH_OS();
+    PC = PC + 1;
+    E = E === 0;
+    if (E) { STATE = DIV_ERROR; } else {}
+    if (E) { RUNNING = false; } else {}
+};
 
 M[POP] = () =>     { POP_OS();
-                     PC = PC + 1;
-                   };
+    PC = PC + 1;
+};
 
 M[ASSIGN] = () =>  { POP_OS();
-                     HEAP[ENV + HEAP[ENV + FIRST_CHILD_SLOT]
-                              + P[PC + 1]] = RES;
-                     PC = PC + 2;
-                   };
+    HEAP[ENV + HEAP[ENV + FIRST_CHILD_SLOT]
+    + P[PC + 1]] = RES;
+    PC = PC + 2;
+};
 
 M[JOF] = () =>     { POP_OS();
-                     A = HEAP[RES + NUMBER_VALUE_SLOT];
-                     if (!A) { PC = P[PC + 1]; } else {}
-                     if (A) { PC = PC + 2; } else {}
-                   };
+    A = HEAP[RES + NUMBER_VALUE_SLOT];
+    if (!A) { PC = P[PC + 1]; } else {}
+    if (A) { PC = PC + 2; } else {}
+};
 
 M[GOTO] = () =>    { PC = P[PC + 1];
-                   };
+};
 
 M[LDF] = () =>     { A = P[PC + LDF_MAX_OS_SIZE_OFFSET];
-                     B = P[PC + LDF_ADDRESS_OFFSET];
-                     C = P[PC + LDF_ENV_EXTENSION_COUNT_OFFSET];
-                     NEW_CLOSURE();
-                     A = RES;
-                     PUSH_OS();
-                     PC = PC + 4;
-                   };
+    B = P[PC + LDF_ADDRESS_OFFSET];
+    C = P[PC + LDF_ENV_EXTENSION_COUNT_OFFSET];
+    NEW_CLOSURE();
+    A = RES;
+    PUSH_OS();
+    PC = PC + 4;
+};
 
 M[LD] = () =>      { A = HEAP[ENV + HEAP[ENV + FIRST_CHILD_SLOT]
-                                  + P[PC + 1]];
-                     PUSH_OS();
-                     PC = PC + 2;
-                   };
++ P[PC + 1]];
+    PUSH_OS();
+    PC = PC + 2;
+};
 
 M[LDV] = () =>     { E = HEAP[OS + SIZE_SLOT] - 4; // get the number of arguments
-                     C = ENV + HEAP[ENV + SIZE_SLOT] - 1; // addr of last argument
-                     for (D = 0; D < E; D = D + 1) {
-                         A = HEAP[C - D];
-                         PUSH_OS();
-                     }
-                     PC = PC + 1;
-                   };
+    C = ENV + HEAP[ENV + SIZE_SLOT] - 1; // addr of last argument
+    for (D = 0; D < E; D = D + 1) {
+        A = HEAP[C - D];
+        PUSH_OS();
+    }
+    PC = PC + 1;
+};
 
 M[CALL] = () =>    { G = P[PC + 1];  // lets keep number of arguments in G
-                     // we peek down OS to get the closure
-                     F = HEAP[OS + HEAP[OS + LAST_CHILD_SLOT] - G];
-                     // prep for EXTEND
-                     A = HEAP[F + CLOSURE_ENV_SLOT];
-                     // A is now env to be extended
-                     H = HEAP[A + LAST_CHILD_SLOT];
-                     // H is now offset of last child slot
-                     B = HEAP[F + CLOSURE_ENV_EXTENSION_COUNT_SLOT];
-                     // B is now the environment extension count
-                     EXTEND(); // after this, RES is new env
-                     E = RES;
-                     H = E + H + G;
-                     // H is now address where last argument goes in new env
-                     for (C = H; C > H - G; C = C - 1) {
-                         POP_OS(); // now RES has the address of the next arg
-                         HEAP[C] = RES; // copy argument into new env
-                     }
-                     POP_OS(); // closure is on top of OS; pop it as not needed
-                     NEW_RTS_FRAME(); // saves PC+2, ENV, OS
-                     A = RES;
-                     PUSH_RTS();
-                     PC = HEAP[F + CLOSURE_ADDRESS_SLOT];
-                     A = HEAP[F + CLOSURE_OS_SIZE_SLOT]; // closure stack size
-                     NEW_OS();    // uses B and C
-                     OS = RES;
-                     ENV = E;
-                   };
+    // we peek down OS to get the closure
+    F = HEAP[OS + HEAP[OS + LAST_CHILD_SLOT] - G];
+    // prep for EXTEND
+    A = HEAP[F + CLOSURE_ENV_SLOT];
+    // A is now env to be extended
+    H = HEAP[A + LAST_CHILD_SLOT];
+    // H is now offset of last child slot
+    B = HEAP[F + CLOSURE_ENV_EXTENSION_COUNT_SLOT];
+    // B is now the environment extension count
+    EXTEND(); // after this, RES is new env
+    E = RES;
+    H = E + H + G;
+    // H is now address where last argument goes in new env
+    for (C = H; C > H - G; C = C - 1) {
+        POP_OS(); // now RES has the address of the next arg
+        HEAP[C] = RES; // copy argument into new env
+    }
+    POP_OS(); // closure is on top of OS; pop it as not needed
+    NEW_RTS_FRAME(); // saves PC+2, ENV, OS
+    A = RES;
+    PUSH_RTS();
+    PC = HEAP[F + CLOSURE_ADDRESS_SLOT];
+    A = HEAP[F + CLOSURE_OS_SIZE_SLOT]; // closure stack size
+    NEW_OS();    // uses B and C
+    OS = RES;
+    ENV = E;
+};
 
 M[CALLVAR] = () =>  { G = P[PC + 1];  // lets keep number of arguments in G
-                    // we peek down OS to get the closure
-                    F = HEAP[OS + HEAP[OS + LAST_CHILD_SLOT] - G];
-                    // prep for EXTEND
-                    A = HEAP[F + CLOSURE_ENV_SLOT];
-                    // A is now env to be extended
-                    H = HEAP[A + LAST_CHILD_SLOT];
-                    // H is now offset of last child slot
-                    B = HEAP[F + CLOSURE_ENV_EXTENSION_COUNT_SLOT] + G - 1;
-                    // B is now the environment extension count
-                    EXTEND(); // after this, RES is new env
-                    E = RES;
-                    H = E + H + G;
-                    // H is now address where last argument goes in new env
-                    for (C = H; C > H - G; C = C - 1) {
-                        POP_OS(); // now RES has the address of the next arg
-                        HEAP[C] = RES; // copy argument into new env
-                    }
-                    POP_OS(); // closure is on top of OS; pop it as not needed
-                    NEW_RTS_FRAME(); // saves PC+2, ENV, OS
-                    A = RES;
-                    PUSH_RTS();
-                    PC = HEAP[F + CLOSURE_ADDRESS_SLOT];
-                    A = HEAP[F + CLOSURE_OS_SIZE_SLOT] + G - 1; // closure stack size
-                    NEW_OS();    // uses B and C
-                    OS = RES;
-                    ENV = E;
-                   };
+    // we peek down OS to get the closure
+    F = HEAP[OS + HEAP[OS + LAST_CHILD_SLOT] - G];
+    // prep for EXTEND
+    A = HEAP[F + CLOSURE_ENV_SLOT];
+    // A is now env to be extended
+    H = HEAP[A + LAST_CHILD_SLOT];
+    // H is now offset of last child slot
+    B = HEAP[F + CLOSURE_ENV_EXTENSION_COUNT_SLOT] + G - 1;
+    // B is now the environment extension count
+    EXTEND(); // after this, RES is new env
+    E = RES;
+    H = E + H + G;
+    // H is now address where last argument goes in new env
+    for (C = H; C > H - G; C = C - 1) {
+        POP_OS(); // now RES has the address of the next arg
+        HEAP[C] = RES; // copy argument into new env
+    }
+    POP_OS(); // closure is on top of OS; pop it as not needed
+    NEW_RTS_FRAME(); // saves PC+2, ENV, OS
+    A = RES;
+    PUSH_RTS();
+    PC = HEAP[F + CLOSURE_ADDRESS_SLOT];
+    A = HEAP[F + CLOSURE_OS_SIZE_SLOT] + G - 1; // closure stack size
+    NEW_OS();    // uses B and C
+    OS = RES;
+    ENV = E;
+};
 
 M[LDNULL] = () =>    { NEW_NULL();
-                       A = RES;
-                       PUSH_OS();
-                       PC = PC + 1;
-                      };
+    A = RES;
+    PUSH_OS();
+    PC = PC + 1;
+};
 
 M[RTN] = () =>     { POP_RTS();
-                     H = RES;
-                     PC = HEAP[H + RTS_FRAME_PC_SLOT];
-                     ENV = HEAP[H + RTS_FRAME_ENV_SLOT];
-                     POP_OS();
-                     A = RES;
-                     OS = HEAP[H + RTS_FRAME_OS_SLOT];
-                     PUSH_OS();
-                    };
+    H = RES;
+    PC = HEAP[H + RTS_FRAME_PC_SLOT];
+    ENV = HEAP[H + RTS_FRAME_ENV_SLOT];
+    POP_OS();
+    A = RES;
+    OS = HEAP[H + RTS_FRAME_OS_SLOT];
+    PUSH_OS();
+};
 
 M[DONE] = () =>    { RUNNING = false;
-                   };
+};
 
 // ============================== INJECTED PRIMITIVE FUNCTIONS ========================
 // utilize underlying source functions
@@ -2043,8 +2037,6 @@ function run() {
     if (STATE === DIV_ERROR) {
         POP_OS();
         error(RES, "execution aborted:");
-    } else if (STATE ===  OUT_OF_MEMORY_ERROR) {
-        error(RES, "memory exhausted despite garbage collection");
     } else {
         POP_OS();
         show_heap_value(RES);
@@ -2089,7 +2081,7 @@ run();
 // print_program(P);
 // run();
 
-initialize_machine(3000);
+initialize_machine(3500);
 P = parse_and_compile("\
 reverse(list(1, 2, 3));\
 \
