@@ -858,39 +858,36 @@ let TEMP_ROOT = -Infinity;
 function NEW() {
   J = A;
   K = B;
-  if (BUMP_HEAD + K > BUMP_TAIL) {
+  while (BUMP_HEAD + K - 1> BUMP_TAIL) {
     // if the hole is too small for the new node
-    visualize_heap("hello");
+    // visualize_heap("hello");
     // TODO: overflow allocator
     // go to next recyclable block or free block
-    A = BUMP_HEAD;
+    A = BUMP_HEAD - 1; // possible for BUMP_HEAD to overflow into next block if block is fully filled
     GET_BLOCK();
-    HEAP[RES + BLOCK_STATE_SLOT] = OCCUPIED; // mark current
-    GET_NEXT_RECYCLABLE_BLOCK();
+    HEAP[RES + BLOCK_STATE_SLOT] = OCCUPIED; // set bump_head block to occupied
+
+    GET_NEXT_BLOCK();
+
     if (RES === NO_BLOCK_FOUND) {
-      // no block is recyclable
-      GET_FREE_BLOCK();
-      if (RES === NO_BLOCK_FOUND) {
-        // no block is either recyclable or free
-        // mark and granular sweep
-        MARK();
-        FREE_REGION();
-        GET_NEXT_RECYCLABLE_BLOCK();
-        if (RES === NO_BLOCK_FOUND) {
-          GET_FREE_BLOCK();
-          if (RES === NO_BLOCK_FOUND) {
-            // if still no recyclable or free block found
-            STATE = OUT_OF_MEMORY_ERROR;
-            RUNNING = false;
-            display("reached oom");
-          } else {}
-        } else {}
-      } else {}
+      // no block is either recyclable or free
+      // mark and granular sweep
+      MARK();
+      FREE_REGION();
+      break;
     } else {}
+
     A = RES;
-    // reallocate bump head and tail in the new block
     ALLOCATE_BUMP_HEAD_AND_TAIL();
+  }
+
+  if (BUMP_HEAD + K - 1 > BUMP_TAIL) {
+    // if still no recyclable or free block found
+    STATE = OUT_OF_MEMORY_ERROR;
+    RUNNING = false;
+    display("reached oom");
   } else {}
+
   HEAP[BUMP_HEAD + TAG_SLOT] = J;
   HEAP[BUMP_HEAD + SIZE_SLOT] = K;
   // TODO: remove assigning mark slot from NEW_* functions
@@ -900,12 +897,11 @@ function NEW() {
   A = BUMP_HEAD;
   GET_LINE();
   A = RES;
-  GET_BLOCK(); // block address in RES
-  HEAP[RES + BLOCK_STATE_SLOT] = RECYCLABLE;
+  GET_BLOCK();
   while (
     // loop through all lines and set line limits
     A <= HEAP[RES + LAST_CHILD_SLOT] &&
-    HEAP[A + LINE_ADDRESS_SLOT] + LINE_SIZE <= BUMP_HEAD + HEAP[BUMP_HEAD + SIZE_SLOT]
+      HEAP[A + LINE_ADDRESS_SLOT] + LINE_SIZE <= BUMP_HEAD + HEAP[BUMP_HEAD + SIZE_SLOT]
   ) {
     // lines are filled
     HEAP[A + LINE_LIMIT_SLOT] = HEAP[A + LINE_ADDRESS_SLOT] + LINE_SIZE;
@@ -914,9 +910,23 @@ function NEW() {
   // update the last line to the actual occupied size
   HEAP[A + LINE_LIMIT_SLOT] = BUMP_HEAD + K;
 
+  // set block state
+  A = BUMP_HEAD + K;
+  GET_BLOCK(); // block address in RES
+  HEAP[RES + BLOCK_STATE_SLOT] = RECYCLABLE;
   // return
   RES = BUMP_HEAD;
   BUMP_HEAD = BUMP_HEAD + K;
+}
+let pass = 0;
+
+// Finds next recyclable block, if none available, find next free block
+// Returns address of block if found, else NO_BLOCK_FOUND
+function GET_NEXT_BLOCK() {
+  GET_NEXT_RECYCLABLE_BLOCK();
+  if (RES === NO_BLOCK_FOUND) {
+    GET_FREE_BLOCK();
+  } else {}
 }
 
 // expects free/recyclable block address in A, size to expect in K
@@ -964,7 +974,7 @@ function MARK() {
     A = RES;
     while (
       A <= HEAP[CURR_BLOCK + LAST_CHILD_SLOT] &&
-      HEAP[A + LINE_ADDRESS_SLOT] <= SCAN + HEAP[SCAN + SIZE_SLOT]
+        HEAP[A + LINE_ADDRESS_SLOT] <= SCAN + HEAP[SCAN + SIZE_SLOT]
     ) {
       HEAP[A + LINE_MARK_SLOT] = MARKED;
       A = A + LINE_BK_SIZE;
@@ -980,7 +990,7 @@ function MARK() {
       if (
         // child is marked and corresponding line also marked
         HEAP[A + MARK_SLOT] === MARKED &&
-        HEAP[RES + LINE_MARK_SLOT] === MARKED
+          HEAP[RES + LINE_MARK_SLOT] === MARKED
       ) {
       } else {
         PUSH_RTS();
@@ -996,7 +1006,6 @@ function FREE_REGION() {
   for (I = 0; I < NUMBER_OF_BLOCKS; I = I + 1) {
     if (HEAP[I * BLOCK_SIZE + MARK_SLOT] === UNMARKED) {
       // if block is not MARKED, set state to FREE
-      display("FREEEEEE");
       HEAP[I * BLOCK_SIZE + BLOCK_STATE_SLOT] = FREE;
     } else {
       // assume OCCUPIED
@@ -1011,7 +1020,7 @@ function FREE_REGION() {
       ) {
         if (HEAP[SCAN + LINE_MARK_SLOT] === UNMARKED) {
           // free line not marked
-          display("FREEEEEE");
+          display(SCAN, "FREEEEEE");
           HEAP[SCAN + LINE_LIMIT_SLOT] = HEAP[SCAN + LINE_ADDRESS_SLOT];
           // set block to recyclable
           HEAP[I * BLOCK_SIZE + BLOCK_STATE_SLOT] = RECYCLABLE;
@@ -1025,25 +1034,34 @@ function FREE_REGION() {
   }
 
   // finds a hole of at least k size and allocate new bump head and tail
+  ALLOCATE_TO_RECYCLABLE();
+  // if hole found still too small, allocate to a free block
+  if (BUMP_HEAD + K > BUMP_TAIL) {
+    ALLOCATE_TO_FREE();
+  } else {}
+}
+
+// choose k-sized hole from recyclable blocks
+function ALLOCATE_TO_RECYCLABLE() {
   for (I = 0; I < NUMBER_OF_BLOCKS; I = I + 1) {
-    if (
-      // if block is free or recyclable,
-      HEAP[I * BLOCK_SIZE + BLOCK_STATE_SLOT] === FREE ||
+    if ( // if block is free or recyclable,
       HEAP[I * BLOCK_SIZE + BLOCK_STATE_SLOT] === RECYCLABLE
     ) {
       // find k-sized hole
-      SCAN = HEAP[I * BLOCK_SIZE + FIRST_CHILD_SLOT];
-      while (SCAN <= HEAP[I * BLOCK_SIZE + LAST_CHILD_SLOT]) {
+      SCAN = I * BLOCK_SIZE + HEAP[I * BLOCK_SIZE + FIRST_CHILD_SLOT];
+      while (SCAN <= I * BLOCK_SIZE + HEAP[I * BLOCK_SIZE + LAST_CHILD_SLOT]) {
         // if line is free/empty
         if (HEAP[SCAN + LINE_LIMIT_SLOT] === HEAP[SCAN + LINE_ADDRESS_SLOT]) {
           // set bump head to end of previous line
-          BUMP_HEAD = HEAP[SCAN - LINE_BK_SIZE + LINE_LIMIT_SLOT];
+          BUMP_HEAD = SCAN === I * BLOCK_SIZE + HEAP[I * BLOCK_SIZE + FIRST_CHILD_SLOT] // if first line
+            ? HEAP[SCAN + LINE_ADDRESS_SLOT]
+            : HEAP[SCAN - LINE_BK_SIZE + LINE_LIMIT_SLOT];
           ALLOCATE_BUMP_TAIL();
 
           if (BUMP_HEAD + K <= BUMP_TAIL) {
             return undefined;
           } else {
-            A = BUMP_TAIL - 1; // since bump_tail is exclusive, may return undefined
+            A = BUMP_TAIL;
             GET_LINE();
             SCAN = RES + LINE_BK_SIZE; // get previous line but increment manually
           }
@@ -1055,16 +1073,32 @@ function FREE_REGION() {
   }
 }
 
+// find first free block and set BUMP_HEAD and BUMP_TAIL immediately
+// if no free blocks, BUMP_HEAD and BUMP_TAIL remain as previous
+function ALLOCATE_TO_FREE() {
+  for (I = 0; I < NUMBER_OF_BLOCKS; I = I + 1) {
+    if (HEAP[I * BLOCK_SIZE + BLOCK_STATE_SLOT] === FREE) {
+      BUMP_HEAD = HEAP[HEAP[I * BLOCK_SIZE + FIRST_CHILD_SLOT]];
+      BUMP_TAIL = BUMP_HEAD + BLOCK_SIZE;
+      break;
+    } else {}
+  }
+}
+
 // finds bump tail based on bump_head
+// changes A
 function ALLOCATE_BUMP_TAIL() {
   A = BUMP_HEAD;
   GET_LINE();
-  A = RES + LINE_BK_SIZE;
-  while (HEAP[A + LINE_ADDRESS_SLOT] === HEAP[A + LINE_LIMIT_SLOT]) {
+  // assuming line of bump head may be occupied, start from next line from bump head
+  A = RES + LINE_BK_SIZE; // line node address in A
+  GET_BLOCK();
+  while (A <= RES + HEAP[RES + LAST_CHILD_SLOT] &&
+         HEAP[A + LINE_ADDRESS_SLOT] === HEAP[A + LINE_LIMIT_SLOT]) {
     A = A + LINE_BK_SIZE;
   }
-  BUMP_TAIL = HEAP[A - LINE_BK_SIZE + LINE_ADDRESS_SLOT] + LINE_SIZE - 1;
   // take max of previous line (for edge case where A is last line)
+  BUMP_TAIL = HEAP[A - LINE_BK_SIZE + LINE_ADDRESS_SLOT] + LINE_SIZE - 1;
 }
 
 // expects object address in A
@@ -1078,9 +1112,11 @@ function GET_BLOCK() {
 // FIXME: need a special case for when bump tail === length of buffer
 function GET_LINE() {
   C = math_floor(A / BLOCK_SIZE) * BLOCK_SIZE;                 // block address in C
+  // find offset from start of block
   RES = HEAP[C + HEAP[C + FIRST_CHILD_SLOT] + LINE_ADDRESS_SLOT]; // start of addressable space in RES
-  A = math_floor((A - RES) / LINE_SIZE);                       // line number in A
-  RES = HEAP[C + FIRST_CHILD_SLOT] + A * LINE_BK_SIZE;            // line node address in RES
+  A = math_floor((A - RES) / LINE_SIZE);                       // line offset number in A
+  RES = C + HEAP[C + FIRST_CHILD_SLOT] + A * LINE_BK_SIZE;            // line node address in RES
+  // debugging
   if (RES < 0) {
     error(RES, "negative line number");
   } else {}
@@ -1107,7 +1143,7 @@ function INITIALIZE_BLOCKS_AND_LINES() {
 
   // reallocate bump pointers for actual use
   BUMP_HEAD = HEAP[HEAP[CURR_BLOCK + FIRST_CHILD_SLOT]];
-  BUMP_TAIL = CURR_BLOCK + BLOCK_SIZE - 1;
+  BUMP_TAIL = CURR_BLOCK + BLOCK_SIZE - 1; // bump_tail is INCLUSIVE
 }
 
 // machine states
@@ -1187,8 +1223,8 @@ function NEW_BLOCK() {
   HEAP[A + SIZE_SLOT] = BLOCK_SIZE;
   HEAP[A + FIRST_CHILD_SLOT] = 6;
   HEAP[A + LAST_CHILD_SLOT] = 6 + (NUM_OF_LINES_PER_BLOCK - 1) * LINE_BK_SIZE;
-  HEAP[A + MARK_SLOT] = UNMARKED; // state slot will be used for mark status
-  HEAP[A + BLOCK_STATE_SLOT] = FREE; // liveness slot will be left in but not used for now
+  HEAP[A + MARK_SLOT] = UNMARKED; // mark slot will be used for mark status
+  HEAP[A + BLOCK_STATE_SLOT] = FREE; // state slot will be used for determining to skip objects or not.
 
   // store line address in B
   B = A + HEAP[A + LAST_CHILD_SLOT] + LINE_BK_SIZE;
@@ -1207,33 +1243,25 @@ function NEW_BLOCK() {
 
 // Returns the address of the first free block scanning from the first block
 function GET_FREE_BLOCK() {
-  let BLOCK_ITER = HEAPBOTTOM;
-  for (let i = 0; i <= NUMBER_OF_BLOCKS; i = i + 1) {
+  RES = NO_BLOCK_FOUND;
+  for (let i = 0; i < NUMBER_OF_BLOCKS; i = i + 1) {
     // if no block is recyclable
-    if (i >= NUMBER_OF_BLOCKS) {
-      RES = NO_BLOCK_FOUND;
-    } else if (HEAP[BLOCK_ITER + BLOCK_STATE_SLOT] === FREE) {
-      RES = BLOCK_ITER;
+    if (HEAP[i * BLOCK_SIZE + BLOCK_STATE_SLOT] === FREE) {
+      RES = BLOCK_SIZE * i;
       break;
-    } else {
-      BLOCK_ITER = BLOCK_ITER + BLOCK_SIZE;
-    }
+    } else {}
   }
 }
 
 // Returns the address of the first recyclable block scanning from the first block
 function GET_NEXT_RECYCLABLE_BLOCK() {
-  let BLOCK_ITER = HEAPBOTTOM;
-  for (let i = 0; i <= NUMBER_OF_BLOCKS; i = i + 1) {
+  RES = NO_BLOCK_FOUND;
+  for (let i = 0; i < NUMBER_OF_BLOCKS; i = i + 1) {
     // if no block is recyclable
-    if (i >= NUMBER_OF_BLOCKS) {
-      RES = NO_BLOCK_FOUND;
-    } else if (HEAP[BLOCK_ITER + BLOCK_STATE_SLOT] === RECYCLABLE) {
-      RES = BLOCK_ITER;
+    if (HEAP[i * BLOCK_SIZE + BLOCK_STATE_SLOT] === RECYCLABLE) {
+      RES = BLOCK_SIZE * i;
       break;
-    } else {
-      BLOCK_ITER = BLOCK_ITER + BLOCK_SIZE;
-    }
+    } else {}
   }
 }
 
@@ -1519,8 +1547,8 @@ function show_heap(s) {
         ": " +
         stringify(HEAP[i]) +
         (is_number(HEAP[i]) && is_node_tag(HEAP[i])
-          ? " (" + node_kind(HEAP[i]) + ")"
-          : "")
+         ? " (" + node_kind(HEAP[i]) + ")"
+         : "")
     );
     i = i + 1;
   }
@@ -1540,11 +1568,11 @@ function visualize_heap(s) {
     } else {}
     display(
       stringify(i) +
-      ": " +
-      stringify(HEAP[i]) +
-      (is_number(HEAP[i]) && is_node_tag(HEAP[i])
-        ? " (" + node_kind(HEAP[i]) + ")"
-        : "")
+        ": " +
+        stringify(HEAP[i]) +
+        (is_number(HEAP[i]) && is_node_tag(HEAP[i])
+         ? " (" + node_kind(HEAP[i]) + ")"
+         : "")
     );
     i = i + 1;
     demarc = demarc >= 0 ? (demarc-1) : demarc;
@@ -1881,7 +1909,7 @@ function run() {
 // print_program(P);
 // run();
 //
-initialize_machine(8, 15, 3); // exactly 200 needed
+initialize_machine(3, 20, 3); // exactly 200 needed
 P = parse_and_compile(
   "             \
 const a = 2;                        \
