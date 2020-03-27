@@ -279,8 +279,8 @@ const JOF     = 17; // followed by: jump address
 const GOTO    = 18; // followed by: jump address
 const LDF     = 19; // followed by: max_stack_size, address, env extensn count
 const CALL    = 20;
-const CALLVAR   = 21;
-const LD      = 22; // followed by: index of value in environment
+const CALLVAR = 21;
+const LD      = 22; // followed by: index of value in environment, number of environments to look up
 const LDV     = 23;
 const LDNULL  = 26;
 const RTN     = 27;
@@ -400,6 +400,126 @@ function generate_injected_prim_func_code(entry) {
     return code;
 }
 
+// primitive functions according to source 2 specifications
+// TODO: variadic functions: math_hypot, list etc.
+const math_consts = "\
+const math_E = 2.718281828459045;\
+const math_LN10 = 2.302585092994046;\
+const math_LN2 = 0.6931471805599453;\
+const math_LOG10E = 0.4342944819032518;\
+const math_LOG2E = 1.4426950408889634;\
+const math_PI = 3.141592653589793;\
+const math_SQRT1_2 = 0.7071067811865476;\
+const math_SQRT2 = 1.4142135623730951;\
+";
+
+const predefined_functions = "\
+function is_boolean(v) {\
+    return v === true || v === false;\
+}\
+function is_list(xs) {\
+    return is_null(xs)\
+                ? true\
+                : is_pair(xs)\
+                    ? is_list(tail(xs))\
+                    : false;\
+}\
+function equal(x1, x2) {\
+    return is_null(x1) && is_null(x2)\
+                ? true\
+                : is_pair(x1) && is_pair(x2) \
+                    ? equal(head(x1), head(x2)) && equal(tail(x1), tail(x2))\
+                    : x1 === x2;\
+}\
+function length(xs) {\
+    function length_aux(ys, count) {\
+        return is_null(ys)\
+                    ? count\
+                    : length_aux(tail(ys), count + 1);\
+    }\
+    return length_aux(xs, 0);\
+}\
+function map(f, xs) {\
+    return is_null(xs)\
+                ? null\
+                : pair(f(head(xs)), map(f, tail(xs)));\
+}\
+function build_list(n, f) {\
+    function build_from_zero(a, n, f) {\
+        return a === n\
+                    ? null\
+                    : pair(f(a), build_from_zero(a + 1, n, f));\
+    }\
+    return build_from_zero(0, n, f);\
+}\
+function for_each(f, xs) {\
+    function apply(f, xs) {\
+        f(head(xs));\
+        return for_each(f, tail(xs));\
+    }\
+    return is_null(xs)\
+                ? true\
+                : apply(f, xs);\
+}\
+function reverse(xs) {\
+    function rev(original, reversed) {\
+        return is_null(original) \
+                    ? reversed \
+                    : rev(tail(original), \
+                            pair(head(original), reversed));\
+    }\
+    return rev(xs, null);\
+}\
+function append(xs, ys) {\
+    return is_null(xs) \
+                ? ys\
+                : pair(head(xs), append(tail(xs), ys));\
+}\
+function member(x, xs) {\
+    return is_null(xs)\
+                ? null\
+                : x === head(xs)\
+                    ? xs\
+                    : member(x, tail(xs));\
+}\
+function accumulate(f, initial, xs) {\
+    return is_null(xs) \
+                ? initial \
+                : f(head(xs), \
+                    accumulate(f, initial, tail(xs)));\
+}\
+function remove(x, xs) {\
+    return is_null(xs)\
+                ? null\
+                : x === head(xs)\
+                    ? tail(xs)\
+                    : pair(head(xs), remove(x, tail(xs)));\
+}\
+function remove_all(x, xs) {\
+    return is_null(xs)\
+                ? null\
+                : x === head(xs)\
+                    ? remove_all(x, tail(xs))\
+                    : pair(head(xs), remove_all(x, tail(xs)));\
+}\
+function filter(pred, xs) {\
+    return is_null(xs)\
+                ? null\
+                : pred(head(xs))\
+                    ? pair(head(xs), filter(pred, tail(xs)))\
+                    : tail(xs);\
+}\
+function enum_list(start, end) {\
+    return build_list(end - start + 1, x => x + start);\
+}\
+function list_ref(xs, n) {\
+    return n <= 0\
+                ? head(xs)\
+                : list_ref(tail(xs), n - 1);\
+}\
+";
+
+
 // some auxiliary constants
 // to keep track of the inline data
 
@@ -471,11 +591,11 @@ function print_program(P) {
         i = i + 1;
         if (op === LDCN || op === LDCB || op === LDCS || op === GOTO ||
             op === JOF || op === ASSIGN ||
-            op === LDF || op === LD || op === CALL) {
+            op === LDF || op === CALL) {
             s = s + " " + stringify(P[i]);
             i = i + 1;
         } else {}
-        if (op === LDF) {
+        if (op === LD ||op === LDF) {
             s = s + " " + stringify(P[i]) + " " +
                 stringify(P[i + 1]);
             i = i + 2;
@@ -573,17 +693,47 @@ function parse_and_compile(string) {
     function make_empty_index_table() {
         return null;
     }
-    function extend_index_table(t, s) {
-        return is_null(t)
-            ? list(pair(s, 0))
-            : pair(pair(s, tail(head(t)) + 1), t);
+    // reimplemented index table: from cloning the entire environment to creating 
+    // fresh environment frames
+    // with this change, index table exists as list of lists of names, with their
+    // reference numbers recorded independently in each environment
+    function extend_curr_env_index_table(t, s) {
+        return is_null(t) // empty index table
+            ? list(list(pair(s, 0)))
+            : is_null(head(t)) 
+            // current environment is empty, create new one and append from 0
+            ? pair(pair(pair(s, 0), head(t)), tail(t))
+            // append to non-empty current environment with only
+            : pair(pair(pair(s, tail(head(head(t))) + 1), head(t)), tail(t));
     }
+    function extend_new_env_index_table(t) {
+        return is_null(t)
+            ? list(t)
+            : pair(make_empty_index_table(), t);
+    }
+    // searches all the environment frames for a name
     function index_of(t, s) {
         return is_null(t)
             ? error(s, "name not found:")
-            : head(head(t)) === s
-            ? tail(head(t))
-            : index_of(tail(t), s);
+            : is_null(head(t))
+            ? index_of(tail(t), s)
+            : head(head(head(t))) === s
+            ? tail(head(head(t)))
+            : index_of(pair(tail(head(t)), tail(t)), s);
+    }
+    // get the number of environment frames to look up for a name
+    // for the VM instruction LD to lookup in O(1) time
+    function env_to_lookup(t, s) {
+        function aux(t, s, n) {
+            return is_null(t)
+                ? error(s, "name not found:")
+                : is_null(head(t))
+                ? aux(tail(t), s, n + 1)
+                : head(head(head(t))) === s
+                ? n
+                : aux(pair(tail(head(t)), tail(t)), s, n);
+        }
+        return aux(t, s, 0);
     }
 
     // a small complication: the toplevel function
@@ -719,7 +869,6 @@ function parse_and_compile(string) {
     }
 
     function compile_application(expr, index_table) {
-        // TODO: handle variadic case
         const max_stack_operator = compile(operator(expr),
                                        index_table, false);
         const max_stack_operands = compile_arguments(operands(expr),
@@ -738,8 +887,8 @@ function parse_and_compile(string) {
         const parameters =
             map(x => name_of_name(x), function_definition_parameters(expr));
         const extended_index_table =
-            accumulate((s, it) => extend_index_table(it, s),
-                       index_table,
+            accumulate((s, it) => extend_curr_env_index_table(it, s),
+                       extend_new_env_index_table(index_table),
                        append(reverse(locals),
                        reverse(parameters)));
         add_ternary_instruction(LDF, NaN, NaN,
@@ -787,7 +936,6 @@ function parse_and_compile(string) {
     }
 
     // compile injected primitive name
-    // TODO: handle variadic cases
     function compile_injected_primitive(name, index_table) {
         const entry = lookup_injected_prim_func_by_string(name);
         const ops_types = injected_prim_func_ops_types(entry);
@@ -796,7 +944,8 @@ function parse_and_compile(string) {
             add_nullary_instruction(LDV);
         } else {
             for (let i = length(ops_types) - 1; i >= 0; i = i - 1) {
-                add_unary_instruction(LD, index_of(index_table, "x" + stringify(i)));
+                // load variables in the current environment
+                add_binary_instruction(LD, index_of(index_table, "x" + stringify(i)), 0);
             }
         }
         add_nullary_instruction(OP);
@@ -837,8 +986,9 @@ function parse_and_compile(string) {
             max_stack_size =
             compile_function_definition(expr, index_table);
         } else if (is_name(expr)) {
-            add_unary_instruction(LD, index_of(index_table,
-                                  name_of_name(expr)));
+            add_binary_instruction(LD, 
+                                   index_of(index_table, name_of_name(expr)), 
+                                   env_to_lookup(index_table, name_of_name(expr)));
             max_stack_size = 1;
         } else if (is_sequence(expr)) {
             max_stack_size =
@@ -851,7 +1001,9 @@ function parse_and_compile(string) {
             // when the return statement is injected with "injected" clause
             // handle it at compile_injected_primitive()
             if (length(expr) > 1 && is_injected_return(expr)) {
-                max_stack_size = compile_injected_primitive(name_of_injected_function_in_return(expr), index_table);
+                max_stack_size = compile_injected_primitive(
+                    name_of_injected_function_in_return(expr), 
+                    index_table);
             } else {
                 max_stack_size = compile(return_statement_expression(expr),
                   index_table, false);
@@ -880,129 +1032,10 @@ function parse_and_compile(string) {
         return max_stack_size;
     }
 
-    // primitive functions according to source 2 specifications
-    // TODO: variadic functions: math_hypot, list etc.
-    const math_consts = "\
-    const math_E = 2.718281828459045;\
-    const math_LN10 = 2.302585092994046;\
-    const math_LN2 = 0.6931471805599453;\
-    const math_LOG10E = 0.4342944819032518;\
-    const math_LOG2E = 1.4426950408889634;\
-    const math_PI = 3.141592653589793;\
-    const math_SQRT1_2 = 0.7071067811865476;\
-    const math_SQRT2 = 1.4142135623730951;\
-    ";
-
     // prepend math prelude with predefined functions
     const math_prelude = math_consts + accumulate((x, y) => y + generate_injected_prim_func_code(x) + " ",
                                                   " ",
                                                   primitives);
-
-    const predefined_functions = "\
-    function is_boolean(v) {\
-        return v === true || v === false;\
-    }\
-    function is_list(xs) {\
-        return is_null(xs)\
-                   ? true\
-                   : is_pair(xs)\
-                       ? is_list(tail(xs))\
-                       : false;\
-    }\
-    function equal(x1, x2) {\
-        return is_null(x1) && is_null(x2)\
-                   ? true\
-                   : is_pair(x1) && is_pair(x2) \
-                       ? equal(head(x1), head(x2)) && equal(tail(x1), tail(x2))\
-                       : x1 === x2;\
-    }\
-    function length(xs) {\
-        function length_aux(ys, count) {\
-            return is_null(ys)\
-                       ? count\
-                       : length_aux(tail(ys), count + 1);\
-        }\
-        return length_aux(xs, 0);\
-    }\
-    function map(f, xs) {\
-        return is_null(xs)\
-                   ? null\
-                   : pair(f(head(xs)), map(f, tail(xs)));\
-    }\
-    function build_list(n, f) {\
-        function build_from_zero(a, n, f) {\
-            return a === n\
-                       ? null\
-                       : pair(f(a), build_from_zero(a + 1, n, f));\
-        }\
-        return build_from_zero(0, n, f);\
-    }\
-    function for_each(f, xs) {\
-        function apply(f, xs) {\
-            f(head(xs));\
-            return for_each(f, tail(xs));\
-        }\
-        return is_null(xs)\
-                   ? true\
-                   : apply(f, xs);\
-    }\
-    function reverse(xs) {\
-        function rev(original, reversed) {\
-            return is_null(original) \
-                       ? reversed \
-                       : rev(tail(original), \
-                             pair(head(original), reversed));\
-        }\
-        return rev(xs, null);\
-    }\
-    function append(xs, ys) {\
-        return is_null(xs) \
-                   ? ys\
-                   : pair(head(xs), append(tail(xs), ys));\
-    }\
-    function member(x, xs) {\
-        return is_null(xs)\
-                   ? null\
-                   : x === head(xs)\
-                       ? xs\
-                       : member(x, tail(xs));\
-    }\
-    function accumulate(f, initial, xs) {\
-        return is_null(xs) \
-                   ? initial \
-                   : f(head(xs), \
-                       accumulate(f, initial, tail(xs)));\
-    }\
-    function remove(x, xs) {\
-        return is_null(xs)\
-                   ? null\
-                   : x === head(xs)\
-                       ? tail(xs)\
-                       : pair(head(xs), remove(x, tail(xs)));\
-    }\
-    function remove_all(x, xs) {\
-        return is_null(xs)\
-                   ? null\
-                   : x === head(xs)\
-                       ? remove_all(x, tail(xs))\
-                       : pair(head(xs), remove_all(x, tail(xs)));\
-    }\
-    function filter(pred, xs) {\
-        return is_null(xs)\
-                   ? null\
-                   : pred(head(xs))\
-                       ? pair(head(xs), filter(pred, tail(xs)))\
-                       : tail(xs);\
-    }\
-    function enum_list(start, end) {\
-        return build_list(end - start + 1, x => x + start);\
-    }\
-    function list_ref(xs, n) {\
-        return n <= 0\
-                   ? head(xs)\
-                   : list_ref(tail(xs), n - 1);\
-    }\
-    ";
 
     // prepend the program with pre-defined functions
     const prepended_string = math_prelude + predefined_functions + string;
@@ -1017,7 +1050,7 @@ function parse_and_compile(string) {
 
     const locals = reverse(local_names(program));
     const program_names_index_table =
-         accumulate((s, it) => extend_index_table(it, s),
+         accumulate((s, it) => extend_curr_env_index_table(it, s),
                     make_empty_index_table(),
                     locals);
 
@@ -1394,23 +1427,6 @@ function NEW_ENVIRONMENT() {
     HEAP[RES + PARENT_ENVIRONMENT_SLOT] = ENV;
 }
 
-// expects env in A, by-how-many in B
-// changes A, B, C, D
-// Using TEMP_ROOT to make sure the
-// origin on copying is updated when
-// garbage collection happens in NEW_ENVIRONMENT
-function EXTEND() {
-    // TEMP_ROOT = A;
-    A = B;
-    NEW_ENVIRONMENT();
-    // // for (B = HEAP[TEMP_ROOT + FIRST_CHILD_SLOT];
-    // //      B <= HEAP[TEMP_ROOT + LAST_CHILD_SLOT];
-    // //      B = B + 1) {
-    // //     HEAP[RES + B] = HEAP[TEMP_ROOT + B];
-    // // }
-    // TEMP_ROOT = -1;
-}
-
 // debugging: show current heap
 function is_node_tag(x) {
     return x !== undefined && x <= -100 && x >= -110;
@@ -1468,29 +1484,23 @@ function is_pair_value(addr) {
     return node_kind(HEAP[addr]) === "pair";
 }
 function show_pair_value(address) {
-    show_heap("");
-    display(address);
     let display_text = "[";
-    const h_addr = HEAP[address + HEAD_VALUE_SLOT];
-    const t_addr = HEAP[address + TAIL_VALUE_SLOT];
-    if (is_primitive_value(h_addr)) {
-        display_text = display_text + stringify(HEAP[h_addr + NUMBER_VALUE_SLOT]);
-    } else if (is_null_value(h_addr)) {
-        display_text = display_text + "null";
-    } else if (is_pair_value(h_addr)) {
-        display_text = display_text + show_pair_value(h_addr);
-    } else {
-        display_text = display_text + "undefined_value";
-    }
-    display_text = display_text + ",";
-    if (is_primitive_value(t_addr)) {
-        display_text = display_text + stringify(HEAP[t_addr + NUMBER_VALUE_SLOT]);
-    } else if (is_null_value(t_addr)) {
-        display_text = display_text + "null";
-    } else if (is_pair_value(t_addr)) {
-        display_text = display_text + show_pair_value(t_addr);
-    } else {
-        display_text = display_text + "undefined_value";
+    for (let i = 0; 
+             i < 2; 
+             i = i + 1) {
+        const curr_addr = HEAP[address + HEAD_VALUE_SLOT + i];
+        if (is_primitive_value(curr_addr)) {
+            display_text = display_text + stringify(HEAP[curr_addr + NUMBER_VALUE_SLOT]);
+        } else if (is_null_value(curr_addr)) {
+            display_text = display_text + "null";
+        } else if (is_pair_value(curr_addr)) {
+            display_text = display_text + show_pair_value(curr_addr);
+        } else {
+            display_text = display_text + "undefined_value";
+        }
+        if (curr_addr === HEAP[address + HEAD_VALUE_SLOT]) {
+            display_text = display_text + ",";
+        } else {}
     }
     display_text = display_text + "]";
     return display_text;
@@ -1557,9 +1567,7 @@ M[LDCU] = () =>    { NEW_UNDEFINED();
 M[PLUS] = () =>    { POP_OS();
                      // Overloading + operator for strings at VM level.
                      // Might be better to leave it at compile time as a concatenation function
-
-                     show_heap("");
-                     display(RES);
+                     
                      // if operands are both strings
                      if (HEAP[RES + TAG_SLOT] === STRING_TAG) {
                          A = HEAP[RES + STRING_VALUE_SLOT];
@@ -1698,14 +1706,17 @@ M[LDF] = () =>     { A = P[PC + LDF_MAX_OS_SIZE_OFFSET];
                      PC = PC + 4;
                    };
 
-M[LD] = () =>      { // look up previous environment frames if name not found
-                     display(P[PC + 1], "PC? ");
-                     E = ENV;
-                     print_program(P);
-                     A = HEAP[ENV + HEAP[ENV + FIRST_CHILD_SLOT]
+M[LD] = () =>      { E = ENV;
+                     C = P[PC + 2]; // number of environments to lookup
+                     while (C > 0) {
+                         E = HEAP[E + PARENT_ENVIRONMENT_SLOT];
+                         C = C - 1;
+                     }
+                     // now E is the environment the name lives in
+                     A = HEAP[E+ HEAP[E + FIRST_CHILD_SLOT]
                                   + P[PC + 1]];
                      PUSH_OS();
-                     PC = PC + 2;
+                     PC = PC + 3;
                    };
 
 M[LDV] = () =>     { E = HEAP[OS + SIZE_SLOT] - 4; // get the number of arguments
@@ -1721,17 +1732,13 @@ M[CALL] = () =>    { G = P[PC + 1];  // lets keep number of arguments in G
                      // we peek down OS to get the closure
                      F = HEAP[OS + HEAP[OS + LAST_CHILD_SLOT] - G];
                      // prep for EXTEND
-                     A = HEAP[F + CLOSURE_ENV_SLOT];
-                     show_heap("");
-                     display(A);
-                     // A is now env to be extended
-                     H = HEAP[A + LAST_CHILD_SLOT];
-                     // H is now offset of last child slot
-                     B = HEAP[F + CLOSURE_ENV_EXTENSION_COUNT_SLOT];
+                     H = HEAP[ENV + FIRST_CHILD_SLOT];
+                     // H is now the first child slot of the environment
+                     A = HEAP[F + CLOSURE_ENV_EXTENSION_COUNT_SLOT];
                      // B is now the environment extension count
-                     EXTEND(); // after this, RES is new env
+                     NEW_ENVIRONMENT(); // after this, RES is new env
                      E = RES;
-                     H = E + H + G;
+                     H = E + H + G - 1;
                      // H is now address where last argument goes in new env
                      for (C = H; C > H - G; C = C - 1) {
                          POP_OS(); // now RES has the address of the next arg
@@ -1749,39 +1756,37 @@ M[CALL] = () =>    { G = P[PC + 1];  // lets keep number of arguments in G
                    };
 
 M[CALLVAR] = () =>  { G = P[PC + 1];  // lets keep number of arguments in G
-                    // we peek down OS to get the closure
-                    F = HEAP[OS + HEAP[OS + LAST_CHILD_SLOT] - G];
-                    // prep for EXTEND
-                    A = HEAP[F + CLOSURE_ENV_SLOT];
-                    // A is now env to be extended
-                    H = HEAP[A + LAST_CHILD_SLOT];
+                     // we peek down OS to get the closure
+                     F = HEAP[OS + HEAP[OS + LAST_CHILD_SLOT] - G];
+                     // prep for EXTEND
+                     H = HEAP[ENV + FIRST_CHILD_SLOT];
                     // H is now offset of last child slot
-                    B = HEAP[F + CLOSURE_ENV_EXTENSION_COUNT_SLOT] + G - 1;
-                    // B is now the environment extension count
-                    EXTEND(); // after this, RES is new env
-                    E = RES;
-                    H = E + HEAP[E + SIZE_SLOT] - 1;
-                    // H is now address where last argument goes in new env
-                    for (C = H; C > H - G; C = C - 1) {
-                        POP_OS(); // now RES has the address of the next arg
-                        HEAP[C] = RES; // copy argument into new env
-                    }
-                    POP_OS(); // closure is on top of OS; pop it as not needed
-                    NEW_RTS_FRAME(); // saves PC+2, ENV, OS
-                    A = RES;
-                    PUSH_RTS();
-                    PC = HEAP[F + CLOSURE_ADDRESS_SLOT];
-                    A = HEAP[F + CLOSURE_OS_SIZE_SLOT] + G - 1; // closure stack size
-                    NEW_OS();    // uses B and C
-                    OS = RES;
-                    ENV = E;
+                     A = HEAP[F + CLOSURE_ENV_EXTENSION_COUNT_SLOT] + G - 1;
+                     // A is now the environment extension count
+                     NEW_ENVIRONMENT(); // after this, RES is new env
+                     E = RES;
+                     H = E + H + G - 1;
+                     // H is now address where last argument goes in new env
+                     for (C = H; C > H - G; C = C - 1) {
+                         POP_OS(); // now RES has the address of the next arg
+                         HEAP[C] = RES; // copy argument into new env
+                     }
+                     POP_OS(); // closure is on top of OS; pop it as not needed
+                     NEW_RTS_FRAME(); // saves PC+2, ENV, OS
+                     A = RES;
+                     PUSH_RTS();
+                     PC = HEAP[F + CLOSURE_ADDRESS_SLOT];
+                     A = HEAP[F + CLOSURE_OS_SIZE_SLOT] + G - 1; // closure stack size
+                     NEW_OS();    // uses B and C
+                     OS = RES;
+                     ENV = E;
                    };
 
-M[LDNULL] = () =>    { NEW_NULL();
-                       A = RES;
-                       PUSH_OS();
-                       PC = PC + 1;
-                      };
+M[LDNULL] = () =>  { NEW_NULL();
+                     A = RES;
+                     PUSH_OS();
+                     PC = PC + 1;
+                   };
 
 M[RTN] = () =>     { POP_RTS();
                      H = RES;
@@ -1951,10 +1956,11 @@ run();
 
 P = parse_and_compile("\
 const z = 3;\
-function foo(x, y) {\
+function foo(x) {\
     return x + z;\
 }\
 foo(2);\
+pair(1, 2);\
 ");
 print_program(P);
 run();
