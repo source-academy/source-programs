@@ -858,34 +858,49 @@ let TEMP_ROOT = -Infinity;
 function NEW() {
   J = A;
   K = B;
-  while (BUMP_HEAD + K - 1> BUMP_TAIL) {
+  if (BUMP_HEAD + K - 1 > BUMP_TAIL) {
     // if the hole is too small for the new node
     // visualize_heap("hello");
-    // TODO: overflow allocator
-    // go to next recyclable block or free block
+
+    // GET_FREE_BLOCK();
+    // if (K > LINE_SIZE && RES !== NO_BLOCK_FOUND) {
+    //   // use overflow allocator
+    // } else {
+    //   // set bump_head block to occupied
+    // }
+
     A = BUMP_HEAD - 1; // possible for BUMP_HEAD to overflow into next block if block is fully filled
     GET_BLOCK();
-    HEAP[RES + BLOCK_STATE_SLOT] = OCCUPIED; // set bump_head block to occupied
+    HEAP[RES + BLOCK_STATE_SLOT] = OCCUPIED;
+    ALLOCATE_TO_RECYCLABLE();
+    display(BUMP_HEAD, "bumphead");
+    display(BUMP_TAIL, "bumptail");
+    display(K, "size");
+  } else {}
 
-    GET_NEXT_BLOCK();
-
+  if (BUMP_HEAD + K - 1 > BUMP_TAIL) {
+    GET_FREE_BLOCK();
+    display("free blcok =========", RES);
     if (RES === NO_BLOCK_FOUND) {
       // no block is either recyclable or free
       // mark and granular sweep
+      display("Collecttttttt");
       MARK();
       FREE_REGION();
-      break;
-    } else {}
-
-    A = RES;
-    ALLOCATE_BUMP_HEAD_AND_TAIL();
-  }
+    } else {
+      ALLOCATE_TO_FREE();
+    }
+    display(BUMP_HEAD, "free bumphead");
+    display(BUMP_TAIL, "free bumptail");
+    display(K, "size");
+    show_heap("");
+  } else {}
 
   if (BUMP_HEAD + K - 1 > BUMP_TAIL) {
     // if still no recyclable or free block found
     STATE = OUT_OF_MEMORY_ERROR;
     RUNNING = false;
-    display("reached oom");
+    error("reached oom");
   } else {}
 
   HEAP[BUMP_HEAD + TAG_SLOT] = J;
@@ -984,6 +999,7 @@ function MARK() {
       I <= HEAP[SCAN + LAST_CHILD_SLOT];
       I = I + 1
     ) {
+      if (HEAP[SCAN + I] === undefined) { continue; } else {}
       A = HEAP[SCAN + I]; // address of child
       GET_LINE();
       A = HEAP[SCAN + I]; // address of child
@@ -1078,7 +1094,7 @@ function ALLOCATE_TO_RECYCLABLE() {
 function ALLOCATE_TO_FREE() {
   for (I = 0; I < NUMBER_OF_BLOCKS; I = I + 1) {
     if (HEAP[I * BLOCK_SIZE + BLOCK_STATE_SLOT] === FREE) {
-      BUMP_HEAD = HEAP[HEAP[I * BLOCK_SIZE + FIRST_CHILD_SLOT]];
+      BUMP_HEAD = I * BLOCK_SIZE + HEAP[HEAP[I * BLOCK_SIZE + FIRST_CHILD_SLOT]];
       BUMP_TAIL = BUMP_HEAD + BLOCK_SIZE;
       break;
     } else {}
@@ -1920,7 +1936,7 @@ function f(x, y) {                  \
     return x - y * a + b - c + d;   \
 }                                   \
 f(30, 10);                          \
-  3;"
+3;"
 );
 run();
 //
