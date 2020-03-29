@@ -820,7 +820,7 @@ const MARK_SLOT = 4;
 // algorithm, but much less than 50%. In this mimicked version of Immix, we allocate 1 block for evacuation.
 // initialize header info for Mark-Region algorithm
 let NUMBER_OF_BLOCKS = -Infinity;
-let HEADROOM = -Infinity;
+let HEADROOM_BLOCK = -Infinity;
 // address of current working block
 let CURR_BLOCK = -Infinity;
 // address of meta data of current working line
@@ -873,16 +873,11 @@ function NEW() {
     GET_BLOCK();
     HEAP[RES + BLOCK_STATE_SLOT] = OCCUPIED;
     ALLOCATE_TO_RECYCLABLE();
-    display(BUMP_HEAD, "bumphead");
-    display(BUMP_TAIL, "bumptail");
-    display(K, "size");
   } else {}
 
   if (BUMP_HEAD + K - 1 > BUMP_TAIL) {
     GET_FREE_BLOCK();
-    display("free blcok =========", RES);
     if (RES === NO_BLOCK_FOUND) {
-      // no block is either recyclable or free
       // mark and granular sweep
       display("Collecttttttt");
       MARK();
@@ -890,18 +885,17 @@ function NEW() {
     } else {
       ALLOCATE_TO_FREE();
     }
-    display(BUMP_HEAD, "free bumphead");
-    display(BUMP_TAIL, "free bumptail");
-    display(K, "size");
-    show_heap("");
   } else {}
 
+  // if still no space for allocation
   if (BUMP_HEAD + K - 1 > BUMP_TAIL) {
-    // if still no recyclable or free block found
     STATE = OUT_OF_MEMORY_ERROR;
     RUNNING = false;
     error("reached oom");
   } else {}
+
+  display("new bump head", BUMP_HEAD);
+  display("new bump tail", BUMP_TAIL);
 
   HEAP[BUMP_HEAD + TAG_SLOT] = J;
   HEAP[BUMP_HEAD + SIZE_SLOT] = K;
@@ -933,7 +927,6 @@ function NEW() {
   RES = BUMP_HEAD;
   BUMP_HEAD = BUMP_HEAD + K;
 }
-let pass = 0;
 
 // Finds next recyclable block, if none available, find next free block
 // Returns address of block if found, else NO_BLOCK_FOUND
@@ -944,14 +937,15 @@ function GET_NEXT_BLOCK() {
   } else {}
 }
 
-// expects free/recyclable block address in A, size to expect in K
+// expects free/recyclable block address in A
+// Finds first hole and sets bump head and bump tail
 function ALLOCATE_BUMP_HEAD_AND_TAIL() {
   // finds a hole (one or more free lines) and allocate new bump head and tail
   SCAN = A + HEAP[A + FIRST_CHILD_SLOT];
   while (SCAN <= A + HEAP[A + LAST_CHILD_SLOT]) {
     // if line is free/empty
     if (HEAP[SCAN + LINE_LIMIT_SLOT] === HEAP[SCAN + LINE_ADDRESS_SLOT]) {
-      // set bump head to end of previous line
+      // set bump head to start of line
       BUMP_HEAD = HEAP[SCAN + LINE_ADDRESS_SLOT];
       ALLOCATE_BUMP_TAIL();
       break;
@@ -963,6 +957,7 @@ function ALLOCATE_BUMP_HEAD_AND_TAIL() {
 
 // Changes A, B, C, I, SCAN
 function MARK() {
+  display("MARK!");
   // keep old TOP_RTS to prevent deleting stacks
   B = TOP_RTS;
   // init roots for dfs
@@ -1001,6 +996,12 @@ function MARK() {
     ) {
       if (HEAP[SCAN + I] === undefined) { continue; } else {}
       A = HEAP[SCAN + I]; // address of child
+
+      // child is invalid or not yet loaded
+      if (A === undefined) {
+        continue;
+      } else {}
+
       GET_LINE();
       A = HEAP[SCAN + I]; // address of child
       if (
@@ -1036,7 +1037,6 @@ function FREE_REGION() {
       ) {
         if (HEAP[SCAN + LINE_MARK_SLOT] === UNMARKED) {
           // free line not marked
-          display(SCAN, "FREEEEEE");
           HEAP[SCAN + LINE_LIMIT_SLOT] = HEAP[SCAN + LINE_ADDRESS_SLOT];
           // set block to recyclable
           HEAP[I * BLOCK_SIZE + BLOCK_STATE_SLOT] = RECYCLABLE;
@@ -1052,12 +1052,13 @@ function FREE_REGION() {
   // finds a hole of at least k size and allocate new bump head and tail
   ALLOCATE_TO_RECYCLABLE();
   // if hole found still too small, allocate to a free block
-  if (BUMP_HEAD + K > BUMP_TAIL) {
+  if (BUMP_HEAD + K - 1 > BUMP_TAIL) {
     ALLOCATE_TO_FREE();
   } else {}
 }
 
-// choose k-sized hole from recyclable blocks
+// choose k-sized hole from ALL recyclable blocks
+// if hole large enough isn't found, bump head and tail will be last hole.
 function ALLOCATE_TO_RECYCLABLE() {
   for (I = 0; I < NUMBER_OF_BLOCKS; I = I + 1) {
     if ( // if block is free or recyclable,
@@ -1074,7 +1075,7 @@ function ALLOCATE_TO_RECYCLABLE() {
             : HEAP[SCAN - LINE_BK_SIZE + LINE_LIMIT_SLOT];
           ALLOCATE_BUMP_TAIL();
 
-          if (BUMP_HEAD + K <= BUMP_TAIL) {
+          if (BUMP_HEAD + K - 1 <= BUMP_TAIL) {
             return undefined;
           } else {
             A = BUMP_TAIL;
@@ -1095,10 +1096,30 @@ function ALLOCATE_TO_FREE() {
   for (I = 0; I < NUMBER_OF_BLOCKS; I = I + 1) {
     if (HEAP[I * BLOCK_SIZE + BLOCK_STATE_SLOT] === FREE) {
       BUMP_HEAD = I * BLOCK_SIZE + HEAP[HEAP[I * BLOCK_SIZE + FIRST_CHILD_SLOT]];
-      BUMP_TAIL = BUMP_HEAD + BLOCK_SIZE;
+      BUMP_TAIL = I * BLOCK_SIZE + BLOCK_SIZE - 1;
       break;
     } else {}
   }
+}
+
+function ALLOCATE_OVERFLOW() {
+  display("overflow allocation");
+  A = BUMP_HEAD;
+  PUSH_RTS();
+  A = BUMP_TAIL;
+  PUSH_RTS();
+  // RES is still address of free block
+  A = RES;
+  ALLOCATE_BUMP_HEAD_AND_TAIL();
+  // since bump head and tail are at free block, new node is guaranteed to load properly
+  A = J;
+  NEW();
+  display("end overflow allocation");
+  // restore old bump head and tail values
+  POP_RTS();
+  BUMP_TAIL = RES;
+  POP_RTS();
+  BUMP_HEAD = RES;
 }
 
 // finds bump tail based on bump_head
@@ -1125,7 +1146,6 @@ function GET_BLOCK() {
 
 // expects object address in A
 // returns line node address in RES
-// FIXME: need a special case for when bump tail === length of buffer
 function GET_LINE() {
   C = math_floor(A / BLOCK_SIZE) * BLOCK_SIZE;                 // block address in C
   // find offset from start of block
@@ -1153,7 +1173,7 @@ function INITIALIZE_BLOCKS_AND_LINES() {
     NEW_BLOCK();
     A = B;
   }
-  HEADROOM = RES; // last block dedicated as Headroom
+  HEADROOM_BLOCK = RES; // last block dedicated as Headroom
   CURR_BLOCK = HEAPBOTTOM;
   CURR_LINE = CURR_BLOCK + FIRST_CHILD_SLOT;
 
@@ -1183,6 +1203,7 @@ const OUT_OF_MEMORY_ERROR = 2;
 const OCCUPIED = 0;
 const RECYCLABLE = 1;
 const FREE = 2;
+const HEADROOM = 3; // special state so that global allocator skips this block
 
 // Liveness of line and block
 const UNMARKED = 0;
@@ -1508,6 +1529,7 @@ function NEW_ENVIRONMENT() {
   NEW();
   HEAP[RES + FIRST_CHILD_SLOT] = 5;
   HEAP[RES + LAST_CHILD_SLOT] = 4 + D;
+
   HEAP[RES + MARK_SLOT] = UNMARKED;
 }
 
@@ -1834,11 +1856,6 @@ M[CALL] = () => {
   N = HEAP[F + CLOSURE_OS_SIZE_SLOT]; // closure stack size
 
   EXTEND(); // after this, RES is new env
-  // check for oom
-  if (!RUNNING) {
-    return undefined;
-  } else {
-  }
 
   // Heap address of new environment can
   // be changed by NEW_RS_FRAME and NEW_OS below.
@@ -1865,7 +1882,6 @@ M[CALL] = () => {
   PUSH_RTS();
   A = N;
   NEW_OS();
-
   // check for oom
   if (!RUNNING) {
     return undefined;
@@ -1879,7 +1895,10 @@ M[CALL] = () => {
 };
 
 M[RTN] = () => {
+  display("WAHT IS RTS", RTS);
+  display("top", TOP_RTS);
   POP_RTS();
+  display("POP", RES);
   H = RES;
   PC = HEAP[H + RTS_FRAME_PC_SLOT];
   ENV = HEAP[H + RTS_FRAME_ENV_SLOT];
