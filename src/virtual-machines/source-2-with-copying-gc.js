@@ -377,7 +377,7 @@ function is_variadic_function(name) {
 // generate code snippet for primitive function
 // to register them in the program
 // takes on the form
-// function foo() {
+// function foo(x0, x1...) {
 //     return foo;
 // }
 // where the return statement is handled in
@@ -401,7 +401,6 @@ function generate_injected_prim_func_code(entry) {
 }
 
 // primitive functions according to source 2 specifications
-// TODO: variadic functions: math_hypot, list etc.
 const math_consts = "\
 const math_E = 2.718281828459045;\
 const math_LN10 = 2.302585092994046;\
@@ -1073,17 +1072,23 @@ function parse_and_compile(string) {
 // the op-codes of instructions and their arguments
 let P = [];
 // PC is program counter: index of the next instruction
-let PC = 0;
-// HEAP is array containing all dynamically allocated data structures
-const HEAP = [];
-// next free slot in heap
-let FREE = 0;
+let PC = -Infinity;
 // OS is address of current environment in HEAP; initially a dummy value
 let ENV = -Infinity;
 // OS is address of current operand stack in HEAP; initially a dummy value
 let OS = -Infinity;
 // temporary value, used by PUSH and POP; initially a dummy value
 let RES = -Infinity;
+
+// RTS: runtime stack
+let RTS = [];
+let TOP_RTS = -1;
+
+// boolean that says whether machine is running
+let RUNNING = NaN;
+
+// exit state: NORMAL, DIV_ERROR, OUT_OF_MEMORY_ERROR, etc
+let STATE = NaN;
 
 // some general-purpose registers
 let A = 0;
@@ -1093,6 +1098,11 @@ let D = 0;
 let E = 0;
 let F = 0;
 let G = 0;
+let I = 0;
+let J = 0;
+let K = 0;
+let L = 0;
+let N = 0;
 let H = 0;
 
 function show_executing(s) {
@@ -1114,20 +1124,31 @@ function show_registers(s) {
     display(  F, "F  :");
     display(  G, "G  :");
     display(  H, "H  :");
+    display(  I, "I  :");
+    display(  J, "J  :");
+    display(  K, "K  :");
+    display(  L, "L  :");
+    display(  N, "N  :");
     display( OS, "OS :");
     display(ENV, "ENV:");
     display(RTS, "RTS:");
     display(TOP_RTS, "TOP_RTS:");
 }
 
-// register that says if machine is running
-let RUNNING = true;
+// HEAP is array containing all dynamically allocated data structures
+let HEAP = NaN;
+// next free slot in heap
+let FREE = -Infinity;
+// scan pointer in Cheney
+let SCAN = -Infinity;
+// the size of the heap is fixed
+let HEAP_SIZE = -Infinity;
+// smallest heap address
+let HEAPBOTTOM = -Infinity;
 
 const NORMAL = 0;
 const DIV_ERROR = 1;
 const OUT_OF_MEMORY_ERROR = 2; // not used yet: memory currently unbounded
-
-let STATE = NORMAL;
 
 // general node layout
 const TAG_SLOT = 0;
@@ -1135,12 +1156,142 @@ const SIZE_SLOT = 1;
 const FIRST_CHILD_SLOT = 2;
 const LAST_CHILD_SLOT = 3;
 
+// ///////////////////////////////////
+// Cheney's Copying Garbage Collection
+// ///////////////////////////////////
+
+// initialize spaces for Cheney's algorithm
+
+let SPACESIZE = -Infinity;
+let TOSPACE = -Infinity;
+let FROMSPACE = -Infinity;
+let TOPOFSPACE = -Infinity;
+
+function initialize_machine(heapsize) {
+    display(heapsize, "\nRunning VM with heap size:");
+    HEAP = [];
+    HEAP_SIZE = heapsize;
+    HEAPBOTTOM = 0;
+    SPACESIZE = HEAP_SIZE / 2;
+    TOSPACE = HEAPBOTTOM;
+    FROMSPACE = TOSPACE + SPACESIZE;
+    TOPOFSPACE = TOSPACE + SPACESIZE - 1;
+    FREE = TOSPACE;
+    TEMP_ROOT = -1;
+    RUNNING = true;
+    STATE = NORMAL;
+    PC = 0;
+}
+
+// We introduce TEMP_ROOT register to handle instructions
+// that allocate nodes on the heap and then may flip.
+// The address of those nodes are assigned to TEMP_ROOT.
+// TEMP_ROOT is treated as a root in garbage collection,
+// and thus gets updated to point to the correct copy in
+// the to-space.
+let TEMP_ROOT = -Infinity;
+
 // NEW expects tag in A and size in B
+// changes A, B, C, J, K
 function NEW() {
-    HEAP[FREE + TAG_SLOT] = A;
-    HEAP[FREE + SIZE_SLOT] = B;
+    J = A;
+    K = B;
+    if (FREE + K > TOPOFSPACE) {
+        display(FREE, "Flip! FREE:");
+        FLIP();
+    } else {}
+    if (FREE + K > TOPOFSPACE) {
+        STATE = OUT_OF_MEMORY_ERROR;
+        RUNNING = false;
+    } else {}
+    HEAP[FREE + TAG_SLOT] = J;
+    HEAP[FREE + SIZE_SLOT] = K;
     RES = FREE;
-    FREE = FREE + B;
+    FREE = FREE + K;
+}
+
+// use tag slot as forwarding address;
+// the trick: since tags are negative, they
+// can never be confused with heap addresses
+const FORWARDINGADDRESS = 0;
+
+// changes B, C, I
+function FLIP() {
+    A = FROMSPACE;
+    FROMSPACE = TOSPACE;
+    TOSPACE = A;
+    TOPOFSPACE = TOSPACE + SPACESIZE - 1;
+    FREE = TOSPACE;
+    SCAN = TOSPACE;
+
+    A = OS;
+    COPY();
+    OS = RES;
+
+    A = ENV;
+    COPY();
+    ENV = RES;
+
+    // TEMP_ROOT is temporary root of garbage
+    // collection, used in EXTEND and CALL
+    if (TEMP_ROOT >= 0) {
+        A = TEMP_ROOT;
+        COPY();
+        TEMP_ROOT = RES;
+    } else {}
+
+    for (I = 0; I <= TOP_RTS; I = I + 1) {
+        A = RTS[I];
+        COPY();
+        RTS[I] = RES;
+    }
+    while (SCAN < FREE) {
+        for (I = HEAP[SCAN + FIRST_CHILD_SLOT];
+             I <= HEAP[SCAN + LAST_CHILD_SLOT];
+             I = I + 1) {
+            A = HEAP[SCAN + I];
+            COPY();
+            HEAP[SCAN + I] = RES;
+        }
+        SCAN = SCAN + HEAP[SCAN + SIZE_SLOT];
+    }
+}
+
+// expects node to be copied in A
+// changes B, C
+function COPY() {
+    if (A === undefined) {
+        RES = undefined;
+    } else if (A === -Infinity) {
+        // take care of top environment parent slot
+        RES = -Infinity;
+    } else {
+        ALREADY_COPIED();
+        if (RES) {
+            RES = HEAP[A + FORWARDINGADDRESS];
+        } else {
+            B = FREE;
+            MOVE();
+            FREE = FREE + HEAP[A + SIZE_SLOT];
+            HEAP[A + FORWARDINGADDRESS] = B;
+            RES = B;
+        }
+    }
+}
+
+// expects node in A
+function ALREADY_COPIED() {
+    RES = HEAP[A + FORWARDINGADDRESS] >= TOSPACE
+      &&
+      HEAP[A + FORWARDINGADDRESS] <= FREE;
+}
+
+// expects source in A and destination in B
+// changes C
+function MOVE() {
+    for (C = 0; C < HEAP[A + SIZE_SLOT]; C = C + 1) {
+        HEAP[B + C] = HEAP[A + C];
+    }
 }
 
 // number nodes layout
@@ -1156,13 +1307,13 @@ const NUMBER_SIZE = 5;
 const NUMBER_VALUE_SLOT = 4;
 
 function NEW_NUMBER() {
-    C = A;
+    E = A;
     A = NUMBER_TAG;
     B = NUMBER_SIZE;
     NEW();
     HEAP[RES + FIRST_CHILD_SLOT] = 6;
     HEAP[RES + LAST_CHILD_SLOT] = 5; // no children
-    HEAP[RES + NUMBER_VALUE_SLOT] = C;
+    HEAP[RES + NUMBER_VALUE_SLOT] = E;
 }
 
 // bool nodes layout
@@ -1342,10 +1493,10 @@ function NEW_CLOSURE() {
     NEW();
     A = E;
     B = F;
-	  HEAP[RES + FIRST_CHILD_SLOT] = CLOSURE_ENV_SLOT;
-	  HEAP[RES + LAST_CHILD_SLOT] = CLOSURE_ENV_SLOT;
-	  HEAP[RES + CLOSURE_OS_SIZE_SLOT] = A;
-	  HEAP[RES + CLOSURE_ADDRESS_SLOT] = B;
+	HEAP[RES + FIRST_CHILD_SLOT] = CLOSURE_ENV_SLOT;
+	HEAP[RES + LAST_CHILD_SLOT] = CLOSURE_ENV_SLOT;
+	HEAP[RES + CLOSURE_OS_SIZE_SLOT] = A;
+	HEAP[RES + CLOSURE_ADDRESS_SLOT] = B;
     HEAP[RES + CLOSURE_ENV_SLOT] = ENV;
     HEAP[RES + CLOSURE_ENV_EXTENSION_COUNT_SLOT] = C;
 }
@@ -1383,10 +1534,6 @@ function NEW_RTS_FRAME() {
     HEAP[RES + RTS_FRAME_OS_SLOT] = OS;
 }
 
-
-const RTS = [];
-let TOP_RTS = -1;
-
 // expects stack frame in A
 function PUSH_RTS() {
     TOP_RTS = TOP_RTS + 1;
@@ -1422,7 +1569,7 @@ function NEW_ENVIRONMENT() {
     A = ENV_TAG;
     B = C + 5;
     NEW();
-    HEAP[RES + FIRST_CHILD_SLOT] = 5;
+    HEAP[RES + FIRST_CHILD_SLOT] = 4;
     HEAP[RES + LAST_CHILD_SLOT] = 4 + C;
     HEAP[RES + PARENT_ENVIRONMENT_SLOT] = ENV;
 }
@@ -1472,7 +1619,6 @@ function show_heap_value(address) {
 }
 
 function is_primitive_value(addr) {
-    display(addr);
     return node_kind(HEAP[addr]) === "number"
         || node_kind(HEAP[addr]) === "string"
         || node_kind(HEAP[addr]) === "bool";
@@ -1569,7 +1715,7 @@ M[PLUS] = () =>    { POP_OS();
                      // Might be better to leave it at compile time as a concatenation function
                      
                      // if operands are both strings
-                     if (HEAP[RES + TAG_SLOT] === STRING_TAG) {
+                    if (HEAP[RES + TAG_SLOT] === STRING_TAG) {
                          A = HEAP[RES + STRING_VALUE_SLOT];
                          POP_OS();
                          A = HEAP[RES + STRING_VALUE_SLOT] + A;
@@ -1683,7 +1829,7 @@ M[POP] = () =>     { POP_OS();
                    };
 
 M[ASSIGN] = () =>  { POP_OS();
-                     HEAP[ENV + HEAP[ENV + FIRST_CHILD_SLOT]
+                     HEAP[ENV + HEAP[ENV + FIRST_CHILD_SLOT] + 1
                               + P[PC + 1]] = RES;
                      PC = PC + 2;
                    };
@@ -1713,8 +1859,9 @@ M[LD] = () =>      { E = ENV;
                          C = C - 1;
                      }
                      // now E is the environment the name lives in
-                     A = HEAP[E+ HEAP[E + FIRST_CHILD_SLOT]
-                                  + P[PC + 1]];
+                     A = HEAP[E + HEAP[E + FIRST_CHILD_SLOT] + 1 
+                                + P[PC + 1]];
+                        
                      PUSH_OS();
                      PC = PC + 3;
                    };
@@ -1735,10 +1882,10 @@ M[CALL] = () =>    { G = P[PC + 1];  // lets keep number of arguments in G
                      H = HEAP[ENV + FIRST_CHILD_SLOT];
                      // H is now the first child slot of the environment
                      A = HEAP[F + CLOSURE_ENV_EXTENSION_COUNT_SLOT];
-                     // B is now the environment extension count
+                     // A is now the environment extension count
                      NEW_ENVIRONMENT(); // after this, RES is new env
                      E = RES;
-                     H = E + H + G - 1;
+                     H = E + H + G;
                      // H is now address where last argument goes in new env
                      for (C = H; C > H - G; C = C - 1) {
                          POP_OS(); // now RES has the address of the next arg
@@ -1763,9 +1910,10 @@ M[CALLVAR] = () =>  { G = P[PC + 1];  // lets keep number of arguments in G
                     // H is now offset of last child slot
                      A = HEAP[F + CLOSURE_ENV_EXTENSION_COUNT_SLOT] + G - 1;
                      // A is now the environment extension count
+                     // NOTE: -1 to ignore the placeholder variable
                      NEW_ENVIRONMENT(); // after this, RES is new env
                      E = RES;
-                     H = E + H + G - 1;
+                     H = E + H + G;
                      // H is now address where last argument goes in new env
                      for (C = H; C > H - G; C = C - 1) {
                          POP_OS(); // now RES has the address of the next arg
@@ -1776,7 +1924,9 @@ M[CALLVAR] = () =>  { G = P[PC + 1];  // lets keep number of arguments in G
                      A = RES;
                      PUSH_RTS();
                      PC = HEAP[F + CLOSURE_ADDRESS_SLOT];
-                     A = HEAP[F + CLOSURE_OS_SIZE_SLOT] + G - 1; // closure stack size
+                     A = HEAP[F + CLOSURE_OS_SIZE_SLOT] + G - 1; 
+                     // closure stack size
+                     // NOTE: -1 to ignore the placeholder variable
                      NEW_OS();    // uses B and C
                      OS = RES;
                      ENV = E;
@@ -1899,8 +2049,6 @@ for_each(p => insert_primitive(p), primitives);
 
 function run() {
     while (RUNNING) {
-        //show_registers("run loop");
-        //show_heap("run loop");
         if (M[P[PC]] === undefined) {
             error(P[PC], "unknown op-code:");
         } else {
@@ -1910,6 +2058,8 @@ function run() {
     if (STATE === DIV_ERROR) {
         POP_OS();
         error(RES, "execution aborted:");
+    } else if (STATE ===  OUT_OF_MEMORY_ERROR) {
+        error(RES, "memory exhausted despite garbage collection");
     } else {
         POP_OS();
         show_heap_value(RES);
@@ -1954,16 +2104,18 @@ run();
 // print_program(P);
 // run();
 
+initialize_machine(1900);
 P = parse_and_compile("\
-const z = 3;\
+const z = 100000000000;\
 function foo(x) {\
     return x + z;\
 }\
-foo(2);\
-pair(1, 2);\
+foo(200000);\
+list(1,2,3,4);\
 ");
 print_program(P);
 run();
+//show_heap("???");
 
 /*
 P = parse_and_compile("false ? 11 : 22;");
