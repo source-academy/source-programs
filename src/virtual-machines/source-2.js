@@ -377,7 +377,7 @@ function is_variadic_function(name) {
 // generate code snippet for primitive function
 // to register them in the program
 // takes on the form
-// function foo() {
+// function foo(x0, x1...) {
 //     return foo;
 // }
 // where the return statement is handled in
@@ -401,7 +401,6 @@ function generate_injected_prim_func_code(entry) {
 }
 
 // primitive functions according to source 2 specifications
-// TODO: variadic functions: math_hypot, list etc.
 const math_consts = "\
 const math_E = 2.718281828459045;\
 const math_LN10 = 2.302585092994046;\
@@ -1156,13 +1155,13 @@ const NUMBER_SIZE = 5;
 const NUMBER_VALUE_SLOT = 4;
 
 function NEW_NUMBER() {
-    C = A;
+    E = A;
     A = NUMBER_TAG;
     B = NUMBER_SIZE;
     NEW();
     HEAP[RES + FIRST_CHILD_SLOT] = 6;
     HEAP[RES + LAST_CHILD_SLOT] = 5; // no children
-    HEAP[RES + NUMBER_VALUE_SLOT] = C;
+    HEAP[RES + NUMBER_VALUE_SLOT] = E;
 }
 
 // bool nodes layout
@@ -1342,10 +1341,10 @@ function NEW_CLOSURE() {
     NEW();
     A = E;
     B = F;
-	  HEAP[RES + FIRST_CHILD_SLOT] = CLOSURE_ENV_SLOT;
-	  HEAP[RES + LAST_CHILD_SLOT] = CLOSURE_ENV_SLOT;
-	  HEAP[RES + CLOSURE_OS_SIZE_SLOT] = A;
-	  HEAP[RES + CLOSURE_ADDRESS_SLOT] = B;
+	HEAP[RES + FIRST_CHILD_SLOT] = CLOSURE_ENV_SLOT;
+	HEAP[RES + LAST_CHILD_SLOT] = CLOSURE_ENV_SLOT;
+	HEAP[RES + CLOSURE_OS_SIZE_SLOT] = A;
+	HEAP[RES + CLOSURE_ADDRESS_SLOT] = B;
     HEAP[RES + CLOSURE_ENV_SLOT] = ENV;
     HEAP[RES + CLOSURE_ENV_EXTENSION_COUNT_SLOT] = C;
 }
@@ -1376,10 +1375,10 @@ function NEW_RTS_FRAME() {
     A = RTS_FRAME_TAG;
     B = RTS_FRAME_SIZE;
     NEW();
-	  HEAP[RES + FIRST_CHILD_SLOT] = RTS_FRAME_ENV_SLOT;
-	  HEAP[RES + LAST_CHILD_SLOT] = RTS_FRAME_OS_SLOT;
-	  HEAP[RES + RTS_FRAME_PC_SLOT] = PC + 2; // next instruction!
-	  HEAP[RES + RTS_FRAME_ENV_SLOT] = ENV;
+	HEAP[RES + FIRST_CHILD_SLOT] = RTS_FRAME_ENV_SLOT;
+	HEAP[RES + LAST_CHILD_SLOT] = RTS_FRAME_OS_SLOT;
+	HEAP[RES + RTS_FRAME_PC_SLOT] = PC + 2; // next instruction!
+	HEAP[RES + RTS_FRAME_ENV_SLOT] = ENV;
     HEAP[RES + RTS_FRAME_OS_SLOT] = OS;
 }
 
@@ -1422,7 +1421,7 @@ function NEW_ENVIRONMENT() {
     A = ENV_TAG;
     B = C + 5;
     NEW();
-    HEAP[RES + FIRST_CHILD_SLOT] = 5;
+    HEAP[RES + FIRST_CHILD_SLOT] = 4;
     HEAP[RES + LAST_CHILD_SLOT] = 4 + C;
     HEAP[RES + PARENT_ENVIRONMENT_SLOT] = ENV;
 }
@@ -1472,7 +1471,6 @@ function show_heap_value(address) {
 }
 
 function is_primitive_value(addr) {
-    display(addr);
     return node_kind(HEAP[addr]) === "number"
         || node_kind(HEAP[addr]) === "string"
         || node_kind(HEAP[addr]) === "bool";
@@ -1683,8 +1681,9 @@ M[POP] = () =>     { POP_OS();
                    };
 
 M[ASSIGN] = () =>  { POP_OS();
-                     HEAP[ENV + HEAP[ENV + FIRST_CHILD_SLOT]
+                     HEAP[ENV + HEAP[ENV + FIRST_CHILD_SLOT] + 1
                               + P[PC + 1]] = RES;
+                    // +1 to account for parent env addr
                      PC = PC + 2;
                    };
 
@@ -1713,8 +1712,10 @@ M[LD] = () =>      { E = ENV;
                          C = C - 1;
                      }
                      // now E is the environment the name lives in
-                     A = HEAP[E+ HEAP[E + FIRST_CHILD_SLOT]
+                     A = HEAP[E + HEAP[E + FIRST_CHILD_SLOT] + 1
                                   + P[PC + 1]];
+                     // +1 to account for parent env addr
+
                      PUSH_OS();
                      PC = PC + 3;
                    };
@@ -1735,10 +1736,10 @@ M[CALL] = () =>    { G = P[PC + 1];  // lets keep number of arguments in G
                      H = HEAP[ENV + FIRST_CHILD_SLOT];
                      // H is now the first child slot of the environment
                      A = HEAP[F + CLOSURE_ENV_EXTENSION_COUNT_SLOT];
-                     // B is now the environment extension count
+                     // A is now the environment extension count
                      NEW_ENVIRONMENT(); // after this, RES is new env
                      E = RES;
-                     H = E + H + G - 1;
+                     H = E + H + G;
                      // H is now address where last argument goes in new env
                      for (C = H; C > H - G; C = C - 1) {
                          POP_OS(); // now RES has the address of the next arg
@@ -1765,7 +1766,7 @@ M[CALLVAR] = () =>  { G = P[PC + 1];  // lets keep number of arguments in G
                      // A is now the environment extension count
                      NEW_ENVIRONMENT(); // after this, RES is new env
                      E = RES;
-                     H = E + H + G - 1;
+                     H = E + H + G;
                      // H is now address where last argument goes in new env
                      for (C = H; C > H - G; C = C - 1) {
                          POP_OS(); // now RES has the address of the next arg
@@ -1776,7 +1777,9 @@ M[CALLVAR] = () =>  { G = P[PC + 1];  // lets keep number of arguments in G
                      A = RES;
                      PUSH_RTS();
                      PC = HEAP[F + CLOSURE_ADDRESS_SLOT];
-                     A = HEAP[F + CLOSURE_OS_SIZE_SLOT] + G - 1; // closure stack size
+                     A = HEAP[F + CLOSURE_OS_SIZE_SLOT] + G - 1; 
+                     // closure stack size
+                     // NOTE: -1 to ignore the placeholder variable
                      NEW_OS();    // uses B and C
                      OS = RES;
                      ENV = E;
@@ -1899,8 +1902,6 @@ for_each(p => insert_primitive(p), primitives);
 
 function run() {
     while (RUNNING) {
-        //show_registers("run loop");
-        //show_heap("run loop");
         if (M[P[PC]] === undefined) {
             error(P[PC], "unknown op-code:");
         } else {

@@ -1527,10 +1527,10 @@ function NEW_RTS_FRAME() {
     A = RTS_FRAME_TAG;
     B = RTS_FRAME_SIZE;
     NEW();
-	  HEAP[RES + FIRST_CHILD_SLOT] = RTS_FRAME_ENV_SLOT;
-	  HEAP[RES + LAST_CHILD_SLOT] = RTS_FRAME_OS_SLOT;
-	  HEAP[RES + RTS_FRAME_PC_SLOT] = PC + 2; // next instruction!
-	  HEAP[RES + RTS_FRAME_ENV_SLOT] = ENV;
+	HEAP[RES + FIRST_CHILD_SLOT] = RTS_FRAME_ENV_SLOT;
+	HEAP[RES + LAST_CHILD_SLOT] = RTS_FRAME_OS_SLOT;
+	HEAP[RES + RTS_FRAME_PC_SLOT] = PC + 2; // next instruction!
+	HEAP[RES + RTS_FRAME_ENV_SLOT] = ENV;
     HEAP[RES + RTS_FRAME_OS_SLOT] = OS;
 }
 
@@ -1831,7 +1831,8 @@ M[POP] = () =>     { POP_OS();
 M[ASSIGN] = () =>  { POP_OS();
                      HEAP[ENV + HEAP[ENV + FIRST_CHILD_SLOT] + 1
                               + P[PC + 1]] = RES;
-                     PC = PC + 2;
+                    // +1 to account for parent env addr
+                    PC = PC + 2;
                    };
 
 M[JOF] = () =>     { POP_OS();
@@ -1859,8 +1860,9 @@ M[LD] = () =>      { E = ENV;
                          C = C - 1;
                      }
                      // now E is the environment the name lives in
-                     A = HEAP[E + HEAP[E + FIRST_CHILD_SLOT] + 1 
+                     A = HEAP[E + HEAP[E + FIRST_CHILD_SLOT] + 1
                                 + P[PC + 1]];
+                     // +1 to account for parent env addr
                         
                      PUSH_OS();
                      PC = PC + 3;
@@ -2115,7 +2117,6 @@ list(1,2,3,4);\
 ");
 print_program(P);
 run();
-//show_heap("???");
 
 /*
 P = parse_and_compile("false ? 11 : 22;");
