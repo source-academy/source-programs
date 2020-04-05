@@ -58,10 +58,20 @@ The virtual machines in this section are SECD-style and follow a description in 
 * [`src/module-demos/bohemian.js`](https://tinyurl.com/SICPJS-rhapsody): Bohemian Rhapsody cover using the "sounds" library 
 * [`src/module-demos/pix-n-flix.js`](https://tinyurl.com/SICP-distortion): a library for image and video processing, based on the constituent pixels
 
-## Test
+## Test framework
 * [`src/test/framework/main.js`](https://github.com/source-academy/source-programs/blob/master/src/test/framework/): test framework for Source programs, written in Source §4
 
-### License
+# Testing
+
+Write your test cases in the folder `__tests__` in each `src` subfolder. The name of the file specifies the targeted Source.
+For example, `src/steppers/source-0.js` is the Source and a test case might be `src/steppers/__tests__/source-0.js.test1`.
+
+Test cases are run using:
+```
+% yarn test
+```
+
+# License
 
 [![GPL 3][gpl3-image]][gpl3]
 All JavaScript programs in this repository are licensed under the 
