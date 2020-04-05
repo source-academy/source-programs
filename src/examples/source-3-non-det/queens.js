@@ -14,10 +14,6 @@
   columns being fixed. This further reduces the search space, yielding a quick solution when N = 8.
 */
 
-
-const N = 8; // the number of queens and the size of the board
-const empty_positions = null;
-
 /* Pretty prints a solution to the n-queens puzzle */
 function pretty_print(result, board_size) {
   function member_eq(v, xs) {
@@ -47,6 +43,9 @@ function pretty_print(result, board_size) {
   possible_positions);
 }
 
+
+const N = 8; // the number of queens and the size of the board
+const empty_positions = null;
 
 /******************************************************************************/
 /* Slow version which uses non-determinism for both the columns and rows,     */
