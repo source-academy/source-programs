@@ -66,7 +66,13 @@ The virtual machines in this section are SECD-style and follow a description in 
 Write your test cases in the folder `__tests__` in each `src` subfolder. The name of the file specifies the targeted Source.
 For example, `src/steppers/source-0.js` is the Source and a test case might be `src/steppers/__tests__/source-0.js.test1`.
 
-Test cases are run using:
+Each test case is appended to your Source, and then run, using Source §4. The last line of the test case is a comment that must contain the expected result. For example, a stepper test case may be:
+```
+parse_and_evaluate("! (1 === 1 && 2 > 3);");
+// true
+```
+
+Run all test cases by typing:
 ```
 % yarn test
 ```
