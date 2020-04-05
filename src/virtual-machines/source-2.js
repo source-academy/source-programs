@@ -48,7 +48,7 @@ function name_of_name(stmt) {
 
 function is_self_evaluating(stmt) {
     return is_number(stmt) || is_boolean(stmt) || is_string(stmt) ||
-      is_undefined(stmt) || is_array_expression(stmt) || is_null(stmt);
+      is_undefined(stmt) || is_pair(stmt) || is_null(stmt);
 }
 
 function is_undefined_expression(stmt) {
@@ -279,11 +279,9 @@ const JOF     = 17; // followed by: jump address
 const GOTO    = 18; // followed by: jump address
 const LDF     = 19; // followed by: max_stack_size, address, env extensn count
 const CALL    = 20;
-const CALLP   = 21;
+const CALLVAR   = 21;
 const LD      = 22; // followed by: index of value in environment
-const IARRAY  = 23;
-const LARRAY  = 24;
-const AARRAY  = 25;
+const LDV     = 23;
 const LDNULL  = 26;
 const RTN     = 27;
 const DONE    = 28;
@@ -292,45 +290,53 @@ const DONE    = 28;
 // follow the format:
 // name, opcode, built-in func, arguments, return
 const primitives = list(
-    list("IS_NUM ", 29, is_number  , "is_number"  , list("any"), "bool"),
-    list("IS_PAIR", 30, is_pair    , "is_pair"    , list("any"), "bool"),
-    list("IS_NULL", 31, is_null    , "is_null"    , list("any"), "bool"),
-    list("DISPLAY", 32, display    , "display"    , list("any"), "undefined"),
-    list("ERROR  ", 33, error      , "error"      , list("any"), "undefined"),
-    list("RANDOM ", 34, math_random, "math_random", null, "num"),
-    list("ABS    ", 35, math_abs   , "math_abs"   , list("num"), "num"),
-    list("ACOS   ", 36, math_acos  , "math_acos"  , list("num"), "num"),
-    list("ACOSH  ", 37, math_acosh , "math_acosh" , list("num"), "num"),
-    list("ASIN   ", 38, math_asin  , "math_asin"  , list("num"), "num"),
-    list("ASINH  ", 39, math_asinh , "math_asinh" , list("num"), "num"),
-    list("ATAN   ", 40, math_atan  , "math_atan"  , list("num"), "num"),
-    list("ATANH  ", 41, math_atanh , "math_atanh" , list("num"), "num"),
-    list("CBRT   ", 42, math_cbrt  , "math_cbrt"  , list("num"), "num"),
-    list("CEIL   ", 43, math_ceil  , "math_ceil"  , list("num"), "num"),
-    list("CLZ32  ", 44, math_clz32 , "math_clz32" , list("num"), "num"),
-    list("COS    ", 45, math_cos   , "math_cos"   , list("num"), "num"),
-    list("COSH   ", 46, math_cosh  , "math_cosh"  , list("num"), "num"),
-    list("EXP    ", 47, math_exp   , "math_exp"   , list("num"), "num"),
-    list("EXPM1  ", 48, math_expm1 , "math_expm1" , list("num"), "num"),
-    list("FLOOR  ", 49, math_floor , "math_floor" , list("num"), "num"),
-    list("FROUND ", 50, math_fround, "math_fround", list("num"), "num"),
-    list("LOG    ", 51, math_log   , "math_log"   , list("num"), "num"),
-    list("LOG1P  ", 52, math_log1p , "math_log1p" , list("num"), "num"),
-    list("LOG10  ", 53, math_log10 , "math_log10" , list("num"), "num"),
-    list("LOG2   ", 54, math_log2  , "math_log2"  , list("num"), "num"),
-    list("ROUND  ", 55, math_round , "math_round" , list("num"), "num"),
-    list("SIGN   ", 56, math_sign  , "math_sign"  , list("num"), "num"),
-    list("SIN    ", 57, math_sin   , "math_sin"   , list("num"), "num"),
-    list("SINH   ", 58, math_sinh  , "math_sinh"  , list("num"), "num"),
-    list("SQRT   ", 59, math_sqrt  , "math_sqrt"  , list("num"), "num"),
-    list("TAN    ", 60, math_tan   , "math_tan"   , list("num"), "num"),
-    list("TANH   ", 61, math_tanh  , "math_tanh"  , list("num"), "num"),
-    list("TRUNC  ", 62, math_trunc , "math_trunc" , list("num"), "num"),
-    list("ATAN2  ", 63, math_atan2 , "math_atan2" , list("num", "num"), "num"),
-    list("IMUL   ", 64, math_imul  , "math_imul"  , list("num", "num"), "num"),
-    list("POW    ", 65, math_pow   , "math_pow"   , list("num", "num"), "num")
-    // list("MAX    ", 66, math_max   , "math_max"   , list("var"), "num"),
-    // list("MIN    ", 67, math_min   , "math_min"   , list("var"), "num")
+    list("PAIR   ", 40, pair       , "pair"       , list("addr", "addr"), "pair"),
+    list("HEAD   ", 41, head       , "head"       , list("pair"), "addr"),
+    list("TAIL   ", 42, tail       , "tail"       , list("pair"), "addr"),
+    list("IS_NUM ", 43, is_number  , "is_number"  , list("any"), "bool"),
+    list("IS_PAIR", 44, is_pair    , "is_pair"    , list("any"), "bool"),
+    list("IS_NULL", 45, is_null    , "is_null"    , list("any"), "bool"),
+    list("DISPLAY", 46, display    , "display"    , list("var"), "undefined"),
+    list("ERROR  ", 47, error      , "error"      , list("any"), "undefined"),
+    list("RANDOM ", 48, math_random, "math_random", null, "num"),
+    list("ABS    ", 49, math_abs   , "math_abs"   , list("num"), "num"),
+    list("ACOS   ", 50, math_acos  , "math_acos"  , list("num"), "num"),
+    list("ACOSH  ", 51, math_acosh , "math_acosh" , list("num"), "num"),
+    list("ASIN   ", 52, math_asin  , "math_asin"  , list("num"), "num"),
+    list("ASINH  ", 53, math_asinh , "math_asinh" , list("num"), "num"),
+    list("ATAN   ", 54, math_atan  , "math_atan"  , list("num"), "num"),
+    list("ATANH  ", 55, math_atanh , "math_atanh" , list("num"), "num"),
+    list("CBRT   ", 56, math_cbrt  , "math_cbrt"  , list("num"), "num"),
+    list("CEIL   ", 57, math_ceil  , "math_ceil"  , list("num"), "num"),
+    list("CLZ32  ", 58, math_clz32 , "math_clz32" , list("num"), "num"),
+    list("COS    ", 59, math_cos   , "math_cos"   , list("num"), "num"),
+    list("COSH   ", 60, math_cosh  , "math_cosh"  , list("num"), "num"),
+    list("EXP    ", 61, math_exp   , "math_exp"   , list("num"), "num"),
+    list("EXPM1  ", 62, math_expm1 , "math_expm1" , list("num"), "num"),
+    list("FLOOR  ", 63, math_floor , "math_floor" , list("num"), "num"),
+    list("FROUND ", 64, math_fround, "math_fround", list("num"), "num"),
+    list("LOG    ", 65, math_log   , "math_log"   , list("num"), "num"),
+    list("LOG1P  ", 66, math_log1p , "math_log1p" , list("num"), "num"),
+    list("LOG10  ", 67, math_log10 , "math_log10" , list("num"), "num"),
+    list("LOG2   ", 68, math_log2  , "math_log2"  , list("num"), "num"),
+    list("ROUND  ", 69, math_round , "math_round" , list("num"), "num"),
+    list("SIGN   ", 70, math_sign  , "math_sign"  , list("num"), "num"),
+    list("SIN    ", 71, math_sin   , "math_sin"   , list("num"), "num"),
+    list("SINH   ", 72, math_sinh  , "math_sinh"  , list("num"), "num"),
+    list("SQRT   ", 73, math_sqrt  , "math_sqrt"  , list("num"), "num"),
+    list("TAN    ", 74, math_tan   , "math_tan"   , list("num"), "num"),
+    list("TANH   ", 75, math_tanh  , "math_tanh"  , list("num"), "num"),
+    list("TRUNC  ", 76, math_trunc , "math_trunc" , list("num"), "num"),
+    list("ATAN2  ", 77, math_atan2 , "math_atan2" , list("num", "num"), "num"),
+    list("IMUL   ", 78, math_imul  , "math_imul"  , list("num", "num"), "num"),
+    list("POW    ", 79, math_pow   , "math_pow"   , list("num", "num"), "num"),
+    list("MAX    ", 80, math_max   , "math_max"   , list("var"), "num"),
+    list("MIN    ", 81, math_min   , "math_min"   , list("var"), "num"),
+    list("HYPOT  ", 82, math_hypot , "math_hypot" , list("var"), "num"),
+    list("RUNTIME", 83, runtime    , "runtime"    , null, "num"),
+    list("STRINGI", 84, stringify  , "stringify"  , list("num"), "str"),
+    list("LIST   ", 85, list       , "list"       , list("var"), "pair")
+// list("PROMPT ", 84, prompt     , "prompt"     , null, "string")
 );
 
 // auxiliary functions for injected primitive functions
@@ -361,6 +367,12 @@ function lookup_injected_prim_func_by_string(name) {
                     : lookup(tail(xs));
     }
     return lookup(primitives);
+}
+function is_variadic_function(name) {
+    // only checks injected primitive
+    return is_injected_primitive(name) &&
+            !is_null(member("var",
+                            injected_prim_func_ops_types(lookup_injected_prim_func_by_string(name))));
 }
 // generate code snippet for primitive function
 // to register them in the program
@@ -423,11 +435,9 @@ const OPCODES = append(
         pair(GOTO,    "GOTO   "),
         pair(LDF,     "LDF    "),
         pair(CALL,    "CALL   "),
-        pair(CALLP,   "CALLP  "),
+        pair(CALLVAR, "CALLVAR"),
         pair(LD,      "LD     "),
-        pair(IARRAY,  "IARRAY "), // Initiate ARRAY creation
-        pair(LARRAY,  "LARRAY "), // Load ARRAY (part of array creation)
-        pair(AARRAY,  "AARRAY "), // Access ARRAY
+        pair(LDV,     "LDV    "),
         pair(LDNULL,  "LDNULL "),
         pair(RTN,     "RTN    "),
         pair(DONE,    "DONE   ")
@@ -681,26 +691,6 @@ function parse_and_compile(string) {
         return math_max(m_1, m_2, m_3);
     }
 
-    function compile_array_expression(expr, index_table) {
-        const length_of_array = length(head(tail(expr)));
-        compile(length_of_array, index_table, false);
-        add_nullary_instruction(IARRAY);
-        let ops = arr_elements(expr);
-        while (!no_arr_elements(ops)) {
-            compile(first_arr_element(ops), index_table, false);
-            ops = rest_arr_elements(ops);
-        }
-        add_nullary_instruction(LARRAY);
-        return 1;
-    }
-
-    function compile_array_access(expr, index_table) {
-        compile(array_name(expr), index_table, false);
-        compile(array_index(expr), index_table, false);
-        add_nullary_instruction(AARRAY);
-        return 1;
-    }
-
     function compile_primitive_application(expr, index_table) {
         const op = primitive_operator_name(expr);
         const ops = operands(expr);
@@ -734,7 +724,11 @@ function parse_and_compile(string) {
                                        index_table, false);
         const max_stack_operands = compile_arguments(operands(expr),
                                        index_table);
-        add_unary_instruction(CALL, length(operands(expr)));
+        if (is_variadic_function(name_of_name(operator(expr)))) {
+            add_unary_instruction(CALLVAR, length(operands(expr)));
+        } else {
+            add_unary_instruction(CALL, length(operands(expr)));
+        }
         return math_max(max_stack_operator, max_stack_operands + 1);
     }
 
@@ -798,8 +792,12 @@ function parse_and_compile(string) {
         const entry = lookup_injected_prim_func_by_string(name);
         const ops_types = injected_prim_func_ops_types(entry);
         const OP = injected_prim_func_opcode(entry);
-        for (let i = length(ops_types) - 1; i >= 0; i = i - 1) {
-            add_unary_instruction(LD, index_of(index_table, "x" + stringify(i)));
+        if (is_variadic_function(name)) {
+            add_nullary_instruction(LDV);
+        } else {
+            for (let i = length(ops_types) - 1; i >= 0; i = i - 1) {
+                add_unary_instruction(LD, index_of(index_table, "x" + stringify(i)));
+            }
         }
         add_nullary_instruction(OP);
         return 1;
@@ -829,12 +827,6 @@ function parse_and_compile(string) {
         } else if (is_primitive_application(expr)) {
             max_stack_size =
             compile_primitive_application(expr, index_table);
-        } else if (is_array_expression(expr)) {
-            max_stack_size =
-              compile_array_expression(expr, index_table);
-        } else if (is_array_access(expr)) {
-            max_stack_size =
-              compile_array_access(expr, index_table);
         } else if (is_null(expr)) {
             add_nullary_instruction(LDNULL);
             max_stack_size = 1;
@@ -889,7 +881,7 @@ function parse_and_compile(string) {
     }
 
     // primitive functions according to source 2 specifications
-    // TODO: variadic functions: math_hypot, math_max, math_min, list etc.
+    // TODO: variadic functions: math_hypot, list etc.
     const math_consts = "\
     const math_E = 2.718281828459045;\
     const math_LN10 = 2.302585092994046;\
@@ -909,15 +901,6 @@ function parse_and_compile(string) {
     const predefined_functions = "\
     function is_boolean(v) {\
         return v === true || v === false;\
-    }\
-    function pair(h, t) {\
-        return [h, t];\
-    }\
-    function head(p) {\
-        return p[0]; \
-    }\
-    function tail(arr) { \
-        return arr[1]; \
     }\
     function is_list(xs) {\
         return is_null(xs)\
@@ -1253,30 +1236,32 @@ function NEW_STRING() {
     HEAP[RES + STRING_VALUE_SLOT] = C;
 }
 
-// array nodes layout
+// pair nodes layout
 //
 // 0: tag  = -107
-// 1: size = depends on initialization
+// 1: size = 6
 // 2: first child = 4
-// 3: last child
-// 4: value in index 0
-// 5: value in index 1
+// 3: last child = 5
+// 4: head value
+// 5: tail value
 // ....
 
-const ARRAY_TAG = -107;
-// constants for pairs
+const PAIR_TAG = -107;
 const PAIR_SIZE = 6;
+const HEAD_VALUE_SLOT = 4;
+const TAIL_VALUE_SLOT = 5;
 
-// expects array size in A
-function NEW_ARRAY() {
-    B = A + 4; // add the book keeping slots
-    A = ARRAY_TAG;
+// expects head value in A, tail value in B
+function NEW_PAIR() {
+    C = A;
+    D = B;
+    A = PAIR_TAG;
+    B = PAIR_SIZE; // add the book keeping slots
     NEW();
     HEAP[RES + FIRST_CHILD_SLOT] = 4;
-    HEAP[RES + LAST_CHILD_SLOT] = B - 1;
-    for (let i = 0; i < B; i = i + 1) {
-        HEAP[RES + HEAP[RES + FIRST_CHILD_SLOT] + i] = 0;
-    }
+    HEAP[RES + LAST_CHILD_SLOT] = 5;
+    HEAP[RES + HEAD_VALUE_SLOT] = C;
+    HEAP[RES + TAIL_VALUE_SLOT] = D;
 }
 
 // null nodes layout
@@ -1431,7 +1416,7 @@ function node_kind(x) {
          : x ===          OS_TAG ? "OS"
          : x ===         ENV_TAG ? "environment"
          : x ===   UNDEFINED_TAG ? "undefined"
-         : x ===       ARRAY_TAG ? "array"
+         : x ===        PAIR_TAG ? "pair"
          : x ===        NULL_TAG ? "null"
          : " (unknown node kind)";
 }
@@ -1449,10 +1434,10 @@ function show_heap(s) {
 }
 
 function show_heap_value(address) {
-    if (node_kind(HEAP[address])=== "array") {
+    if (node_kind(HEAP[address])=== "pair") {
         let display_text = "result: heap node of type = " +
                            node_kind(HEAP[address]) + ", value = " +
-                           show_array_value(address);
+                           show_pair_value(address);
         display(undefined, display_text);
     } else {
         display(undefined, "result: heap node of type = " +
@@ -1462,23 +1447,39 @@ function show_heap_value(address) {
     }
 }
 
-function show_array_value(address) {
+function is_primitive_value(addr) {
+    return node_kind(HEAP[addr]) === "number"
+        || node_kind(HEAP[addr]) === "string"
+        || node_kind(HEAP[addr]) === "bool";
+}
+function is_null_value(addr) {
+    return node_kind(HEAP[addr]) === "null";
+}
+function is_pair_value(addr) {
+    return node_kind(HEAP[addr]) === "pair";
+}
+function show_pair_value(address) {
     let display_text = "[";
-    const size = HEAP[address + SIZE_SLOT];
-    for (let i = 0; i < size - 4; i = i + 1) {
-        const addr = HEAP[address + HEAP[address + FIRST_CHILD_SLOT] + i];
-        const value_type = node_kind(HEAP[addr]);
-        display_text = display_text +
-                       (value_type === "number"
-                           ? stringify(HEAP[addr + NUMBER_VALUE_SLOT])
-                           : (value_type === "array"
-                               ? show_array_value(addr)
-                               : (value_type === "null"
-                                   ? "null"
-                                   : "unknown type")));
-        if (i < size - 5) {
-            display_text = display_text + ", ";
-        } else {}
+    const h_addr = HEAP[address + HEAD_VALUE_SLOT];
+    const t_addr = HEAP[address + TAIL_VALUE_SLOT];
+    if (is_primitive_value(h_addr)) {
+        display_text = display_text + stringify(HEAP[h_addr + NUMBER_VALUE_SLOT]);
+    } else if (is_null_value(h_addr)) {
+        display_text = display_text + "null";
+    } else if (is_pair_value(h_addr)) {
+        display_text = display_text + show_pair_value(h_addr);
+    } else {
+        display_text = display_text + "undefined_value";
+    }
+    display_text = display_text + ",";
+    if (is_primitive_value(t_addr)) {
+        display_text = display_text + stringify(HEAP[t_addr + NUMBER_VALUE_SLOT]);
+    } else if (is_null_value(t_addr)) {
+        display_text = display_text + "null";
+    } else if (is_pair_value(t_addr)) {
+        display_text = display_text + show_pair_value(t_addr);
+    } else {
+        display_text = display_text + "undefined_value";
     }
     display_text = display_text + "]";
     return display_text;
@@ -1587,7 +1588,6 @@ M[TIMES] = () =>   { POP_OS();
 M[EQUAL] = () =>   { POP_OS();
                      A = HEAP[RES + NUMBER_VALUE_SLOT];
                      POP_OS();
-                     show_registers("");
                      A = HEAP[RES + NUMBER_VALUE_SLOT] === A;
                      NEW_BOOL();
                      A = RES;
@@ -1691,6 +1691,15 @@ M[LD] = () =>      { A = HEAP[ENV + HEAP[ENV + FIRST_CHILD_SLOT]
                      PC = PC + 2;
                    };
 
+M[LDV] = () =>     { E = HEAP[OS + SIZE_SLOT] - 4; // get the number of arguments
+                     C = ENV + HEAP[ENV + SIZE_SLOT] - 1; // addr of last argument
+                     for (D = 0; D < E; D = D + 1) {
+                         A = HEAP[C - D];
+                         PUSH_OS();
+                     }
+                     PC = PC + 1;
+                   };
+
 M[CALL] = () =>    { G = P[PC + 1];  // lets keep number of arguments in G
                      // we peek down OS to get the closure
                      F = HEAP[OS + HEAP[OS + LAST_CHILD_SLOT] - G];
@@ -1720,8 +1729,7 @@ M[CALL] = () =>    { G = P[PC + 1];  // lets keep number of arguments in G
                      ENV = E;
                    };
 
-M[CALLP] = () =>  { G = P[PC + 1];  // lets keep number of arguments in G
-                    H = P[PC + 2];  // keep the opcode to call in H
+M[CALLVAR] = () =>  { G = P[PC + 1];  // lets keep number of arguments in G
                     // we peek down OS to get the closure
                     F = HEAP[OS + HEAP[OS + LAST_CHILD_SLOT] - G];
                     // prep for EXTEND
@@ -1729,7 +1737,7 @@ M[CALLP] = () =>  { G = P[PC + 1];  // lets keep number of arguments in G
                     // A is now env to be extended
                     H = HEAP[A + LAST_CHILD_SLOT];
                     // H is now offset of last child slot
-                    B = HEAP[F + CLOSURE_ENV_EXTENSION_COUNT_SLOT];
+                    B = HEAP[F + CLOSURE_ENV_EXTENSION_COUNT_SLOT] + G - 1;
                     // B is now the environment extension count
                     EXTEND(); // after this, RES is new env
                     E = RES;
@@ -1744,54 +1752,17 @@ M[CALLP] = () =>  { G = P[PC + 1];  // lets keep number of arguments in G
                     A = RES;
                     PUSH_RTS();
                     PC = HEAP[F + CLOSURE_ADDRESS_SLOT];
-                    A = HEAP[F + CLOSURE_OS_SIZE_SLOT]; // closure stack size
+                    A = HEAP[F + CLOSURE_OS_SIZE_SLOT] + G - 1; // closure stack size
                     NEW_OS();    // uses B and C
                     OS = RES;
                     ENV = E;
                    };
 
-M[IARRAY] = () =>  { POP_OS(); // get array size
-                     A = HEAP[RES + NUMBER_VALUE_SLOT] + 1;
-                     G = OS;
-                     NEW_OS(); // initialize a new OS with array size
-                     A = RES;
-                     F = OS;    // stores the old OS address to F
-                     OS = A;    // change OS pointer to new OS for array initialization
-                     A = G;
-                     PUSH_OS(); // push the address of the old OS to new OS
-                     PC = PC + 1;
-                   };
-
-M[LARRAY] = () =>    { // get head and tail from OS stack
-                     A = HEAP[OS + SIZE_SLOT] - 5; // get the number of child nodes in the array OS
-                     C = A;
-                     NEW_ARRAY();
-                     A = RES;
-                     for (let i = C - 1; i >= 0; i = i - 1) {
-                         POP_OS();
-                         HEAP[A + HEAP[A + FIRST_CHILD_SLOT] + i] = RES;
-                     }
-                     POP_OS();
-                     OS = RES;   // change the OS back to the old one
-                     PUSH_OS();
-                     PC = PC + 1;
-};
-
-M[AARRAY] = () =>  {
-                     POP_OS();
-                     C = RES; // get index of the array access in D
-                     D = HEAP[C + NUMBER_VALUE_SLOT];
-                     POP_OS(); // get address of the array in RES
-                     A = HEAP[RES + HEAP[RES + FIRST_CHILD_SLOT] + D];
-                     PUSH_OS();
-                     PC = PC + 1;
-                    };
-
 M[LDNULL] = () =>    { NEW_NULL();
-                     A = RES;
-                     PUSH_OS();
-                     PC = PC + 1;
-                    };
+                       A = RES;
+                       PUSH_OS();
+                       PC = PC + 1;
+                      };
 
 M[RTN] = () =>     { POP_RTS();
                      H = RES;
@@ -1808,6 +1779,9 @@ M[DONE] = () =>    { RUNNING = false;
 
 // ============================== INJECTED PRIMITIVE FUNCTIONS ========================
 // utilize underlying source functions
+// special cases handled are:
+// is_pair, is_null, pair access and list
+// as they cannot simply utilize the underlying source functions in the VM
 
 function insert_primitive(p) {
     const OP        = injected_prim_func_opcode(p);
@@ -1815,33 +1789,80 @@ function insert_primitive(p) {
     const ops_types = injected_prim_func_ops_types(p);
     const rtn_type  = injected_prim_func_return_type(p);
     M[OP] = () => {
-        // gets arguments based on list of types
+        // handle special cases of primitives
         if (injected_prim_func_string(p) === "is_pair") {
             POP_OS(); // get address of the node being tested
-            A = HEAP[RES + TAG_SLOT] === ARRAY_TAG
-                && HEAP[RES + SIZE_SLOT] === PAIR_SIZE;
+            A = HEAP[RES + TAG_SLOT] === PAIR_TAG;
             NEW_BOOL();
         } else if (injected_prim_func_string(p) === "is_null") {
             POP_OS();
             A = HEAP[RES + TAG_SLOT] === NULL_TAG;
             NEW_BOOL();
+        } else if (injected_prim_func_string(p) === "head") {
+            POP_OS();
+            RES = HEAP[RES + HEAD_VALUE_SLOT];
+        } else if (injected_prim_func_string(p) === "tail") {
+            POP_OS();
+            RES = HEAP[RES + TAIL_VALUE_SLOT];
+        } else if (injected_prim_func_string(p) === "list") {
+            // list is a variadic function
+            const num_of_args = HEAP[OS + SIZE_SLOT] - 4;
+            NEW_NULL(); // null at the end of list
+            B = RES;
+            // we look into OS and load from the start to end instead of popping it
+            for (E = 0; E < num_of_args; E = E + 1) {
+                A = HEAP[OS + HEAP[OS + FIRST_CHILD_SLOT] + E];
+                NEW_PAIR();
+                B = RES;
+            }
+            G = B;
+            // clean up OS
+            for (E = 0; E < num_of_args; E = E + 1) {
+                POP_OS();
+            }
+            RES = G;
         } else {
-            const args =
-              map(x => {
-                    if (x === "num") {
-                        POP_OS();
-                        return HEAP[RES + NUMBER_VALUE_SLOT];
-                    } else {
-                    }
-                },
-                ops_types);
-            A = apply_in_underlying_javascript(f, args);
+            if (is_variadic_function(injected_prim_func_string(p))) {
+                const num_of_args = HEAP[OS + SIZE_SLOT] - 4;
+                let args = null;
+                for (C = 0; C < num_of_args; C = C + 1) {
+                    POP_OS();
+                    args = pair(HEAP[RES + NUMBER_VALUE_SLOT], args);
+                }
+                A = apply_in_underlying_javascript(f, reverse(args));
+            } else {
+                // gets arguments based on list of types
+                const args =
+                  map(x => {
+                        if (x === "num") {
+                            POP_OS();  // get number node and extract value
+                            return HEAP[RES + NUMBER_VALUE_SLOT];
+                        } else if (x === "str") {
+                            POP_OS();
+                            return HEAP[RES + STRING_VALUE_SLOT];
+                        } else if (x === "addr") {
+                            POP_OS();  // get address of the node and return
+                            return RES;
+                        } else {
+                        }
+                    },
+                    ops_types);
+                A = apply_in_underlying_javascript(f, args);
+            }
             if (rtn_type === "num") {
                 NEW_NUMBER();
             } else if (rtn_type === "bool") {
                 NEW_BOOL();
+            } else if (rtn_type === "str") {
+                NEW_STRING();
+            } else if (rtn_type === "pair") {
+                B = tail(A);
+                A = head(A);
+                NEW_PAIR();
+            } else if (rtn_type === "addr") {
+                RES = A;
             } else {
-                NEW_UNDEFINED;
+                NEW_UNDEFINED();
             }
         }
         A = RES;
@@ -1910,11 +1931,7 @@ run();
 // run();
 
 P = parse_and_compile("\
-function foo() {\
-    return math_pow;\
-}\
-foo()(2,3);\
-pair(1, pair(1, null));\
+reverse(list(1, 2, 3));\
 \
 ");
 print_program(P);
