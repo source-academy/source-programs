@@ -17,32 +17,35 @@
 /* Pretty prints a solution to the n-queens puzzle */
 function pretty_print(result, board_size) {
   function member_eq(v, xs) {
-    return is_null(xs) ? null : equal(v, head(xs)) ? xs : member_eq(v, tail(xs));
+    return is_null(xs)
+      ? null
+      : equal(v, head(xs))
+      ? xs
+      : member_eq(v, tail(xs));
   }
   const possible_positions = enum_list(1, board_size);
 
-  let col_index_str = '  ';
-  for_each(i => { col_index_str = col_index_str + stringify(i) + ' '; }, possible_positions);
+  let col_index_str = "  ";
+  for_each(i => {
+    col_index_str = col_index_str + stringify(i) + " ";
+  }, possible_positions);
   display(col_index_str);
 
   for_each(row => {
-    let row_str = stringify(row) + ' ';
+    let row_str = stringify(row) + " ";
     for_each(col => {
       const position = pair(row, col);
       const contains_position = member_eq(position, result) !== null;
       if (contains_position) {
-        row_str = row_str + 'Q ';
+        row_str = row_str + "Q ";
       } else {
-        row_str = row_str + '. ';
+        row_str = row_str + ". ";
       }
-    },
-    possible_positions);
+    }, possible_positions);
 
     display(row_str);
-  },
-  possible_positions);
+  }, possible_positions);
 }
-
 
 const N = 8; // the number of queens and the size of the board
 const empty_positions = null;
@@ -60,19 +63,23 @@ function queens_slow(board_size, num_queens) {
   require(num_queens <= board_size);
   const possible_positions = enum_list(1, board_size);
 
-  const result = accumulate((_, so_far) => {
-    const row = an_element_of(possible_positions);
-    require(is_row_safe(row, so_far));
+  const result = accumulate(
+    (_, so_far) => {
+      const row = an_element_of(possible_positions);
+      require(is_row_safe(row, so_far));
 
-    const col = an_element_of(possible_positions);
-    require(is_col_safe(col, so_far));
+      const col = an_element_of(possible_positions);
+      require(is_col_safe(col, so_far));
 
-    const new_position = pair(row, col);
-    require(is_diagonal_safe(new_position, so_far));
+      const new_position = pair(row, col);
+      require(is_diagonal_safe(new_position, so_far));
 
-    const new_positions = pair(new_position, so_far);
-    return new_positions;
-  }, empty_positions, enum_list(1, num_queens));
+      const new_positions = pair(new_position, so_far);
+      return new_positions;
+    },
+    empty_positions,
+    enum_list(1, num_queens)
+  );
 
   return result;
 }
@@ -90,14 +97,19 @@ function is_col_safe(new_col, queen_positions) {
 function is_diagonal_safe(new_position, queen_positions) {
   const new_sum = head(new_position) + tail(new_position);
   const new_sub = head(new_position) - tail(new_position);
-  const sums = map(position => head(position) + tail(position), queen_positions);
+  const sums = map(
+    position => head(position) + tail(position),
+    queen_positions
+  );
 
-  return member(new_sum, sums) === null &&
-        member(new_sub, map(
-            position => head(position) - tail(position), queen_positions
-          )) === null;
+  return (
+    member(new_sum, sums) === null &&
+    member(
+      new_sub,
+      map(position => head(position) - tail(position), queen_positions)
+    ) === null
+  );
 }
-
 
 /******************************************************************************/
 /* Fast version which uses non-determinism only for the rows,                 */
@@ -109,41 +121,43 @@ function is_diagonal_safe(new_position, queen_positions) {
 // generate more solutions by entering 'try again' in the REPL
 
 function queens_fast(board_size, num_queens) {
-		require(num_queens <= board_size);
-    const possible_positions = enum_list(1, board_size);
+  require(num_queens <= board_size);
+  const possible_positions = enum_list(1, board_size);
 
-    function queen_cols(k) {
-        if (k === 0) {
-					return empty_positions;
-				} else {
-					const so_far = queen_cols(k - 1);
+  function queen_cols(k) {
+    if (k === 0) {
+      return empty_positions;
+    } else {
+      const so_far = queen_cols(k - 1);
 
-					const new_row = an_element_of(possible_positions);
-          const new_position = pair(new_row, k);
-          require(is_safe(new_position, so_far));
+      const new_row = an_element_of(possible_positions);
+      const new_position = pair(new_row, k);
+      require(is_safe(new_position, so_far));
 
-					const new_positions = pair(new_position, so_far);
-					return new_positions;
-				}
-   }
-   return queen_cols(num_queens);
+      const new_positions = pair(new_position, so_far);
+      return new_positions;
+    }
+  }
+  return queen_cols(num_queens);
 }
 
 function is_safe(new_position, positions) {
-    const new_row = head(new_position);
-    const new_col = tail(new_position);
+  const new_row = head(new_position);
+  const new_col = tail(new_position);
 
-    return accumulate((position, so_far) => {
+  return accumulate(
+    (position, so_far) => {
       const row = head(position);
       const col = tail(position);
 
-      return so_far &&
-        new_row - new_col !==
-        row - col &&
-        new_row + new_col !==
-        row + col &&
-        new_row !== row;
+      return (
+        so_far &&
+        new_row - new_col !== row - col &&
+        new_row + new_col !== row + col &&
+        new_row !== row
+      );
     },
     true,
-    positions);
+    positions
+  );
 }
