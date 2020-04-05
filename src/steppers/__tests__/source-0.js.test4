@@ -1,0 +1,2 @@
+parse_and_evaluate("1 + 2 * 4;");
+// 3
