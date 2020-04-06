@@ -3,6 +3,7 @@
 JS_SLANG="node node_modules/js-slang/dist/repl/repl.js"
 
 SOURCEFILES=src/*/*.js
+SOURCE_TEST=src/test/framework/main.js
 
 red=`tput setaf 1`
 green=`tput setaf 2`
@@ -36,11 +37,12 @@ main() {
 	if [ -d "$DIR/__tests__" ]
 	then
 	    # call test_source on each test case in __tests__
-	    for i in "$DIR/__tests__/$(basename ${s})"*
+	    for i in "$DIR/__tests__/$(basename ${s} .js)".*
 	    do
 		test_source $s $i
 	    done
 	fi
+
     done
 }
 
