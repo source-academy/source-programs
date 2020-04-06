@@ -1,6 +1,6 @@
 #! /usr/bin/env bash
 
-JS_SLANG=js-slang
+JS_SLANG="node node_modules/js-slang/dist/repl/repl.js"
 
 SOURCEFILES=src/*/*.js
 
