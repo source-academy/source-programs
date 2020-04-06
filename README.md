@@ -81,6 +81,7 @@ Run all test cases by typing:
 ```
 % yarn test
 ```
+[Integration of the `test` script with `src/test/framework/` is pending; any help appreciated.]
 
 # License
 
