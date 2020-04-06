@@ -63,6 +63,8 @@ The virtual machines in this section are SECD-style and follow a description in 
 
 # Testing
 
+For testing your Source programs, you need `node` and `yarn`.
+
 Write your test cases in the folder `__tests__` in each `src` subfolder. The name of the file specifies the targeted Source.
 For example, `src/steppers/source-0.js` is the Source and a test case might be `src/steppers/__tests__/source-0.js.test1`.
 
@@ -71,7 +73,11 @@ Each test case is appended to your Source, and then run, using Source §4. The l
 parse_and_evaluate("! (1 === 1 && 2 > 3);");
 // true
 ```
-
+Before you can run the tests, you need to install `js-slang` by typing:
+```
+% yarn
+% yarn install
+```
 Run all test cases by typing:
 ```
 % yarn test
