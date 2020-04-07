@@ -65,7 +65,7 @@ The virtual machines in this section are SECD-style and follow a description in 
 
 For testing your Source programs, you need `node` and `yarn`.
 
-Write your test cases in a folder `__tests__` in each `src` subfolder. The name of the file specifies the targeted Source of your test case. For example, if `src/steppers/source-0.js` is the Source, a test case might be `src/steppers/__tests__/source-0.js.test1`.
+Write your test cases in a folder `__tests__` in each `src` subfolder. The name of the file specifies the targeted Source of your test case. For example, if `src/steppers/source-0.js` is the Source, a test case might be `src/steppers/__tests__/source-0.test1.js`.
 
 Each test case is appended to your Source, and then run with `js-slang` (using Source §4). The last line of the test case is a `//` comment that must contain the expected result. For example, a stepper test case may be:
 ```
@@ -81,6 +81,7 @@ Run all test cases by typing:
 ```
 % yarn test
 ```
+[Integration of the `test` script with `src/test/framework/` is pending; any help appreciated.]
 
 # License
 

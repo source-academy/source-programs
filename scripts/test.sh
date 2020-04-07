@@ -62,7 +62,7 @@ main() {
 	if [ -d "$DIR/__tests__" ]
 	then
 	    # call test_source on each test case in __tests__
-	    for i in "$DIR/__tests__/$(basename ${s})"*
+	    for i in "$DIR/__tests__/$(basename ${s} .js)".*
 	    do
 		test_source $s $i
 	    done
@@ -74,6 +74,7 @@ main() {
             test_source_framework $TEST_PATH
         fi
 	fi
+
     done
 }
 
