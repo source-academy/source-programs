@@ -1,10 +1,10 @@
 #! /usr/bin/env bash
 
 JS_SLANG="node node_modules/js-slang/dist/repl/repl.js"
-TEST_FRAMEWORK="src/test/framework/main.js"
 
 SOURCEFILES=src/*/*.js
-TEST_FRAMEWORK_FILE="source-test.js"
+SOURCE_TEST="src/test/framework/main.js"
+SOURCE_TEST_FILENAME="source-test.js"
 
 red=`tput setaf 1`
 green=`tput setaf 2`
@@ -31,10 +31,10 @@ $DIFF"
 }
 
 # $1 is the source file to be tested
-# $2 is the Source test file which uses the test framework
+# $2 is the Source test file which uses the source-test framework
 test_source_framework() {
-    # run concatenation of test framework and test file
-    RESULTS=$($JS_SLANG -e --chapter=4 "$(cat $TEST_FRAMEWORK $1 $2)")
+    # run concatenation of source-test framework and test file
+    RESULTS=$($JS_SLANG -e --chapter=4 "$(cat $SOURCE_TEST $1 $2)")
     
     # retrieve names for tests that passed
     while read test_name
@@ -68,8 +68,8 @@ main() {
 		test_source $s $i
 	    done
 
-        # check if test framework is being used
-        TEST_PATH="$DIR/__tests__/$TEST_FRAMEWORK_FILE"
+        # check if source-test framework is being used
+        TEST_PATH="$DIR/__tests__/$SOURCE_TEST_FILENAME"
         if [ -e $TEST_PATH ]
         then
             test_source_framework $s $TEST_PATH
