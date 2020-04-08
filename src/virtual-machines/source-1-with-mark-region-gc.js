@@ -856,6 +856,7 @@ let TEMP_ROOT = -Infinity;
 
 // NEW expects tag in A and size in B
 // changes A, B, C, J, K
+let step = 0;
 function NEW() {
   J = A;
   K = B;
@@ -889,12 +890,6 @@ function NEW() {
   } else {}
 
   // if still no space for allocation
-  if (BUMP_HEAD + K > BUMP_TAIL) {
-    STATE = OUT_OF_MEMORY_ERROR;
-    RUNNING = false;
-    error("reached oom");
-  } else {}
-
   HEAP[BUMP_HEAD + TAG_SLOT] = J;
   HEAP[BUMP_HEAD + SIZE_SLOT] = K;
   // TODO: remove assigning mark slot from NEW_* functions
@@ -905,9 +900,11 @@ function NEW() {
   GET_LINE();
   A = RES;
   GET_BLOCK();
+
   // loop through all lines and set line limits
   while (A <= RES + HEAP[RES + LAST_CHILD_SLOT] &&
-         HEAP[A + LINE_ADDRESS_SLOT] + LINE_SIZE <= BUMP_HEAD + HEAP[BUMP_HEAD + SIZE_SLOT]) {
+         HEAP[A + LINE_ADDRESS_SLOT] + LINE_SIZE <=
+         BUMP_HEAD + HEAP[BUMP_HEAD + SIZE_SLOT]) {
     // lines are filled
     HEAP[A + LINE_LIMIT_SLOT] = HEAP[A + LINE_ADDRESS_SLOT] + LINE_SIZE;
     A = A + LINE_BK_SIZE;
@@ -976,10 +973,8 @@ function MARK() {
     A = SCAN;
     GET_LINE();
     A = RES;
-    while (
-      A <= HEAP[CURR_BLOCK + LAST_CHILD_SLOT] &&
-        HEAP[A + LINE_ADDRESS_SLOT] <= SCAN + HEAP[SCAN + SIZE_SLOT]
-    ) {
+    while (A <= CURR_BLOCK + HEAP[CURR_BLOCK + LAST_CHILD_SLOT] &&
+           HEAP[A + LINE_ADDRESS_SLOT] <= SCAN + HEAP[SCAN + SIZE_SLOT]) {
       HEAP[A + LINE_MARK_SLOT] = MARKED;
       A = A + LINE_BK_SIZE;
     }
@@ -995,14 +990,10 @@ function MARK() {
       GET_LINE();
       A = HEAP[SCAN + I]; // address of child
 
-      if (
-        // child is marked and corresponding line also marked
-        HEAP[A + MARK_SLOT] === MARKED &&
-          HEAP[RES + LINE_MARK_SLOT] === MARKED
-      ) {
-      } else {
+      // child is marked and corresponding line also marked
+      if (HEAP[A + MARK_SLOT] !== MARKED) {
         PUSH_RTS();
-      }
+      } else {}
     }
   }
 }
@@ -1022,13 +1013,14 @@ function FREE_REGION() {
       // free lines in non-free block
       for (
         // line pseudo node address in SCAN
-        SCAN = HEAP[I * BLOCK_SIZE + FIRST_CHILD_SLOT];
-        SCAN < HEAP[I * BLOCK_SIZE + LAST_CHILD_SLOT];
+        SCAN = I * BLOCK_SIZE + HEAP[I * BLOCK_SIZE + FIRST_CHILD_SLOT];
+        SCAN < I * BLOCK_SIZE + HEAP[I * BLOCK_SIZE + LAST_CHILD_SLOT];
         SCAN = SCAN + LINE_BK_SIZE
       ) {
         if (HEAP[SCAN + LINE_MARK_SLOT] === UNMARKED) {
-          // free line not marked
+          // free line that is not marked
           HEAP[SCAN + LINE_LIMIT_SLOT] = HEAP[SCAN + LINE_ADDRESS_SLOT];
+          display(SCAN, "freee line");
           // set block to recyclable
           HEAP[I * BLOCK_SIZE + BLOCK_STATE_SLOT] = RECYCLABLE;
         } else {}
@@ -1086,7 +1078,7 @@ function ALLOCATE_TO_RECYCLABLE() {
 function ALLOCATE_TO_FREE() {
   for (I = 0; I < NUMBER_OF_BLOCKS; I = I + 1) {
     if (HEAP[I * BLOCK_SIZE + BLOCK_STATE_SLOT] === FREE) {
-      BUMP_HEAD = I * BLOCK_SIZE + HEAP[HEAP[I * BLOCK_SIZE + FIRST_CHILD_SLOT]];
+      BUMP_HEAD = HEAP[I * BLOCK_SIZE + HEAP[I * BLOCK_SIZE + FIRST_CHILD_SLOT]];
       BUMP_TAIL = I * BLOCK_SIZE + BLOCK_SIZE;
       break;
     } else {}
@@ -1606,6 +1598,16 @@ function show_heap(s) {
     i = i + 1;
   }
 }
+function show_node(address) {
+  const tag = HEAP[address];
+  const size = HEAP[address + SIZE_SLOT];
+  display("======================");
+  display(node_kind(tag), address);
+  for (let i = 1; i < size; i = i + 1) {
+    display(stringify(address + i) + ": " + stringify(HEAP[address + i]));
+  }
+  display("======================");
+}
 function visualize_heap(s) {
   const len = array_length(HEAP);
   let acc = "";
@@ -1901,15 +1903,12 @@ M[RTN] = () => {
 M[DONE] = () => {
   RUNNING = false;
 };
-let step = 0;
+
 function run() {
   while (RUNNING) {
     if (M[P[PC]] === undefined) {
       error(P[PC], "unknown op-code:");
     } else {
-      if (step === 3) {
-        show_executing("");
-      } else {}
       M[P[PC]]();
     }
   }
@@ -1935,23 +1934,23 @@ function run() {
 // );
 // print_program(P);
 // run();
-//
-initialize_machine(3, 20, 3); // exactly 200 needed
-P = parse_and_compile(
-  "             \
-const a = 2;                        \
-const b = 7;                        \
-function f(x, y) {                  \
-    const c = 100;                  \
-    const d = 500;                  \
-    return x - y * a + b - c + d;   \
-}                                   \
-f(30, 10);                          "
-// returns 417
-);
-run();
+// //
+// initialize_machine(3, 20, 3); // exactly 200 needed
+// P = parse_and_compile(
+//   "             \
+// const a = 2;                        \
+// const b = 7;                        \
+// function f(x, y) {                  \
+//     const c = 100;                  \
+//     const d = 500;                  \
+//     return x - y * a + b - c + d;   \
+// }                                   \
+// f(30, 10);                          "
+// // returns 417
+// );
+// run();
 
-// initialize_machine(290);
+// initialize_machine(29, 10, 1);
 // P = parse_and_compile("         \
 // function factorial(n) {         \
 //     return n === 1 ? 1          \
@@ -1962,7 +1961,7 @@ run();
 // run();
 //
 //
-// initialize_machine(156);
+// initialize_machine(11, 4, 4);
 // P = parse_and_compile("         \
 // const about_pi = 3;             \
 // function square(x) {            \
@@ -1971,9 +1970,9 @@ run();
 // 4 * about_pi * square(6371);    ");
 // //print_program(P);
 // run();
-//
-//
-// initialize_machine(206);
+// //
+// //
+// initialize_machine(10, 10, 2);
 // P = parse_and_compile("           \
 // function power(x, y) {            \
 //     return y === 0                \
@@ -1983,30 +1982,30 @@ run();
 // power(17, 1);                     ");
 // //print_program(P);
 // run();
-//
-//
-// initialize_machine(442);
-// P = parse_and_compile("                                     \
-// function recurse(x, y, operation, initvalue) {              \
-//     return y === 0                                          \
-//         ? initvalue                                         \
-//         : operation(x, recurse(x, y - 1,                    \
-//                     operation, initvalue));                 \
-// }                                                           \
-//                                                             \
-// function f(x, z) { return x * z; }                          \
-// recurse(2, 3, f, 1);                                        \
-//                                                             \
-// function g(x, z) { return x + z; }                          \
-// recurse(2, 3, g, 0);                                        \
-//                                                             \
-// function h(x, z) { return x / z; }                          \
-// recurse(2, 3, h, 128);                                      ");
-// //print_program(P);
-// run();
-//
-//
-// initialize_machine(696);
+
+
+initialize_machine(20, 10, 2);
+P = parse_and_compile("                                     \
+function recurse(x, y, operation, initvalue) {              \
+    return y === 0                                          \
+        ? initvalue                                         \
+        : operation(x, recurse(x, y - 1,                    \
+                    operation, initvalue));                 \
+}                                                           \
+                                                            \
+function f(x, z) { return x * z; }                          \
+recurse(2, 3, f, 1);                                        \
+                                                            \
+function g(x, z) { return x + z; }                          \
+recurse(2, 3, g, 0);                                        \
+                                                            \
+function h(x, z) { return x / z; }                          \
+recurse(2, 3, h, 128);                                      ");
+//print_program(P);
+run();
+
+
+// initialize_machine(6, 20, 9);
 // P = parse_and_compile("                         \
 // function abs(x) {                               \
 //     return x >= 0 ? x : 0 - x;                  \
@@ -2036,18 +2035,18 @@ run();
 // sqrt(5);                                        ");
 // //print_program(P);
 // run();
-//
-//
-// initialize_machine(140);
+
+
+// initialize_machine(10, 5, 2);
 // P = parse_and_compile(" \
 // function f(x) {         \
 //     x + 1;              \
 // }                       \
 // f(3);                   ");
+// // print_program(P);
 // run();
-//
-//
-// initialize_machine(176);
+
+// initialize_machine(12, 4, 3);
 // P = parse_and_compile(" \
 // function x(a) {         \
 //   const b = 2*a;        \

@@ -1137,50 +1137,59 @@ function show_registers(s) {
 
 // HEAP is array containing all dynamically allocated data structures
 let HEAP = NaN;
-// next free slot in heap
-let FREE = -Infinity;
-// scan pointer in Cheney
+// bump allocator pointers
+let BUMP_HEAD = -Infinity; // for insertion
+let BUMP_TAIL = -Infinity; // for free line size checking
+// scan pointer in Immix
 let SCAN = -Infinity;
+// flag to indicate when overflow allocation was used
+let OVERFLOW = false;
 // the size of the heap is fixed
 let HEAP_SIZE = -Infinity;
 // smallest heap address
 let HEAPBOTTOM = -Infinity;
-
-const NORMAL = 0;
-const DIV_ERROR = 1;
-const OUT_OF_MEMORY_ERROR = 2; // not used yet: memory currently unbounded
 
 // general node layout
 const TAG_SLOT = 0;
 const SIZE_SLOT = 1;
 const FIRST_CHILD_SLOT = 2;
 const LAST_CHILD_SLOT = 3;
+const MARK_SLOT = 4;
 
 // ///////////////////////////////////
-// Cheney's Copying Garbage Collection
+// Immix Mark-Region Garbage Collector
 // ///////////////////////////////////
+// Mark-Region Garbage Collection is a modern granular garbage collection algorithm that has similar characteristics
+// of both Mark-and-Sweep and Copying algorithms, yet performing better than both in a large heap space.
+// TODO: Detailed documentation at: https://github.com/source-academy/source-programs/wiki/
 
-// initialize spaces for Cheney's algorithm
+// General metadata for Immix Garbage Collector
+// In Immix, usually a 2.5% of the blocks are reserved in the Headroom for evacuation, similar to Cheney's copying
+// algorithm, but much less than 50%. In this mimicked version of Immix, we allocate 1 block for evacuation.
+// initialize header info for Mark-Region algorithm
+let NUMBER_OF_BLOCKS = -Infinity;
+let HEADROOM_BLOCK = -Infinity;
+// address of current working block
+let CURR_BLOCK = -Infinity;
+// address of meta data of current working line
+let CURR_LINE = -Infinity;
 
-let SPACESIZE = -Infinity;
-let TOSPACE = -Infinity;
-let FROMSPACE = -Infinity;
-let TOPOFSPACE = -Infinity;
-
-function initialize_machine(heapsize) {
-    display(heapsize, "\nRunning VM with heap size:");
-    HEAP = [];
-    HEAP_SIZE = heapsize;
-    HEAPBOTTOM = 0;
-    SPACESIZE = HEAP_SIZE / 2;
-    TOSPACE = HEAPBOTTOM;
-    FROMSPACE = TOSPACE + SPACESIZE;
-    TOPOFSPACE = TOSPACE + SPACESIZE - 1;
-    FREE = TOSPACE;
-    TEMP_ROOT = -1;
-    RUNNING = true;
-    STATE = NORMAL;
-    PC = 0;
+// initialize machine with heapsize, number of blocks in heap, and number of lines in each block
+function initialize_machine(linesize, linenumber, blocknumber) {
+  HEAP = [];
+  LINE_SIZE = linesize;
+  NUM_OF_LINES_PER_BLOCK = linenumber;
+  NUMBER_OF_BLOCKS = blocknumber;
+  BLOCK_SIZE = (linesize + LINE_BK_SIZE) * NUM_OF_LINES_PER_BLOCK + BLOCK_BK_SIZE;
+  HEAP_SIZE = BLOCK_SIZE * blocknumber;
+  display(HEAP_SIZE, "\nRunning VM with heap size:");
+  display(linesize * linenumber * blocknumber, "\nEffective memory size:");
+  HEAPBOTTOM = 0;
+  INITIALIZE_BLOCKS_AND_LINES();
+  TEMP_ROOT = -1;
+  RUNNING = true;
+  STATE = NORMAL;
+  PC = 0;
 }
 
 // We introduce TEMP_ROOT register to handle instructions
@@ -1194,20 +1203,305 @@ let TEMP_ROOT = -Infinity;
 // NEW expects tag in A and size in B
 // changes A, B, C, J, K
 function NEW() {
-    J = A;
-    K = B;
-    if (FREE + K > TOPOFSPACE) {
-        display(FREE, "Flip! FREE:");
-        FLIP();
+  J = A;
+  K = B;
+  if (BUMP_HEAD + K > BUMP_TAIL) {
+    // if the hole is too small for the new node
+    GET_FREE_BLOCK();
+    if (K > LINE_SIZE && RES !== NO_BLOCK_FOUND) {
+      // use overflow allocator
+      return ALLOCATE_OVERFLOW();
+    } else {
+      // set bump_head block to occupied
+    }
+
+    A = BUMP_HEAD - 1; // possible for BUMP_HEAD to overflow into next block if block is fully filled
+    GET_BLOCK();
+    HEAP[RES + BLOCK_STATE_SLOT] = OCCUPIED;
+    ALLOCATE_TO_RECYCLABLE();
+  } else {}
+
+  if (BUMP_HEAD + K > BUMP_TAIL) {
+    GET_FREE_BLOCK();
+    if (RES === NO_BLOCK_FOUND) {
+      // mark and granular sweep
+      display("Collecttttttt");
+      MARK();
+      FREE_REGION();
+    } else {
+      ALLOCATE_TO_FREE();
+    }
+  } else {}
+
+  // if still no space for allocation
+  if (BUMP_HEAD + K > BUMP_TAIL) {
+    STATE = OUT_OF_MEMORY_ERROR;
+    RUNNING = false;
+    error("reached oom");
+  } else {}
+
+  HEAP[BUMP_HEAD + TAG_SLOT] = J;
+  HEAP[BUMP_HEAD + SIZE_SLOT] = K;
+  HEAP[BUMP_HEAD + MARK_SLOT] = UNMARKED;
+
+  // update line limits
+  A = BUMP_HEAD;
+  GET_LINE();
+  A = RES;
+  GET_BLOCK();
+  // loop through all lines and set line limits
+  while (A <= RES + HEAP[RES + LAST_CHILD_SLOT] &&
+         HEAP[A + LINE_ADDRESS_SLOT] + LINE_SIZE <= BUMP_HEAD + HEAP[BUMP_HEAD + SIZE_SLOT]) {
+    // lines are filled
+    HEAP[A + LINE_LIMIT_SLOT] = HEAP[A + LINE_ADDRESS_SLOT] + LINE_SIZE;
+    A = A + LINE_BK_SIZE;
+  }
+  // update the last line to the actual occupied size
+  HEAP[A + LINE_LIMIT_SLOT] = BUMP_HEAD + K;
+
+  // set block state
+  HEAP[RES + BLOCK_STATE_SLOT] = RECYCLABLE;
+  // return
+  RES = BUMP_HEAD;
+  BUMP_HEAD = BUMP_HEAD + K;
+}
+
+// Finds next recyclable block, if none available, find next free block
+// Returns address of block if found, else NO_BLOCK_FOUND
+function GET_NEXT_BLOCK() {
+  GET_NEXT_RECYCLABLE_BLOCK();
+  if (RES === NO_BLOCK_FOUND) {
+    GET_FREE_BLOCK();
+  } else {}
+}
+
+// expects free/recyclable block address in A
+// Finds first hole and sets bump head and bump tail
+function ALLOCATE_BUMP_HEAD_AND_TAIL() {
+  // finds a hole (one or more free lines) and allocate new bump head and tail
+  SCAN = A + HEAP[A + FIRST_CHILD_SLOT];
+  while (SCAN <= A + HEAP[A + LAST_CHILD_SLOT]) {
+    // if line is free/empty
+    if (HEAP[SCAN + LINE_LIMIT_SLOT] === HEAP[SCAN + LINE_ADDRESS_SLOT]) {
+      // set bump head to start of line
+      BUMP_HEAD = HEAP[SCAN + LINE_ADDRESS_SLOT];
+      ALLOCATE_BUMP_TAIL();
+      break;
+    } else {
+      SCAN = SCAN + LINE_BK_SIZE;
+    }
+  }
+}
+
+// Changes A, B, C, I, SCAN
+function MARK() {
+  display("MARK!");
+  // keep old TOP_RTS to prevent deleting stacks
+  B = TOP_RTS;
+  // init roots for dfs
+  for (I = 0; I <= B; I = I + 1) {
+    A = RTS[I]; // add all rts stacks
+    PUSH_RTS();
+  }
+
+  A = OS;
+  PUSH_RTS(); // add current os
+  A = ENV;
+  PUSH_RTS(); // add current env
+
+  while (B < TOP_RTS) {
+    POP_RTS();
+    SCAN = RES;
+    // mark node
+    HEAP[SCAN + MARK_SLOT] = MARKED;
+    // mark node's block
+    CURR_BLOCK = math_floor(SCAN / BLOCK_SIZE) * BLOCK_SIZE;
+    HEAP[CURR_BLOCK + MARK_SLOT] = MARKED;
+    // mark node's start line to end line
+    A = SCAN;
+    GET_LINE();
+    A = RES;
+    while (
+      A <= HEAP[CURR_BLOCK + LAST_CHILD_SLOT] &&
+        HEAP[A + LINE_ADDRESS_SLOT] <= SCAN + HEAP[SCAN + SIZE_SLOT]
+    ) {
+      HEAP[A + LINE_MARK_SLOT] = MARKED;
+      A = A + LINE_BK_SIZE;
+    }
+    for (
+      I = HEAP[SCAN + FIRST_CHILD_SLOT];
+      I <= HEAP[SCAN + LAST_CHILD_SLOT];
+      I = I + 1
+    ) {
+      // child is invalid or not yet loaded
+      if (HEAP[SCAN + I] === undefined) { continue; } else {}
+
+      A = HEAP[SCAN + I]; // address of child
+      GET_LINE();
+      A = HEAP[SCAN + I]; // address of child
+
+      if (
+        // child is marked and corresponding line also marked
+        HEAP[A + MARK_SLOT] === MARKED &&
+          HEAP[RES + LINE_MARK_SLOT] === MARKED
+      ) {
+      } else {
+        PUSH_RTS();
+      }
+    }
+  }
+}
+
+// expects hole-size in K
+function FREE_REGION() {
+  // granular collection
+  // free blocks
+  for (I = 0; I < NUMBER_OF_BLOCKS; I = I + 1) {
+    if (HEAP[I * BLOCK_SIZE + MARK_SLOT] === UNMARKED) {
+      // if block is not MARKED, set state to FREE
+      HEAP[I * BLOCK_SIZE + BLOCK_STATE_SLOT] = FREE;
+    } else {
+      // assume OCCUPIED
+      HEAP[I * BLOCK_SIZE + BLOCK_STATE_SLOT] = OCCUPIED;
+
+      // free lines in non-free block
+      for (
+        // line pseudo node address in SCAN
+        SCAN = HEAP[I * BLOCK_SIZE + FIRST_CHILD_SLOT];
+        SCAN < HEAP[I * BLOCK_SIZE + LAST_CHILD_SLOT];
+        SCAN = SCAN + LINE_BK_SIZE
+      ) {
+        if (HEAP[SCAN + LINE_MARK_SLOT] === UNMARKED) {
+          // free line not marked
+          HEAP[SCAN + LINE_LIMIT_SLOT] = HEAP[SCAN + LINE_ADDRESS_SLOT];
+          // set block to recyclable
+          HEAP[I * BLOCK_SIZE + BLOCK_STATE_SLOT] = RECYCLABLE;
+        } else {}
+        // unmark line
+        HEAP[SCAN + LINE_MARK_SLOT] = UNMARKED;
+      }
+    }
+    // unmark whole block
+    HEAP[I * BLOCK_SIZE + MARK_SLOT] = UNMARKED;
+  }
+
+  // finds a hole of at least k size and allocate new bump head and tail
+  ALLOCATE_TO_RECYCLABLE();
+  // if hole found still too small, allocate to a free block
+  if (BUMP_HEAD + K > BUMP_TAIL) {
+    ALLOCATE_TO_FREE();
+  } else {}
+}
+
+// choose k-sized hole from ALL recyclable blocks
+// if hole large enough isn't found, bump head and tail will be last hole.
+function ALLOCATE_TO_RECYCLABLE() {
+  for (I = 0; I < NUMBER_OF_BLOCKS; I = I + 1) {
+    if ( // if block is free or recyclable,
+      HEAP[I * BLOCK_SIZE + BLOCK_STATE_SLOT] === RECYCLABLE
+    ) {
+      // find k-sized hole
+      SCAN = I * BLOCK_SIZE + HEAP[I * BLOCK_SIZE + FIRST_CHILD_SLOT];
+      while (SCAN <= I * BLOCK_SIZE + HEAP[I * BLOCK_SIZE + LAST_CHILD_SLOT]) {
+        // if line is free/empty
+        if (HEAP[SCAN + LINE_LIMIT_SLOT] === HEAP[SCAN + LINE_ADDRESS_SLOT]) {
+          // set bump head to end of previous line
+          BUMP_HEAD = SCAN === I * BLOCK_SIZE + HEAP[I * BLOCK_SIZE + FIRST_CHILD_SLOT] // if first line
+            ? HEAP[SCAN + LINE_ADDRESS_SLOT]
+            : HEAP[SCAN - LINE_BK_SIZE + LINE_LIMIT_SLOT];
+          ALLOCATE_BUMP_TAIL();
+
+          if (BUMP_HEAD + K <= BUMP_TAIL) {
+            return undefined;
+          } else {
+            A = BUMP_TAIL - 1;
+            GET_LINE();
+            SCAN = RES + LINE_BK_SIZE; // get previous line but increment manually
+          }
+        } else {
+          SCAN = SCAN + LINE_BK_SIZE;
+        }
+      }
     } else {}
-    if (FREE + K > TOPOFSPACE) {
-        STATE = OUT_OF_MEMORY_ERROR;
-        RUNNING = false;
+  }
+}
+
+// find first free block and set BUMP_HEAD and BUMP_TAIL immediately
+// if no free blocks, BUMP_HEAD and BUMP_TAIL remain as previous
+function ALLOCATE_TO_FREE() {
+  for (I = 0; I < NUMBER_OF_BLOCKS; I = I + 1) {
+    if (HEAP[I * BLOCK_SIZE + BLOCK_STATE_SLOT] === FREE) {
+      BUMP_HEAD = HEAP[I * BLOCK_SIZE + HEAP[I * BLOCK_SIZE + FIRST_CHILD_SLOT]];
+      BUMP_TAIL = I * BLOCK_SIZE + BLOCK_SIZE;
+      break;
     } else {}
-    HEAP[FREE + TAG_SLOT] = J;
-    HEAP[FREE + SIZE_SLOT] = K;
-    RES = FREE;
-    FREE = FREE + K;
+  }
+}
+
+function ALLOCATE_OVERFLOW() {
+  display("overflow allocation");
+  OVERFLOW = true;
+  A = BUMP_HEAD;
+  PUSH_RTS();
+  A = BUMP_TAIL;
+  PUSH_RTS();
+  // RES is still address of free block
+  A = RES;
+  ALLOCATE_BUMP_HEAD_AND_TAIL();
+  // since bump head and tail are at free block, new node is guaranteed to load properly
+  A = J;
+  NEW();
+}
+
+// Expects old RES in A
+function RESTORE_BUMP_PTRS() {
+  // restore old bump head and tail values if
+  // overflow allocation was used
+  // else does nothing
+  if (OVERFLOW) {
+    POP_RTS();
+    BUMP_TAIL = RES;
+    POP_RTS();
+    BUMP_HEAD = RES;
+    OVERFLOW = false;
+  } else {}
+  RES = A;
+}
+
+// finds bump tail based on bump_head
+// changes A
+function ALLOCATE_BUMP_TAIL() {
+  A = BUMP_HEAD;
+  GET_LINE();
+  // assuming line of bump head may be occupied, start from next line from bump head
+  A = BUMP_HEAD === HEAP[RES + LINE_ADDRESS_SLOT] ? RES : RES + LINE_BK_SIZE; // line node address in A
+  GET_BLOCK();
+  while (A <= RES + HEAP[RES + LAST_CHILD_SLOT] &&
+         HEAP[A + LINE_ADDRESS_SLOT] === HEAP[A + LINE_LIMIT_SLOT]) {
+    A = A + LINE_BK_SIZE;
+  }
+  // A should be first occupied line / line after last free line
+  BUMP_TAIL = HEAP[A - LINE_BK_SIZE + LINE_ADDRESS_SLOT] + LINE_SIZE;
+}
+
+// expects object address in A
+// returns block node address in RES
+function GET_BLOCK() {
+  RES = math_floor(A / BLOCK_SIZE) * BLOCK_SIZE;
+}
+
+// expects object address in A
+// returns line node address in RES
+function GET_LINE() {
+  C = math_floor(A / BLOCK_SIZE) * BLOCK_SIZE;                 // block address in C
+  // find offset from start of block
+  RES = HEAP[C + HEAP[C + FIRST_CHILD_SLOT] + LINE_ADDRESS_SLOT]; // start of addressable space in RES
+  A = math_floor((A - RES) / LINE_SIZE);                       // line offset number in A
+  RES = C + HEAP[C + FIRST_CHILD_SLOT] + A * LINE_BK_SIZE;            // line node address in RES
+  // debugging
+  if (RES < 0) {
+    error(RES, "negative line number");
+  } else {}
 }
 
 // use tag slot as forwarding address;
@@ -1215,105 +1509,171 @@ function NEW() {
 // can never be confused with heap addresses
 const FORWARDINGADDRESS = 0;
 
-// changes B, C, I
-function FLIP() {
-    A = FROMSPACE;
-    FROMSPACE = TOSPACE;
-    TOSPACE = A;
-    TOPOFSPACE = TOSPACE + SPACESIZE - 1;
-    FREE = TOSPACE;
-    SCAN = TOSPACE;
+// Creates NUMBER_OF_BLOCKS blocks starting from HEAP_BOTTOM,
+// sets CURR_BLOCK to HEAP_BOTTOM, CURR_LINE to first child address
+// Changes A, B, BUMP_HEAD, BUMP_TAIL
+function INITIALIZE_BLOCKS_AND_LINES() {
+  // populate the heap space with blocks
+  A = HEAPBOTTOM;
+  for (I = 0; I < NUMBER_OF_BLOCKS; I = I + 1) {
+    NEW_BLOCK();
+    A = B;
+  }
+  HEADROOM_BLOCK = RES; // last block dedicated as Headroom
+  CURR_BLOCK = HEAPBOTTOM;
+  CURR_LINE = CURR_BLOCK + FIRST_CHILD_SLOT;
 
-    A = OS;
-    COPY();
-    OS = RES;
+  // reallocate bump pointers for actual use
+  BUMP_HEAD = HEAP[HEAP[CURR_BLOCK + FIRST_CHILD_SLOT]];
+  BUMP_TAIL = CURR_BLOCK + BLOCK_SIZE; // bump_tail is EXCLUSIVE
+}
 
-    A = ENV;
-    COPY();
-    ENV = RES;
 
-    // TEMP_ROOT is temporary root of garbage
-    // collection, used in EXTEND and CALL
-    if (TEMP_ROOT >= 0) {
-        A = TEMP_ROOT;
-        COPY();
-        TEMP_ROOT = RES;
+// machine states
+
+const NORMAL = 0;
+const DIV_ERROR = 1;
+const OUT_OF_MEMORY_ERROR = 2;
+
+// NODEs available so far (v0.1)
+//
+// number node (-100)
+// bool node (-101)
+// environment node (-102)
+// closure node (-103)
+// stackframe node (-104)
+// operandstack node (-105)
+// undefined node (-106)
+// block node (-107)
+
+// state of line and block
+const OCCUPIED = 0;
+const RECYCLABLE = 1;
+const FREE = 2;
+const HEADROOM = 3; // special state so that global allocator skips this block
+
+// Liveness of line and block
+const UNMARKED = 0;
+const MARKED = 1;
+
+// ** BLOCK NODE DESIGN **
+//
+// Immix GC partitions the heap space of a program into large size blocks in order to achieve granular collection and,
+// at the same time, not to waste as much space as copying algorithm like Cheney's. A block in Immix has three states:
+// free (all lines are free), recyclable (some but not all lines are free) and occupied (all lines are occupied).
+// It utilizes fast bump allocation to get free hole (one or more lines) in either a free or recyclable block to achieve
+// fast allocation.
+//
+// Since Immix allows multi-line allocation but not multi-block allocation,
+// the block exists as an actual node that demarcates the block region,
+// and the lines exist as virtual nodes whose metadata is stored at the block header
+//
+// block nodes layout
+//
+// 0: tag  = -107
+// 1: size = total size of block
+// 2: offset of first child from the tag: 6
+// 3: offset of last child from the tag: (NUM_OF_LINES_PER_BLOCK - 1) * LINE_BK_SIZE (3)
+// 4: mark (free: 0, occupied: 1)
+// 5: block state (occupied: 0, recyclable: 1, free: 2)
+// 6: line 0 address
+// 7: line 0 mark bit (marked: 1, unmarked: 0)
+// 8: line 0 start of free address (for block occupancy profiling purpose)
+// 9: line 1 address
+// ...
+// NUM_OF_LINES_PER_BLOCK * LINE_BK_SIZE + BLOCK_BK_SIZE: start of line 0 usable memory
+
+const BLOCK_TAG = -222;
+const BLOCK_BK_SIZE = 6; // size of book keeping entries
+let NUM_OF_LINES_PER_BLOCK = -Infinity;
+let BLOCK_SIZE = -Infinity; // actual size of the block
+const BLOCK_STATE_SLOT = 5;
+const NO_BLOCK_FOUND = -1;
+
+// virtual line nodes
+const LINE_BK_SIZE = 3;
+const LINE_ADDRESS_SLOT = 0;
+const LINE_MARK_SLOT = 1;
+const LINE_LIMIT_SLOT = 2; // limit address === next line's start address if current line is full
+let LINE_SIZE = -Infinity;
+
+// Allocates new block at the start of the program (initialization)
+//
+// Expects root address in A
+// changes A, B
+// Final: RES = block address, B = last address + 1
+function NEW_BLOCK() {
+  HEAP[A] = BLOCK_TAG;
+  HEAP[A + SIZE_SLOT] = BLOCK_SIZE;
+  HEAP[A + FIRST_CHILD_SLOT] = 6;
+  HEAP[A + LAST_CHILD_SLOT] = 6 + (NUM_OF_LINES_PER_BLOCK - 1) * LINE_BK_SIZE;
+  HEAP[A + MARK_SLOT] = UNMARKED; // mark slot will be used for mark status
+  HEAP[A + BLOCK_STATE_SLOT] = FREE; // state slot will be used for determining to skip objects or not.
+
+  // store line address in B
+  B = A + HEAP[A + LAST_CHILD_SLOT] + LINE_BK_SIZE;
+  // initialize line metadata
+  for (let i = 0; i < NUM_OF_LINES_PER_BLOCK; i = i + 1) {
+    C = A + HEAP[A + FIRST_CHILD_SLOT] + i * LINE_BK_SIZE; // C points at the virtual line node
+    HEAP[C + LINE_ADDRESS_SLOT] = B;
+    HEAP[C + LINE_MARK_SLOT] = UNMARKED;
+    HEAP[C + LINE_LIMIT_SLOT] = B; // no occupied data yet
+    // update address to next line
+    B = B + LINE_SIZE;
+  }
+  // B is now pointing at end of the block
+  RES = A;
+}
+
+// Returns the address of the first free block scanning from the first block
+function GET_FREE_BLOCK() {
+  RES = NO_BLOCK_FOUND;
+  for (let i = 0; i < NUMBER_OF_BLOCKS; i = i + 1) {
+    // if no block is recyclable
+    if (HEAP[i * BLOCK_SIZE + BLOCK_STATE_SLOT] === FREE) {
+      RES = BLOCK_SIZE * i;
+      break;
     } else {}
-
-    for (I = 0; I <= TOP_RTS; I = I + 1) {
-        A = RTS[I];
-        COPY();
-        RTS[I] = RES;
-    }
-    while (SCAN < FREE) {
-        for (I = HEAP[SCAN + FIRST_CHILD_SLOT];
-             I <= HEAP[SCAN + LAST_CHILD_SLOT];
-             I = I + 1) {
-            A = HEAP[SCAN + I];
-            COPY();
-            HEAP[SCAN + I] = RES;
-        }
-        SCAN = SCAN + HEAP[SCAN + SIZE_SLOT];
-    }
+  }
 }
 
-// expects node to be copied in A
-// changes B, C
-function COPY() {
-    if (A === undefined) {
-        RES = undefined;
-    } else if (A === -Infinity) {
-        // take care of top environment parent slot
-        RES = -Infinity;
-    } else {
-        ALREADY_COPIED();
-        if (RES) {
-            RES = HEAP[A + FORWARDINGADDRESS];
-        } else {
-            B = FREE;
-            MOVE();
-            FREE = FREE + HEAP[A + SIZE_SLOT];
-            HEAP[A + FORWARDINGADDRESS] = B;
-            RES = B;
-        }
-    }
-}
-
-// expects node in A
-function ALREADY_COPIED() {
-    RES = HEAP[A + FORWARDINGADDRESS] >= TOSPACE
-      &&
-      HEAP[A + FORWARDINGADDRESS] <= FREE;
-}
-
-// expects source in A and destination in B
-// changes C
-function MOVE() {
-    for (C = 0; C < HEAP[A + SIZE_SLOT]; C = C + 1) {
-        HEAP[B + C] = HEAP[A + C];
-    }
+// Returns the address of the first recyclable block scanning from the first block
+function GET_NEXT_RECYCLABLE_BLOCK() {
+  RES = NO_BLOCK_FOUND;
+  for (let i = 0; i < NUMBER_OF_BLOCKS; i = i + 1) {
+    // if no block is recyclable
+    if (HEAP[i * BLOCK_SIZE + BLOCK_STATE_SLOT] === RECYCLABLE) {
+      RES = BLOCK_SIZE * i;
+      break;
+    } else {}
+  }
 }
 
 // number nodes layout
 //
 // 0: tag  = -100
-// 1: size = 5
+// 1: size = 6
 // 2: offset of first child from the tag: 6 (no children)
 // 3: offset of last child from the tag: 5 (must be less than first)
-// 4: value
+// 4: mark slot
+// 5: value
 
 const NUMBER_TAG = -100;
-const NUMBER_SIZE = 5;
-const NUMBER_VALUE_SLOT = 4;
+const NUMBER_SIZE = 6;
+const NUMBER_VALUE_SLOT = 5;
 
+// expects number in A
+// changes A, B, C, D, E, J, K
 function NEW_NUMBER() {
-    E = A;
-    A = NUMBER_TAG;
-    B = NUMBER_SIZE;
-    NEW();
-    HEAP[RES + FIRST_CHILD_SLOT] = 6;
-    HEAP[RES + LAST_CHILD_SLOT] = 5; // no children
-    HEAP[RES + NUMBER_VALUE_SLOT] = E;
+  E = A;
+  A = NUMBER_TAG;
+  B = NUMBER_SIZE;
+  NEW();
+  HEAP[RES + FIRST_CHILD_SLOT] = 6;
+  HEAP[RES + LAST_CHILD_SLOT] = 5; // no children
+  HEAP[RES + NUMBER_VALUE_SLOT] = E;
+  A = RES;
+  RESTORE_BUMP_PTRS();
 }
 
 // bool nodes layout
@@ -1322,216 +1682,169 @@ function NEW_NUMBER() {
 // 1: size = 5
 // 2: offset of first child from the tag: 6 (no children)
 // 3: offset of last child from the tag: 5 (must be less than first)
-// 4: value
+// 4: mark slot
+// 5: value
 
 const BOOL_TAG = -101;
-const BOOL_SIZE = 5;
-const BOOL_VALUE_SLOT = 4;
+const BOOL_SIZE = 6;
+const BOOL_VALUE_SLOT = 5;
 
+// expects boolean in A
+// changes A, B, C, D, E, J, K
 function NEW_BOOL() {
-    C = A;
-    A = BOOL_TAG;
-    B = BOOL_SIZE;
-    NEW();
-    HEAP[RES + FIRST_CHILD_SLOT] = 6;
-    HEAP[RES + LAST_CHILD_SLOT] = 5; // no children
-    HEAP[RES + BOOL_VALUE_SLOT] = C;
+  E = A;
+  A = BOOL_TAG;
+  B = BOOL_SIZE;
+  NEW();
+  HEAP[RES + FIRST_CHILD_SLOT] = 6;
+  HEAP[RES + LAST_CHILD_SLOT] = 5; // no children
+  HEAP[RES + BOOL_VALUE_SLOT] = E;
+  A = RES;
+  RESTORE_BUMP_PTRS();
 }
 
 // undefined nodes layout
 //
 // 0: tag  = -106
-// 1: size = 4
+// 1: size = 5
 // 2: offset of first child from the tag: 5 (no children)
 // 3: offset of last child from the tag: 4 (must be less than first)
+// 4: mark slot
 
 const UNDEFINED_TAG = -106;
-const UNDEFINED_SIZE = 4;
+const UNDEFINED_SIZE = 5;
 
+// changes A, B, C, D, J, K
 function NEW_UNDEFINED() {
-    A = UNDEFINED_TAG;
-    B = UNDEFINED_SIZE;
-    NEW();
-    HEAP[RES + FIRST_CHILD_SLOT] = 5;
-    HEAP[RES + LAST_CHILD_SLOT] = 4; // no children
+  A = UNDEFINED_TAG;
+  B = UNDEFINED_SIZE;
+  NEW();
+  HEAP[RES + FIRST_CHILD_SLOT] = 5;
+  HEAP[RES + LAST_CHILD_SLOT] = 4; // no children
+  A = RES;
+  RESTORE_BUMP_PTRS();
 }
 
 // operandstack nodes layout
 //
 // 0: tag  = -105
 // 1: size = maximal number of entries + 4
-// 2: first child slot = 4
-// 3: last child slot = current top of stack; initially 3 (empty stack)
-// 4: first entry
-// 5: second entry
+// 2: first child slot = 5
+// 3: last child slot = current top of stack; initially 4 (empty stack)
+// 4: mark slot
+// 5: first entry
+// 6: second entry
 // ...
 
 const OS_TAG = -105;
 
 // expects max size in A
+// changes A, B, C, D, E, J, K
 function NEW_OS() {
-    C = A;
-    A = OS_TAG;
-    B = C + 4;
-    NEW();
-	HEAP[RES + FIRST_CHILD_SLOT] = 4;
-	// operand stack initially empty
-	HEAP[RES + LAST_CHILD_SLOT] = 3;
+  E = A;
+  A = OS_TAG;
+  B = E + 5;
+  NEW();
+  HEAP[RES + FIRST_CHILD_SLOT] = 5;
+  // operand stack initially empty
+  HEAP[RES + LAST_CHILD_SLOT] = 4;
+  A = RES;
+  RESTORE_BUMP_PTRS();
 }
 
 // PUSH and POP are convenient subroutines that operate on
 // the operand stack OS
-// PUSH expects its argument in A
+
+// expects its argument in A
+// changes A, B
 function PUSH_OS() {
-    B = HEAP[OS + LAST_CHILD_SLOT]; // address of current top of OS
-    B = B + 1;
-    HEAP[OS + LAST_CHILD_SLOT] = B; // update address of current top of OS
-    HEAP[OS + B] = A;
+  B = HEAP[OS + LAST_CHILD_SLOT]; // address of current top of OS
+  B = B + 1;
+  HEAP[OS + LAST_CHILD_SLOT] = B; // update address of current top of OS
+  HEAP[OS + B] = A;
 }
 
 // POP puts the top-most value into RES
-// uses B
+// changes B
 function POP_OS() {
-    B = HEAP[OS + LAST_CHILD_SLOT]; // address of current top of OS
-    HEAP[OS + LAST_CHILD_SLOT] = B - 1; // update address of current top of OS
-    RES = HEAP[OS + B];
-}
-
-// string nodes layout
-//
-// 0: tag  = -109
-// 1: size = 5  // naive implementation
-// 2: first child = 4
-// 3: last child  = 4
-// 4: string value
-
-const STRING_TAG = -109;
-const STRING_SIZE = 5;
-const STRING_VALUE_SLOT = 4;
-
-//expects string value in A
-function NEW_STRING() {
-    C = A;
-    A = STRING_TAG;
-    B = STRING_SIZE;
-    NEW();
-    HEAP[RES + FIRST_CHILD_SLOT] = 4;
-    HEAP[RES + LAST_CHILD_SLOT] = 4;
-    HEAP[RES + STRING_VALUE_SLOT] = C;
-}
-
-// pair nodes layout
-//
-// 0: tag  = -107
-// 1: size = 6
-// 2: first child = 4
-// 3: last child = 5
-// 4: head value
-// 5: tail value
-// ....
-
-const PAIR_TAG = -107;
-const PAIR_SIZE = 6;
-const HEAD_VALUE_SLOT = 4;
-const TAIL_VALUE_SLOT = 5;
-
-// expects head value in A, tail value in B
-function NEW_PAIR() {
-    C = A;
-    D = B;
-    A = PAIR_TAG;
-    B = PAIR_SIZE; // add the book keeping slots
-    NEW();
-    HEAP[RES + FIRST_CHILD_SLOT] = 4;
-    HEAP[RES + LAST_CHILD_SLOT] = 5;
-    HEAP[RES + HEAD_VALUE_SLOT] = C;
-    HEAP[RES + TAIL_VALUE_SLOT] = D;
-}
-
-// null nodes layout
-//
-// 0: tag  = -108
-// 1: size = 4
-// 2: first child = 5 (no children)
-// 3: last child = 4 (must be less than first child)
-
-const NULL_TAG = -108;
-const NULL_SIZE = 4;
-
-function NEW_NULL() {
-    A = NULL_TAG;
-    B = NULL_SIZE;
-    NEW();
-    HEAP[RES + FIRST_CHILD_SLOT] = 5;
-    HEAP[RES + LAST_CHILD_SLOT] = 4; // no children
+  B = HEAP[OS + LAST_CHILD_SLOT]; // address of current top of OS
+  HEAP[OS + LAST_CHILD_SLOT] = B - 1; // update address of current top of OS
+  RES = HEAP[OS + B];
 }
 
 // closure nodes layout
 //
 // 0: tag  = -103
 // 1: size = 8
-// 2: offset of first child from the tag: 6 (only environment)
-// 3: offset of last child from the tag: 6
-// 4: stack size = max stack size needed for executing function body
-// 5: address = address of function
-// 6: environment
-// 7: extension count = number of entries by which to extend env
+// 2: offset of first child from the tag: 7 (only environment)
+// 3: offset of last child from the tag: 7
+// 4: mark slot
+// 5: stack size = max stack size needed for executing function body
+// 6: address = address of function
+// 7: environment
+// 8: extension count = number of entries by which to extend env
 
 const CLOSURE_TAG = -103;
-const CLOSURE_SIZE = 8;
-const CLOSURE_OS_SIZE_SLOT = 4;
-const CLOSURE_ADDRESS_SLOT = 5;
-const CLOSURE_ENV_SLOT = 6;
-const CLOSURE_ENV_EXTENSION_COUNT_SLOT = 7;
+const CLOSURE_SIZE = 9;
+const CLOSURE_OS_SIZE_SLOT = 5;
+const CLOSURE_ADDRESS_SLOT = 6;
+const CLOSURE_ENV_SLOT = 7;
+const CLOSURE_ENV_EXTENSION_COUNT_SLOT = 8;
 
-// expects stack size in A, address in B, environment extension count in C
+// expects stack size in A, P address in B, environment extension count in C
+// changes A, B, C, D, E, F, J, K
 function NEW_CLOSURE() {
-    E = A;
-    F = B;
-    A = CLOSURE_TAG;
-    B = CLOSURE_SIZE;
-    NEW();
-    A = E;
-    B = F;
-	HEAP[RES + FIRST_CHILD_SLOT] = CLOSURE_ENV_SLOT;
-	HEAP[RES + LAST_CHILD_SLOT] = CLOSURE_ENV_SLOT;
-	HEAP[RES + CLOSURE_OS_SIZE_SLOT] = A;
-	HEAP[RES + CLOSURE_ADDRESS_SLOT] = B;
-    HEAP[RES + CLOSURE_ENV_SLOT] = ENV;
-    HEAP[RES + CLOSURE_ENV_EXTENSION_COUNT_SLOT] = C;
+  D = A;
+  E = B;
+  F = C;
+  A = CLOSURE_TAG;
+  B = CLOSURE_SIZE;
+  NEW();
+  HEAP[RES + FIRST_CHILD_SLOT] = CLOSURE_ENV_SLOT;
+  HEAP[RES + LAST_CHILD_SLOT] = CLOSURE_ENV_SLOT;
+  HEAP[RES + CLOSURE_OS_SIZE_SLOT] = D;
+  HEAP[RES + CLOSURE_ADDRESS_SLOT] = E;
+  HEAP[RES + CLOSURE_ENV_SLOT] = ENV;
+  HEAP[RES + CLOSURE_ENV_EXTENSION_COUNT_SLOT] = F;
+  A = RES;
+  RESTORE_BUMP_PTRS();
 }
 
 // expects closure in A, environment in B
 function SET_CLOSURE_ENV() {
-    HEAP[A + CLOSURE_ENV_SLOT] = B;
+  HEAP[A + CLOSURE_ENV_SLOT] = B;
 }
 
 // stackframe nodes layout
 //
 // 0: tag  = -104
-// 1: size = 7
-// 2: offset of first child from the tag: 5 (environment)
-// 3: offset of last child from the tag: 6 (operand stack)
-// 4: program counter = return address
-// 5: environment
-// 6: operand stack
+// 1: size = 8
+// 2: offset of first child from the tag: 6 (environment)
+// 3: offset of last child from the tag: 7 (operand stack)
+// 4: mark slot
+// 5: program counter = return address
+// 6: environment
+// 7: operand stack
 
 const RTS_FRAME_TAG = -104;
-const RTS_FRAME_SIZE = 7;
-const RTS_FRAME_PC_SLOT = 4;
-const RTS_FRAME_ENV_SLOT = 5;
-const RTS_FRAME_OS_SLOT = 6;
+const RTS_FRAME_SIZE = 8;
+const RTS_FRAME_PC_SLOT = 5;
+const RTS_FRAME_ENV_SLOT = 6;
+const RTS_FRAME_OS_SLOT = 7;
 
 // expects current PC, ENV, OS in their registers
+// changes A, B, C, D, J, K
 function NEW_RTS_FRAME() {
-    A = RTS_FRAME_TAG;
-    B = RTS_FRAME_SIZE;
-    NEW();
-	HEAP[RES + FIRST_CHILD_SLOT] = RTS_FRAME_ENV_SLOT;
-	HEAP[RES + LAST_CHILD_SLOT] = RTS_FRAME_OS_SLOT;
-	HEAP[RES + RTS_FRAME_PC_SLOT] = PC + 2; // next instruction!
-	HEAP[RES + RTS_FRAME_ENV_SLOT] = ENV;
-    HEAP[RES + RTS_FRAME_OS_SLOT] = OS;
+  A = RTS_FRAME_TAG;
+  B = RTS_FRAME_SIZE;
+  NEW();
+  HEAP[RES + FIRST_CHILD_SLOT] = RTS_FRAME_ENV_SLOT;
+  HEAP[RES + LAST_CHILD_SLOT] = RTS_FRAME_OS_SLOT;
+  HEAP[RES + RTS_FRAME_PC_SLOT] = PC + 2; // next instruction!
+  HEAP[RES + RTS_FRAME_ENV_SLOT] = ENV;
+  HEAP[RES + RTS_FRAME_OS_SLOT] = OS;
+  A = RES;
+  RESTORE_BUMP_PTRS();
 }
 
 // expects stack frame in A
@@ -1547,36 +1860,116 @@ function POP_RTS() {
 }
 
 
+// string nodes layout
+//
+// 0: tag  = -109
+// 1: size = 6  // naive implementation
+// 2: first child = 5
+// 3: last child  = 4
+// 4: mark slot
+// 5: string value
+
+const STRING_TAG = -109;
+const STRING_SIZE = 6;
+const STRING_VALUE_SLOT = 5;
+
+//expects string value in A
+function NEW_STRING() {
+    C = A;
+    A = STRING_TAG;
+    B = STRING_SIZE;
+    NEW();
+    HEAP[RES + FIRST_CHILD_SLOT] = 5;
+    HEAP[RES + LAST_CHILD_SLOT] = 4;
+    HEAP[RES + STRING_VALUE_SLOT] = C;
+    A = RES;
+    RESTORE_BUMP_PTRS();
+}
+
+// pair nodes layout
+//
+// 0: tag  = -107
+// 1: size = 6
+// 2: first child = 5
+// 3: last child = 6
+// 4: mark slot
+// 5: head value
+// 6: tail value
+// ....
+
+const PAIR_TAG = -107;
+const PAIR_SIZE = 7;
+const HEAD_VALUE_SLOT = 5;
+const TAIL_VALUE_SLOT = 6;
+
+// expects head value in A, tail value in B
+function NEW_PAIR() {
+    C = A;
+    D = B;
+    A = PAIR_TAG;
+    B = PAIR_SIZE; // add the book keeping slots
+    NEW();
+    HEAP[RES + FIRST_CHILD_SLOT] = 5;
+    HEAP[RES + LAST_CHILD_SLOT] = 6;
+    HEAP[RES + HEAD_VALUE_SLOT] = C;
+    HEAP[RES + TAIL_VALUE_SLOT] = D;
+    A = RES;
+    RESTORE_BUMP_PTRS();
+}
+
+// null nodes layout
+//
+// 0: tag  = -108
+// 1: size = 4
+// 2: first child = 5 (no children)
+// 3: last child = 4 (must be less than first child)
+// 4: mark slot
+
+const NULL_TAG = -108;
+const NULL_SIZE = 5;
+
+function NEW_NULL() {
+    A = NULL_TAG;
+    B = NULL_SIZE;
+    NEW();
+    HEAP[RES + FIRST_CHILD_SLOT] = 5;
+    HEAP[RES + LAST_CHILD_SLOT] = 4; // no children
+    A = RES;
+    RESTORE_BUMP_PTRS();
+}
 
 // environment nodes layout
 //
 // 0: tag  = -102
-// 1: size = number of entries + 4
+// 1: size = number of entries + 6
 // 2: first child = 4
 // 3: last child
-// 4: parent environment
-// 5: first entry
-// 6: second entry
+// 4: mark slot
+// 5: parent environment
+// 6: first entry
+// 7: second entry
 // ...
 
 const ENV_TAG = -102;
-const PARENT_ENVIRONMENT_SLOT = 4;
+const PARENT_ENVIRONMENT_SLOT = 5;
 
 // expects number of env entries in A
 // changes B
 function NEW_ENVIRONMENT() {
     C = A;
     A = ENV_TAG;
-    B = C + 5;
+    B = C + 6;
     NEW();
-    HEAP[RES + FIRST_CHILD_SLOT] = 4;
-    HEAP[RES + LAST_CHILD_SLOT] = 4 + C;
+    HEAP[RES + FIRST_CHILD_SLOT] = 5;
+    HEAP[RES + LAST_CHILD_SLOT] = 5 + C; // since parent node is part of child
     HEAP[RES + PARENT_ENVIRONMENT_SLOT] = ENV;
+    A = RES;
+    RESTORE_BUMP_PTRS();
 }
 
 // debugging: show current heap
 function is_node_tag(x) {
-    return x !== undefined && x <= -100 && x >= -110;
+    return x !== undefined && x <= -100 && x >= -110 || x === -222;
 }
 function node_kind(x) {
     return x ===      NUMBER_TAG ? "number"
@@ -1589,6 +1982,7 @@ function node_kind(x) {
          : x ===   UNDEFINED_TAG ? "undefined"
          : x ===        PAIR_TAG ? "pair"
          : x ===        NULL_TAG ? "null"
+         : x ===       BLOCK_TAG ? "block"
          : " (unknown node kind)";
 }
 function show_heap(s) {
@@ -2106,7 +2500,7 @@ run();
 // print_program(P);
 // run();
 
-initialize_machine(1900);
+initialize_machine(20, 10, 10);
 P = parse_and_compile("\
 const z = 100000000000;\
 function foo(x) {\
@@ -2115,8 +2509,9 @@ function foo(x) {\
 foo(200000);\
 list(1,2,3,4);\
 ");
-print_program(P);
 run();
+display("block size", BLOCK_SIZE);
+show_heap("");
 
 /*
 P = parse_and_compile("false ? 11 : 22;");
