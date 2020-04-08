@@ -846,6 +846,16 @@ function initialize_machine(linesize, linenumber, blocknumber) {
   PC = 0;
 }
 
+// succinct helper function to ensure that all blocks are occupied
+function all_blocks_occupied() {
+  for (let i = 0; i < NUMBER_OF_BLOCKS; i = i + 1) {
+    if (HEAP[i * BLOCK_SIZE + BLOCK_STATE_SLOT] !== OCCUPIED) {
+      return false;
+    } else {}
+  }
+  return true;
+}
+
 // We introduce TEMP_ROOT register to handle instructions
 // that allocate nodes on the heap and then may flip.
 // The address of those nodes are assigned to TEMP_ROOT.
@@ -889,6 +899,12 @@ function NEW() {
   } else {}
 
   // if still no space for allocation
+  if (BUMP_HEAD + K > BUMP_TAIL || all_blocks_occupied()) {
+    STATE = OUT_OF_MEMORY_ERROR;
+    RUNNING = false;
+    error("reached oom");
+  } else {}
+
   HEAP[BUMP_HEAD + TAG_SLOT] = J;
   HEAP[BUMP_HEAD + SIZE_SLOT] = K;
   // TODO: remove assigning mark slot from NEW_* functions
@@ -1629,6 +1645,85 @@ function show_heap_value(address) {
   );
 }
 
+const thin_border = "-------------------------------------------";
+const inner_border = "+++++++++++++++++++++++++++++++++++++++++++";
+function visualize_heap(s) {
+    display("============ VISUALIZER ===================");
+    display("BLOCK LAYOUT");
+    display("NO. OF LINES: " + stringify(NUM_OF_LINES_PER_BLOCK) +
+            ", LINE SIZE: " + stringify(LINE_SIZE));
+    display(thin_border);
+    for (let i = 0; i < NUMBER_OF_BLOCKS; i = i + 1) {
+        show_block(i * BLOCK_SIZE);
+    }
+}
+
+function show_block(blkaddress) {
+    display("BLOCK ADDR: " + stringify(blkaddress));
+    display("STATE: " + blk_state(blkaddress) + ", " + mk_state(blkaddress));
+    display(inner_border);
+    // concatenate line status
+    const first_line_addr = blkaddress + BLOCK_BK_SIZE;
+    const last_line_addr = blkaddress + NUM_OF_LINES_PER_BLOCK * LINE_BK_SIZE;
+    // display(thin_border);
+    for (let i = first_line_addr; i < last_line_addr; i = i + LINE_BK_SIZE) {
+        show_line(i, address_header, get_line_header(i));
+    }
+    display(thin_border);
+}
+
+function get_line_header(i) {
+    let display_text = "|";
+    const line_limit = HEAP[i + LINE_LIMIT_SLOT];
+    const occupancy = line_limit - HEAP[i];
+    const is_free = HEAP[i] === line_limit;
+    display_text = display_text + (is_free ? "free     " : "occupied ");
+    display_text = display_text + stringify(occupancy) + "/" + stringify(LINE_SIZE);
+    display_text = display_text + "|: ";
+    return display_text;
+}
+
+function show_line(address, top, bottom) {
+    let addr_acc = "| ";
+    let value_acc = "| ";
+    const end = HEAP[address + LINE_LIMIT_SLOT];
+    for (let i = HEAP[address]; i < end; i = i + 1) {
+        let a = stringify(i);
+        let v = stringify(HEAP[i]);
+        const padding = array_length(a) - array_length(v);
+        if (padding < 0) {
+            a = pad(a, -padding);
+        } else {
+            v = pad(v, padding);
+        }
+        addr_acc = addr_acc + a + " | ";
+        value_acc = value_acc + v + " | ";
+    }
+    display(top + addr_acc);
+    display(bottom + value_acc);
+    return addr_acc + "\n" + value_acc;
+}
+
+function pad(str, v) {
+    return v <= 0 ? str : pad_f(str + " ", v - 1);
+}
+
+function pad_f(str, v) {
+    return v <= 0? str : pad(" " + str, v - 1);
+}
+
+function blk_state(blkaddress) {
+    const states = ["OCCUPIED", "RECYCLABLE", "FREE", "HEADROOM"];
+    return states[HEAP[blkaddress + BLOCK_STATE_SLOT]];
+}
+
+function mk_state(blkaddress) {
+    const states = ["UNMARKED", "MARKED"];
+    return states[HEAP[blkaddress + MARK_SLOT]];
+}
+
+const address_header = "HEAP ADDRESSES: ";
+
 // SVMLa implementation
 
 // We implement our machine with an array M that
@@ -1985,55 +2080,57 @@ function run() {
 // run();
 
 
-initialize_machine(20, 10, 2);
-P = parse_and_compile("                                     \
-function recurse(x, y, operation, initvalue) {              \
-    return y === 0                                          \
-        ? initvalue                                         \
-        : operation(x, recurse(x, y - 1,                    \
-                    operation, initvalue));                 \
-}                                                           \
-                                                            \
-function f(x, z) { return x * z; }                          \
-recurse(2, 3, f, 1);                                        \
-                                                            \
-function g(x, z) { return x + z; }                          \
-recurse(2, 3, g, 0);                                        \
-                                     ");
-//print_program(P);
-run();
+// initialize_machine(20, 10, 2);
+// P = parse_and_compile("                                     \
+// function recurse(x, y, operation, initvalue) {              \
+//     return y === 0                                          \
+//         ? initvalue                                         \
+//         : operation(x, recurse(x, y - 1,                    \
+//                     operation, initvalue));                 \
+// }                                                           \
+//                                                             \
+// function f(x, z) { return x * z; }                          \
+// recurse(2, 3, f, 1);                                        \
+//                                                             \
+// function g(x, z) { return x + z; }                          \
+// recurse(2, 3, g, 0);                                        \
+//                                                             \
+// function h(x, z) { return x / z; }                          \
+// recurse(2, 3, h, 128);                                          ");
+// //print_program(P);
+// run();
 
 
-initialize_machine(6, 20, 9);
-P = parse_and_compile("                         \
-function abs(x) {                               \
-    return x >= 0 ? x : 0 - x;                  \
-}                                               \
-function square(x) {                            \
-    return x * x;                               \
-}                                               \
-function average(x,y) {                         \
-    return (x + y) / 2;                         \
-}                                               \
-function sqrt(x) {                              \
-    function good_enough(guess, x) {            \
-        return abs(square(guess) - x) < 0.001;  \
-    }                                           \
-    function improve(guess, x) {                \
-        return average(guess, x / guess);       \
-    }                                           \
-    function sqrt_iter(guess, x) {              \
-        return good_enough(guess, x)            \
-                   ? guess                      \
-                   : sqrt_iter(improve(         \
-                                guess, x), x);  \
-    }                                           \
-    return sqrt_iter(1.0, x);                   \
-}                                               \
-                                                \
-sqrt(5);                                        ");
-//print_program(P);
-run();
+// initialize_machine(6, 20, 9);
+// P = parse_and_compile("                         \
+// function abs(x) {                               \
+//     return x >= 0 ? x : 0 - x;                  \
+// }                                               \
+// function square(x) {                            \
+//     return x * x;                               \
+// }                                               \
+// function average(x,y) {                         \
+//     return (x + y) / 2;                         \
+// }                                               \
+// function sqrt(x) {                              \
+//     function good_enough(guess, x) {            \
+//         return abs(square(guess) - x) < 0.001;  \
+//     }                                           \
+//     function improve(guess, x) {                \
+//         return average(guess, x / guess);       \
+//     }                                           \
+//     function sqrt_iter(guess, x) {              \
+//         return good_enough(guess, x)            \
+//                    ? guess                      \
+//                    : sqrt_iter(improve(         \
+//                                 guess, x), x);  \
+//     }                                           \
+//     return sqrt_iter(1.0, x);                   \
+// }                                               \
+//                                                 \
+// sqrt(5);                                        ");
+// //print_program(P);
+// run();
 
 
 // initialize_machine(10, 5, 2);
@@ -2045,17 +2142,18 @@ run();
 // // print_program(P);
 // run();
 
-// initialize_machine(12, 4, 3);
-// P = parse_and_compile(" \
-// function x(a) {         \
-//   const b = 2*a;        \
-//   function y() {        \
-//       return b + 1;     \
-//   }                     \
-//   return y;             \
-// }                       \
-// x(2)();                 ");
-// run();
+initialize_machine(4, 11, 3);
+P = parse_and_compile(" \
+function x(a) {         \
+  const b = 2*a;        \
+  function y() {        \
+      return b + 1;     \
+  }                     \
+  return y;             \
+}                       \
+x(2)();                 ");
+run();
+display(BLOCK_SIZE);
 
 // cmd to run from pwd=source-program
 // node ../js-slang/dist/repl/cli.js src/virtual-machines/source-1-with-mark-region-gc.js
