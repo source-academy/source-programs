@@ -856,7 +856,6 @@ let TEMP_ROOT = -Infinity;
 
 // NEW expects tag in A and size in B
 // changes A, B, C, J, K
-let step = 0;
 function NEW() {
   J = A;
   K = B;
@@ -931,17 +930,22 @@ function GET_NEXT_BLOCK() {
 // expects free/recyclable block address in A
 // Finds first hole and sets bump head and bump tail
 function ALLOCATE_BUMP_HEAD_AND_TAIL() {
-  // finds a hole (one or more free lines) and allocate new bump head and tail
-  SCAN = A + HEAP[A + FIRST_CHILD_SLOT];
-  while (SCAN <= A + HEAP[A + LAST_CHILD_SLOT]) {
-    // if line is free/empty
-    if (HEAP[SCAN + LINE_LIMIT_SLOT] === HEAP[SCAN + LINE_ADDRESS_SLOT]) {
-      // set bump head to start of line
-      BUMP_HEAD = HEAP[SCAN + LINE_ADDRESS_SLOT];
-      ALLOCATE_BUMP_TAIL();
-      break;
-    } else {
-      SCAN = SCAN + LINE_BK_SIZE;
+  if (HEAP[A + BLOCK_STATE_SLOT] === FREE) {
+    BUMP_HEAD = HEAP[A + HEAP[A + FIRST_CHILD_SLOT]];
+    BUMP_TAIL = A + BLOCK_SIZE;
+  } else {
+    // finds a hole (one or more free lines) and allocate new bump head and tail
+    SCAN = A + HEAP[A + FIRST_CHILD_SLOT];
+    while (SCAN <= A + HEAP[A + LAST_CHILD_SLOT]) {
+      // if line is free/empty
+      if (HEAP[SCAN + LINE_LIMIT_SLOT] === HEAP[SCAN + LINE_ADDRESS_SLOT]) {
+        // set bump head to start of line
+        BUMP_HEAD = HEAP[SCAN + LINE_ADDRESS_SLOT];
+        ALLOCATE_BUMP_TAIL();
+        break;
+      } else {
+        SCAN = SCAN + LINE_BK_SIZE;
+      }
     }
   }
 }
@@ -1020,7 +1024,6 @@ function FREE_REGION() {
         if (HEAP[SCAN + LINE_MARK_SLOT] === UNMARKED) {
           // free line that is not marked
           HEAP[SCAN + LINE_LIMIT_SLOT] = HEAP[SCAN + LINE_ADDRESS_SLOT];
-          display(SCAN, "freee line");
           // set block to recyclable
           HEAP[I * BLOCK_SIZE + BLOCK_STATE_SLOT] = RECYCLABLE;
         } else {}
@@ -1092,9 +1095,7 @@ function ALLOCATE_OVERFLOW() {
   PUSH_RTS();
   A = BUMP_TAIL;
   PUSH_RTS();
-  // RES is still address of free block
-  A = RES;
-  ALLOCATE_BUMP_HEAD_AND_TAIL();
+  ALLOCATE_TO_FREE();
   // since bump head and tail are at free block, new node is guaranteed to load properly
   A = J;
   NEW();
@@ -1998,43 +1999,41 @@ recurse(2, 3, f, 1);                                        \
                                                             \
 function g(x, z) { return x + z; }                          \
 recurse(2, 3, g, 0);                                        \
-                                                            \
-function h(x, z) { return x / z; }                          \
-recurse(2, 3, h, 128);                                      ");
+                                     ");
 //print_program(P);
 run();
 
 
-// initialize_machine(6, 20, 9);
-// P = parse_and_compile("                         \
-// function abs(x) {                               \
-//     return x >= 0 ? x : 0 - x;                  \
-// }                                               \
-// function square(x) {                            \
-//     return x * x;                               \
-// }                                               \
-// function average(x,y) {                         \
-//     return (x + y) / 2;                         \
-// }                                               \
-// function sqrt(x) {                              \
-//     function good_enough(guess, x) {            \
-//         return abs(square(guess) - x) < 0.001;  \
-//     }                                           \
-//     function improve(guess, x) {                \
-//         return average(guess, x / guess);       \
-//     }                                           \
-//     function sqrt_iter(guess, x) {              \
-//         return good_enough(guess, x)            \
-//                    ? guess                      \
-//                    : sqrt_iter(improve(         \
-//                                 guess, x), x);  \
-//     }                                           \
-//     return sqrt_iter(1.0, x);                   \
-// }                                               \
-//                                                 \
-// sqrt(5);                                        ");
-// //print_program(P);
-// run();
+initialize_machine(6, 20, 9);
+P = parse_and_compile("                         \
+function abs(x) {                               \
+    return x >= 0 ? x : 0 - x;                  \
+}                                               \
+function square(x) {                            \
+    return x * x;                               \
+}                                               \
+function average(x,y) {                         \
+    return (x + y) / 2;                         \
+}                                               \
+function sqrt(x) {                              \
+    function good_enough(guess, x) {            \
+        return abs(square(guess) - x) < 0.001;  \
+    }                                           \
+    function improve(guess, x) {                \
+        return average(guess, x / guess);       \
+    }                                           \
+    function sqrt_iter(guess, x) {              \
+        return good_enough(guess, x)            \
+                   ? guess                      \
+                   : sqrt_iter(improve(         \
+                                guess, x), x);  \
+    }                                           \
+    return sqrt_iter(1.0, x);                   \
+}                                               \
+                                                \
+sqrt(5);                                        ");
+//print_program(P);
+run();
 
 
 // initialize_machine(10, 5, 2);
