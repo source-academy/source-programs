@@ -4,7 +4,6 @@ JS_SLANG="node node_modules/js-slang/dist/repl/repl.js"
 
 SOURCEFILES=src/*/*.js
 SOURCE_TEST="src/test/framework/main.js"
-SOURCE_TEST_FILENAME="source-test.js"
 
 red=`tput setaf 1`
 green=`tput setaf 2`
@@ -33,7 +32,7 @@ $DIFF"
 # $1 is the source file to be tested
 # $2 is the Source test file which uses the source-test framework
 test_source_framework() {
-    # run concatenation of source-test framework and test file
+    # run concatenation of source-test framework, source and test files
     RESULTS=$($JS_SLANG -e --chapter=4 "$(cat $SOURCE_TEST $1 $2)")
     
     # retrieve names for tests that passed
@@ -65,17 +64,14 @@ main() {
 	    # call test_source on each test case in __tests__
 	    for i in "$DIR/__tests__/$(basename ${s} .js)".*
 	    do
-		test_source $s $i
-	    done
-
-        # check if source-test framework is being used
-        TEST_PATH="$DIR/__tests__/$SOURCE_TEST_FILENAME"
-        if [ -e $TEST_PATH ]
-        then
-            test_source_framework $s $TEST_PATH
-        fi
+            # check if first line of test file contains '// source-test'
+            use_source_test=$(awk 'FNR==1{if ($0~"//[[:space:]]*source-test") print "yes";}' $i)
+            if [[ $use_source_test == "yes" ]]
+            then test_source_framework $s $i
+            else test_source $s $i
+            fi
+        done
 	fi
-
     done
 }
 
