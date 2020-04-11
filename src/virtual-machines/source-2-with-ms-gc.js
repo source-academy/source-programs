@@ -1137,18 +1137,22 @@ function show_registers(s) {
 
 // HEAP is array containing all dynamically allocated data structures
 let HEAP = NaN;
-// next free slot in heap
-let FREE = -Infinity;
-// scan pointer in Cheney
+// allocation pointer
+let FREE_PTR = -Infinity;
+// scan pointer in Mark and Sweep
 let SCAN = -Infinity;
 // the size of the heap is fixed
 let HEAP_SIZE = -Infinity;
 // smallest heap address
 let HEAPBOTTOM = -Infinity;
+// head free node
+let HEAD_FREE_NODE = -Infinity;
+// last free node
+let LAST_FREE_NODE = -Infinity;
 
 const NORMAL = 0;
 const DIV_ERROR = 1;
-const OUT_OF_MEMORY_ERROR = 2; // not used yet: memory currently unbounded
+const OUT_OF_MEMORY_ERROR = 2;
 
 // general node layout
 const TAG_SLOT = 0;
@@ -1156,15 +1160,13 @@ const SIZE_SLOT = 1;
 const FIRST_CHILD_SLOT = 2;
 const LAST_CHILD_SLOT = 3;
 
-// ///////////////////////////////////
-// Cheney's Copying Garbage Collection
-// ///////////////////////////////////
+// /////////////////////////////////
+// Mark and Sweep Garbage Collection
+// /////////////////////////////////
 
-// initialize spaces for Cheney's algorithm
+// initialize spaces for Mark and Sweep algorithm
 
 let SPACESIZE = -Infinity;
-let TOSPACE = -Infinity;
-let FROMSPACE = -Infinity;
 let TOPOFSPACE = -Infinity;
 
 function initialize_machine(heapsize) {
@@ -1172,126 +1174,227 @@ function initialize_machine(heapsize) {
     HEAP = [];
     HEAP_SIZE = heapsize;
     HEAPBOTTOM = 0;
-    SPACESIZE = HEAP_SIZE / 2;
-    TOSPACE = HEAPBOTTOM;
-    FROMSPACE = TOSPACE + SPACESIZE;
-    TOPOFSPACE = TOSPACE + SPACESIZE - 1;
-    FREE = TOSPACE;
-    TEMP_ROOT = -1;
+    SPACESIZE = HEAP_SIZE;
+    TOPOFSPACE = SPACESIZE;
+    initialize_free_list();
+    FREE_PTR = RES;
+    HEAD_FREE_NODE = FREE_PTR;
+    LAST_FREE_NODE = FREE_PTR;
     RUNNING = true;
     STATE = NORMAL;
     PC = 0;
 }
 
-// We introduce TEMP_ROOT register to handle instructions
-// that allocate nodes on the heap and then may flip.
-// The address of those nodes are assigned to TEMP_ROOT.
-// TEMP_ROOT is treated as a root in garbage collection,
-// and thus gets updated to point to the correct copy in
-// the to-space.
-let TEMP_ROOT = -Infinity;
+function initialize_free_list() {
+    A = HEAPBOTTOM;
+    B = HEAP_SIZE;
+    NEW_FREENODE();
+    // explicit assignment of undefined values
+    HEAP[RES + PREV_FREE_NODE_SLOT] = undefined;
+    HEAP[RES + NEXT_FREE_NODE_SLOT] = undefined;
+}
+
+// indicated if the heap has been garbage collected
+let COLLECTED = true;
 
 // NEW expects tag in A and size in B
 // changes A, B, C, J, K
 function NEW() {
     J = A;
     K = B;
-    if (FREE + K > TOPOFSPACE) {
-        display(FREE, "Flip! FREE:");
-        FLIP();
+    FREE_PTR = HEAD_FREE_NODE;
+    FIND_NEXT_FREENODE();
+
+    // if no free node that could accommodate the new node
+    // trigger garbage collection
+    if (FREE_PTR === undefined) {
+        COLLECTED = false;
+        MARK();
+        SWEEP(); // updates FREE_PTR
+        FIND_NEXT_FREENODE();
+        display(FREE_PTR, "FREE_PTR");
+        COLLECTED = true;
     } else {}
-    if (FREE + K > TOPOFSPACE) {
-        STATE = OUT_OF_MEMORY_ERROR;
-        RUNNING = false;
-    } else {}
-    HEAP[FREE + TAG_SLOT] = J;
-    HEAP[FREE + SIZE_SLOT] = K;
-    RES = FREE;
-    FREE = FREE + K;
-}
-
-// use tag slot as forwarding address;
-// the trick: since tags are negative, they
-// can never be confused with heap addresses
-const FORWARDINGADDRESS = 0;
-
-// changes B, C, I
-function FLIP() {
-    A = FROMSPACE;
-    FROMSPACE = TOSPACE;
-    TOSPACE = A;
-    TOPOFSPACE = TOSPACE + SPACESIZE - 1;
-    FREE = TOSPACE;
-    SCAN = TOSPACE;
-
-    A = OS;
-    COPY();
-    OS = RES;
-
-    A = ENV;
-    COPY();
-    ENV = RES;
-
-    // TEMP_ROOT is temporary root of garbage
-    // collection, used in EXTEND and CALL
-    if (TEMP_ROOT >= 0) {
-        A = TEMP_ROOT;
-        COPY();
-        TEMP_ROOT = RES;
+    // if still no available node found, out of memory
+    if (FREE_PTR === undefined) {
+        // exit from the program
+        // STATE = OUT_OF_MEMORY_ERROR;
+        // RUNNING = false;
+        // show_heap("");
+        display(HEAD_FREE_NODE);
+        display(FREE_PTR);
+        error("out of memory");
     } else {}
 
-    for (I = 0; I <= TOP_RTS; I = I + 1) {
-        A = RTS[I];
-        COPY();
-        RTS[I] = RES;
-    }
-    while (SCAN < FREE) {
-        for (I = HEAP[SCAN + FIRST_CHILD_SLOT];
-             I <= HEAP[SCAN + LAST_CHILD_SLOT];
-             I = I + 1) {
-            A = HEAP[SCAN + I];
-            COPY();
-            HEAP[SCAN + I] = RES;
-        }
-        SCAN = SCAN + HEAP[SCAN + SIZE_SLOT];
-    }
-}
+    // by now FREE_PTR should be the free node
 
-// expects node to be copied in A
-// changes B, C
-function COPY() {
-    if (A === undefined) {
-        RES = undefined;
-    } else if (A === -Infinity) {
-        // take care of top environment parent slot
-        RES = -Infinity;
+    // if the remaining space can accommodate the smallest node
+    if (HEAP[FREE_PTR + SIZE_SLOT] > K + UNDEFINED_SIZE) {
+        HEAP[FREE_PTR + K] = HEAP[FREE_PTR];
+        HEAP[FREE_PTR + K + SIZE_SLOT] = HEAP[FREE_PTR + SIZE_SLOT] - K;
+        HEAP[FREE_PTR + K + PREV_FREE_NODE_SLOT] = HEAP[FREE_PTR + PREV_FREE_NODE_SLOT];
+        HEAP[FREE_PTR + K + NEXT_FREE_NODE_SLOT] = HEAP[FREE_PTR + NEXT_FREE_NODE_SLOT];
+        if (FREE_PTR === HEAD_FREE_NODE) {
+            HEAD_FREE_NODE = HEAD_FREE_NODE + K;
+        } else {}
+        if (FREE_PTR === LAST_FREE_NODE) {
+            LAST_FREE_NODE = LAST_FREE_NODE + K;
+        } else {}
     } else {
-        ALREADY_COPIED();
-        if (RES) {
-            RES = HEAP[A + FORWARDINGADDRESS];
+        // else discard the space, creating size < 4 fragmentation
+        // and remove the current node from the doubly linked list
+        if (FREE_PTR === HEAD_FREE_NODE) {
+            HEAD_FREE_NODE = HEAP[FREE_PTR + NEXT_FREE_NODE_SLOT];
         } else {
-            B = FREE;
-            MOVE();
-            FREE = FREE + HEAP[A + SIZE_SLOT];
-            HEAP[A + FORWARDINGADDRESS] = B;
-            RES = B;
+          HEAP[HEAP[FREE_PTR + PREV_FREE_NODE_SLOT] + NEXT_FREE_NODE_SLOT] =
+            HEAP[FREE_PTR + NEXT_FREE_NODE_SLOT];
+            if (FREE_PTR !== LAST_FREE_NODE) {
+            HEAP[HEAP[FREE_PTR + NEXT_FREE_NODE_SLOT] + PREV_FREE_NODE_SLOT] =
+                HEAP[FREE_PTR + PREV_FREE_NODE_SLOT];
+            } else {}
         }
+    }
+
+    HEAP[FREE_PTR + TAG_SLOT] = J;
+    HEAP[FREE_PTR + SIZE_SLOT] = K;
+
+    RES = FREE_PTR;
+}
+
+// expects size of new node in K
+function FIND_NEXT_FREENODE() {
+    while (FREE_PTR !== undefined 
+           && K > HEAP[FREE_PTR + SIZE_SLOT]
+           && FREE_PTR < TOPOFSPACE) {
+        if (FREE_PTR === undefined) {
+            break;
+        } else {}
+        FREE_PTR = HEAP[FREE_PTR + NEXT_FREE_NODE_SLOT];
+    }
+}
+
+// use tag slot as the mark slot as tag slot is not used in mark and sweep
+// since node tag has a range of -110 to -100, we could simply mark the node
+// by getting the tag out of this range
+// here we do +99, meaning tag_slot value: -1xx => -xx - 1
+// unmarking must be done (as intended) for the node to be usable in execution
+const MARK_SLOT = 0;
+
+// Changes A, B, C, I, SCAN
+function MARK() {
+    // show_heap("?");
+    display("MARK!");
+    
+    // keep old TOP_RTS to prevent deleting stacks
+    B = TOP_RTS;
+    // init roots for dfs
+    for (I = 0; I <= B; I = I + 1) {
+      A = RTS[I]; // add all rts stacks
+      PUSH_RTS();
+    }
+    A = OS;
+    PUSH_RTS(); // add current os
+    A = ENV;
+    PUSH_RTS(); // add current env
+ 
+    while (B < TOP_RTS) {
+      POP_RTS();
+      SCAN = RES;
+      // mark node
+      HEAP[SCAN + MARK_SLOT] = HEAP[SCAN + MARK_SLOT] + 99;
+
+      // mark children if any
+      for (
+        I = HEAP[SCAN + FIRST_CHILD_SLOT];
+        I <= HEAP[SCAN + LAST_CHILD_SLOT];
+        I = I + 1
+      ) {
+        // child is invalid or not yet loaded or parent env of top env (-Infinity)
+        if (HEAP[SCAN + I] === undefined 
+            || HEAP[SCAN + I] === -Infinity) { continue; } else {}
+  
+        A = HEAP[SCAN + I]; // address of child
+        IS_MARKED();
+        if (!RES) {
+          PUSH_RTS();
+        } else {}
+      }
     }
 }
 
 // expects node in A
-function ALREADY_COPIED() {
-    RES = HEAP[A + FORWARDINGADDRESS] >= TOSPACE
-      &&
-      HEAP[A + FORWARDINGADDRESS] <= FREE;
+function IS_MARKED() {
+    RES = HEAP[A + MARK_SLOT] > -100 && HEAP[A + MARK_SLOT] <= 0;
 }
 
-// expects source in A and destination in B
-// changes C
-function MOVE() {
-    for (C = 0; C < HEAP[A + SIZE_SLOT]; C = C + 1) {
-        HEAP[B + C] = HEAP[A + C];
+function SWEEP() {
+    SCAN = HEAPBOTTOM;
+    
+    while (SCAN < TOPOFSPACE) {
+        if (HEAP[SCAN] === undefined) {
+            SCAN = SCAN + 1;
+            continue;
+        } else {}
+        
+        A = SCAN;
+        IS_MARKED();
+        if (!RES) {
+            FREE();
+            B = RES;
+            NEW_FREENODE();
+            // if the free list is exhausted
+            if (HEAD_FREE_NODE === undefined) {
+                HEAD_FREE_NODE = RES;
+                LAST_FREE_NODE = RES;
+            } else {
+                // else, append the free list
+                HEAP[RES + PREV_FREE_NODE_SLOT] = LAST_FREE_NODE;
+                HEAP[RES + NEXT_FREE_NODE_SLOT] = undefined;
+                HEAP[LAST_FREE_NODE + NEXT_FREE_NODE_SLOT] = RES;
+            }
+            LAST_FREE_NODE = RES;
+
+        } else {
+            // unmark
+            HEAP[A + MARK_SLOT] = HEAP[A + MARK_SLOT] - 99;
+            B = HEAP[A + SIZE_SLOT];
+        }
+        SCAN = SCAN + B;
     }
+    FREE_PTR = HEAD_FREE_NODE;
+}
+
+// expects node to free in A
+// returns size of node collected
+// changes B, I
+function FREE() {
+    B = HEAP[A + SIZE_SLOT];
+    if (B === 2) {
+        error("??");
+    } else {}
+    for (I = A; I < A + B; I = I + 1) {
+        HEAP[I] = undefined;
+    }
+    RES = B;
+}
+
+// free node layout (pseudo-node existing in free heap space)
+// it has a doubly linked list node structure
+//
+// 0: tag  = -110
+// 1: size = depends on the actual size of free space (at least 4)
+// 2: last free node (undefined for head node)
+// 3: next free node (undefined for tail node)
+
+const FREE_TAG = -110;
+const PREV_FREE_NODE_SLOT = 2;
+const NEXT_FREE_NODE_SLOT = 3;
+
+// expects start address in A, size in B
+function NEW_FREENODE() {
+    HEAP[A + TAG_SLOT] = FREE_TAG;
+    HEAP[A + SIZE_SLOT] = B;
+    RES = A;
 }
 
 // number nodes layout
@@ -1401,7 +1504,7 @@ function POP_OS() {
 //
 // 0: tag  = -109
 // 1: size = 5  // naive implementation
-// 2: first child = 4
+// 2: first child = 5
 // 3: last child  = 4
 // 4: string value
 
@@ -1415,7 +1518,7 @@ function NEW_STRING() {
     A = STRING_TAG;
     B = STRING_SIZE;
     NEW();
-    HEAP[RES + FIRST_CHILD_SLOT] = 4;
+    HEAP[RES + FIRST_CHILD_SLOT] = 5;
     HEAP[RES + LAST_CHILD_SLOT] = 4;
     HEAP[RES + STRING_VALUE_SLOT] = C;
 }
@@ -1576,7 +1679,7 @@ function NEW_ENVIRONMENT() {
 
 // debugging: show current heap
 function is_node_tag(x) {
-    return x !== undefined && x <= -100 && x >= -110;
+    return x !== undefined && x <= -99 && x >= -110;
 }
 function node_kind(x) {
     return x ===      NUMBER_TAG ? "number"
@@ -1589,6 +1692,7 @@ function node_kind(x) {
          : x ===   UNDEFINED_TAG ? "undefined"
          : x ===        PAIR_TAG ? "pair"
          : x ===        NULL_TAG ? "null"
+         : x ===        FREE_TAG ? "free"
          : " (unknown node kind)";
 }
 function show_heap(s) {
@@ -2106,13 +2210,23 @@ run();
 // print_program(P);
 // run();
 
-initialize_machine(1900);
+initialize_machine(1200);
 P = parse_and_compile("\
 const z = 100000000000;\
 function foo(x) {\
     return x + z;\
 }\
 foo(200000);\
+list(1,2,3,4);\
+list(1,2,3,4);\
+list(1,2,3,4);\
+list(1,2,3,4);\
+list(1,2,3,4);\
+list(1,2,3,4);\
+list(1,2,3,4);\
+list(1,2,3,4);\
+list(1,2,3,4);\
+list(1,2,3,4);\
 list(1,2,3,4);\
 ");
 print_program(P);
