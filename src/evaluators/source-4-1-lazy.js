@@ -1,9 +1,12 @@
 /*
-Evaluator for language with booleans, conditionals,
+Lazy evaluator for language with booleans, conditionals,
 sequences, functions, constants, variables and blocks
 This is an evaluator for a language that lets you declare
-functions, variables and constants, apply functions, and
-carry out simple arithmetic calculations, boolean operations.
+functions, variables and constants, apply functions, pairs, 
+and carry out simple arithmetic calculations, boolean 
+operations with lazy evaluation.Constant declaration, 
+variable declaration and function arguments evaluation 
+are delayed. 
 The covered Source §1 sublanguage is:
 stmt    ::= const name = expr ; 
          |  let name = expr ; 
@@ -283,8 +286,6 @@ function primitive_implementation(fun) {
 }
 
 function actual_value(exp, env) {
-    //display("Callig actual_value");
-    //display(evaluate(exp, env));
     return force_it(evaluate(exp, env));
 }
 
@@ -313,8 +314,6 @@ function thunk_value(obj) {
 }
 
 function force_it(obj) {
-    //display("Calling force it");
-    //display(obj);
     if(is_thunk(obj)) {
         
         const result = actual_value(thunk_exp(obj), thunk_env(obj));
@@ -361,33 +360,37 @@ function list_of_delayed_args(exps, env) {
           list_of_delayed_args(rest_operands(exps), env));
 }
 
+//"Note that these lazy lists are even lazier than the 
+// streams of chapter 3: The head of the list, as well 
+// as the tail, is delayed.[2] In fact, even accessing 
+// the head or tail of a lazy pair need not force the 
+// value of a list element. The value will be forced 
+// only when it is really needed—e.g., for use as the 
+// argument of a primitive, or to be printed as an answer."
+// https://sicp.comp.nus.edu.sg/chapters/84#p4
+
 function is_pair_statement (fun){
     return head(tail(operator(fun))) === "pair";
 }
 
-function is_head_statement(stmt)
-{
+function is_head_statement(stmt){
     return head(tail(operator(stmt))) === "head";
 }
 
-function is_tail_statement(stmt)
-{
+function is_tail_statement(stmt){
     return head(tail(operator(stmt))) === "tail";
 }
 
-function eval_head_statement(stmt, env)
-{
+function eval_head_statement(stmt, env){
     return force_it(head(evaluate(head(head(tail(tail(stmt)))), env)));
 }
 
-function eval_tail_statement(stmt, env)
-{
+function eval_tail_statement(stmt, env){
     return force_it(tail(evaluate(head(head(tail(tail(stmt)))), env)));
 }
 
 function eval_pair_statement (args,env){
-
-    const head = delay_it (first_operand(args),env);
+    const head = delay_it (first_operand(args), env);
     const tail = delay_it (first_operand(rest_operands(args)),env);
     return pair (head,tail); 
 }
@@ -497,23 +500,6 @@ function eval_return_statement(stmt, env) {
     return make_return_value(
                evaluate(return_statement_expression(stmt),
                         env));
-}
-
-/* ASSIGNMENT */
-
-function is_assignment(stmt) {
-   return is_tagged_list(stmt, "assignment");
-}
-function assignment_name(stmt) {
-   return head(tail(head(tail(stmt))));
-}
-function assignment_value(stmt) {
-   return head(tail(tail(stmt)));
-}
-function eval_assignment(stmt, env) {
-    const value = delay_it(assignment_value(stmt), env);
-    assign_name_value(assignment_name(stmt), value, env);
-    return value;
 }
 
 /* BLOCKS */
@@ -706,8 +692,6 @@ function evaluate(stmt, env) {
           ? eval_constant_declaration(stmt, env)
         : is_variable_declaration(stmt)
           ? eval_variable_declaration(stmt, env)
-        : is_assignment(stmt)
-          ? eval_assignment(stmt, env)
         : is_conditional_expression(stmt)
           ? eval_conditional_expression(stmt, env)
         : is_function_definition(stmt)
@@ -857,14 +841,7 @@ function read_eval_print_loop(history) {
     }
 }
 
-
-//parse_and_eval("const a = pair(1, pair(2,pair(3, 4))); tail(tail(tail(a)));");
-
-/*
-//infinite list
-parse_and_eval("const a = pair(1, pair(1, 2));\
-                head(a);");
-
+// test cases: 
 
 parse_and_eval("function try_me(a, b) {\
                 return a === 0 ? 1 : b; \
@@ -897,7 +874,6 @@ parse_and_eval("function factorial(x) {\
 
 //result: undefined
 
-*/
 
 //infinite list
 parse_and_eval("function infinite_list(n)\
@@ -910,10 +886,7 @@ parse_and_eval("function infinite_list(n)\
 
 //result: 4
 
-
-/*
-read_eval_print_loop("");
-*/
+parse_and_eval("const a = pair(1, pair(2,pair(3, 4))); tail(tail(tail(a)));");
 
 
 
