@@ -1,5 +1,6 @@
 /*
   SICP JS Exercise 4.35
+
   This file contains two solutions for the n-queens puzzle using non-determinism.
   Each of them makes use of the generate-and-test paradigm.
   The first (queens_slow) uses non-determinism for generating both the row and column
@@ -7,6 +8,7 @@
   as soon as the choice is generated, thereby reducing the search space. However, this is not
   enough to yield a quick solution when N = 8.
   This solution also gives repeated solutions (i.e different permutations that have all the same positions) upon backtracking.
+
   The second (queens_fast) uses non-determinism in picking only the row and not the column of each position, with the
   columns being fixed. This further reduces the search space, yielding a quick solution when N = 8.
 */
