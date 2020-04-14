@@ -842,13 +842,16 @@ function read_eval_print_loop(history) {
 }
 
 // test cases: 
+/*
 
+// testing conditional expression
 parse_and_eval("function try_me(a, b) {\
                 return a === 0 ? 1 : b; \
                 }\
                 try_me(0, head(null));");
 
 //result: 1
+
 
 parse_and_eval("function try_me(a, b) {\
                 return a;}\
@@ -857,6 +860,7 @@ parse_and_eval("function try_me(a, b) {\
 //result: 0
 
 
+// testing lazy declaration
 parse_and_eval("const a = 1 + a;");
 
 //result: undefined
@@ -875,6 +879,7 @@ parse_and_eval("function factorial(x) {\
 //result: undefined
 
 
+// testing lazy list
 //infinite list
 parse_and_eval("function infinite_list(n)\
                 {\
@@ -885,8 +890,6 @@ parse_and_eval("function infinite_list(n)\
               );
 
 //result: 4
-
-parse_and_eval("const a = pair(1, pair(2,pair(3, 4))); tail(tail(tail(a)));");
 
 
 
