@@ -1,51 +1,15 @@
 /*
   SICP JS Exercise 4.35
-
   This file contains two solutions for the n-queens puzzle using non-determinism.
   Each of them makes use of the generate-and-test paradigm.
-
   The first (queens_slow) uses non-determinism for generating both the row and column
   for each position. It does so in an optimized manner, testing the corresponding condition
   as soon as the choice is generated, thereby reducing the search space. However, this is not
   enough to yield a quick solution when N = 8.
   This solution also gives repeated solutions (i.e different permutations that have all the same positions) upon backtracking.
-
   The second (queens_fast) uses non-determinism in picking only the row and not the column of each position, with the
   columns being fixed. This further reduces the search space, yielding a quick solution when N = 8.
 */
-
-/* Pretty prints a solution to the n-queens puzzle */
-function pretty_print(result, board_size) {
-  function member_eq(v, xs) {
-    return is_null(xs)
-      ? null
-      : equal(v, head(xs))
-      ? xs
-      : member_eq(v, tail(xs));
-  }
-  const possible_positions = enum_list(1, board_size);
-
-  let col_index_str = "  ";
-  for_each(i => {
-    col_index_str = col_index_str + stringify(i) + " ";
-  }, possible_positions);
-  display(col_index_str);
-
-  for_each(row => {
-    let row_str = stringify(row) + " ";
-    for_each(col => {
-      const position = pair(row, col);
-      const contains_position = member_eq(position, result) !== null;
-      if (contains_position) {
-        row_str = row_str + "Q ";
-      } else {
-        row_str = row_str + ". ";
-      }
-    }, possible_positions);
-
-    display(row_str);
-  }, possible_positions);
-}
 
 const N = 8; // the number of queens and the size of the board
 const empty_positions = null;
@@ -160,4 +124,38 @@ function is_safe(new_position, positions) {
     true,
     positions
   );
+}
+
+
+/* Pretty prints a solution to the n-queens puzzle */
+function pretty_print(result, board_size) {
+  function member_eq(v, xs) {
+    return is_null(xs)
+      ? null
+      : equal(v, head(xs))
+      ? xs
+      : member_eq(v, tail(xs));
+  }
+  const possible_positions = enum_list(1, board_size);
+
+  let col_index_str = "  ";
+  for_each(i => {
+    col_index_str = col_index_str + stringify(i) + " ";
+  }, possible_positions);
+  display(col_index_str);
+
+  for_each(row => {
+    let row_str = stringify(row) + " ";
+    for_each(col => {
+      const position = pair(row, col);
+      const contains_position = member_eq(position, result) !== null;
+      if (contains_position) {
+        row_str = row_str + "Q ";
+      } else {
+        row_str = row_str + ". ";
+      }
+    }, possible_positions);
+
+    display(row_str);
+  }, possible_positions);
 }
