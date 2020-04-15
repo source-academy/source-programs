@@ -3,6 +3,7 @@
 
   This file contains two solutions for the n-queens puzzle using non-determinism.
   Each of them makes use of the generate-and-test paradigm.
+  
   The first (queens_slow) uses non-determinism for generating both the row and column
   for each position. It does so in an optimized manner, testing the corresponding condition
   as soon as the choice is generated, thereby reducing the search space. However, this is not
