@@ -1625,15 +1625,6 @@ function show_node(address) {
   }
   display("======================");
 }
-function visualize_heap(s) {
-  const len = array_length(HEAP);
-  let acc = "";
-  for (let i = 0; i < len; i = i + BLOCK_SIZE) {
-    for (let j = 0; j < HEAP[I + 2]; j = j + 1) {
-     
-    }
-  }
-}
 
 function show_heap_value(address) {
   display(
@@ -1664,22 +1655,27 @@ function show_block(blkaddress) {
     display(inner_border);
     // concatenate line status
     const first_line_addr = blkaddress + BLOCK_BK_SIZE;
-    const last_line_addr = blkaddress + NUM_OF_LINES_PER_BLOCK * LINE_BK_SIZE;
+    const last_line_addr = blkaddress + BLOCK_BK_SIZE + NUM_OF_LINES_PER_BLOCK * LINE_BK_SIZE;
     // display(thin_border);
     for (let i = first_line_addr; i < last_line_addr; i = i + LINE_BK_SIZE) {
-        show_line(i, address_header, get_line_header(i));
+        let top = line_header + stringify(i) + " ";
+        let bottom = get_line_header(i);
+        const padding = array_length(top) - array_length(bottom);
+        if (padding < 0) {
+            top = pad(top, -padding);
+        } else {
+            bottom = pad(bottom, padding);
+        }
+        show_line(i, top, bottom);
     }
     display(thin_border);
 }
 
 function get_line_header(i) {
-    let display_text = "|";
     const line_limit = HEAP[i + LINE_LIMIT_SLOT];
     const occupancy = line_limit - HEAP[i];
-    const is_free = HEAP[i] === line_limit;
-    display_text = display_text + (is_free ? "free     " : "occupied ");
+    let display_text = "M:[" + (HEAP[i + LINE_MARK_SLOT] === MARKED ? "✓" : "✗") + "] | ";
     display_text = display_text + stringify(occupancy) + "/" + stringify(LINE_SIZE);
-    display_text = display_text + "|: ";
     return display_text;
 }
 
@@ -1722,7 +1718,7 @@ function mk_state(blkaddress) {
     return states[HEAP[blkaddress + MARK_SLOT]];
 }
 
-const address_header = "HEAP ADDRESSES: ";
+const line_header = "LINE NO: ";
 
 // SVMLa implementation
 
@@ -2153,7 +2149,7 @@ function x(a) {         \
 }                       \
 x(2)();                 ");
 run();
-display(BLOCK_SIZE);
+visualize_heap("");
 
 // cmd to run from pwd=source-program
 // node ../js-slang/dist/repl/cli.js src/virtual-machines/source-1-with-mark-region-gc.js
