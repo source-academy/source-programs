@@ -78,7 +78,7 @@ main() {
             # check if first line of test file contains 'source-test'
             use_source_test=$(awk 'FNR==1{ if ($0~"source-test") print "yes" }' $i)
             if [[ $use_source_test == "yes" ]]
-            then test_source_framework $s $i $chap $variant
+            then chap=4 ; test_source_framework $s $i $chap $variant
             else test_source $s $i $chap $variant
             fi
         done
