@@ -5,7 +5,7 @@ JS_SLANG="node node_modules/js-slang/dist/repl/repl.js"
 SOURCEFILES=src/*/*.js
 SOURCE_TEST="src/test/framework/main.js"
 
-DEFAULT_CHAP=4
+DEFAULT_CHAPTER=4
 DEFAULT_VARIANT="default"
 
 red=`tput setaf 1`
@@ -69,8 +69,8 @@ main() {
 	    # call test_source on each test case in __tests__
 	    for i in "$DIR/__tests__/$(basename ${s} .js)".*
 	    do
-            # check if first line of test file contains 'chap=' and retrieve its value. Set to the default chapter if it does not
-            chap=$(awk -F 'chap=' 'FNR==1{ if ($0~"chap=") { print $2 } else { print '$DEFAULT_CHAP' } }' $i | awk -F ' ' '{ print $1 }')
+            # check if first line of test file contains 'chapter=' and retrieve its value. Set to the default chapter if it does not
+            chapter=$(awk -F 'chapter=' 'FNR==1{ if ($0~"chapter=") { print $2 } else { print '$DEFAULT_CHAPTER' } }' $i | awk -F ' ' '{ print $1 }')
         
             # check if first line of test file contains 'variant=' and retrieve its value. Set to the default variant if it does not
             variant=$(awk -F 'variant=' 'FNR==1{ if ($0~"variant=") { print $2 } else { print '$DEFAULT_VARIANT' } }' $i | awk -F ' ' '{ print $1 }')
@@ -78,8 +78,8 @@ main() {
             # check if first line of test file contains 'source-test'
             use_source_test=$(awk 'FNR==1{ if ($0~"source-test") print "yes" }' $i)
             if [[ $use_source_test == "yes" ]]
-            then chap=4 ; test_source_framework $s $i $chap $variant
-            else test_source $s $i $chap $variant
+            then chapter=4 ; test_source_framework $s $i $chapter $variant
+            else test_source $s $i $chapter $variant
             fi
         done
 	fi
