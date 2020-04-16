@@ -158,7 +158,6 @@ function one_step(expr) {
 }
 
 function evaluate(expr) {
-    display(to_string(expr));
     return one_step_possible(expr)
         ? evaluate(one_step(expr))
         : expr;
@@ -168,7 +167,3 @@ function parse_and_evaluate(string) {
     return evaluate(parse(string));
 }
 
-// parse_and_evaluate("! (1 === 1 && 2 > 3);");
-// parse_and_evaluate("1 + 2 / 0;");
-// parse_and_evaluate("1 + 2 / 1;");
-parse_and_evaluate("3 / 4;");

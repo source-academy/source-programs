@@ -1,0 +1,26 @@
+{
+  "name": "source-programs",
+  "version": "0.4.21",
+  "description": "Javascript-based implementations of Source, written in Typescript",
+  "author": {
+    "name": "Source Academy",
+    "url": "https://github.com/source-academy/"
+  },
+  "scripts": {
+      "build": "tsc",
+      "test": "./scripts/test.sh"
+  },
+  "dependencies": {
+      "js-slang": "^0.4.20",
+      "lodash": "^4.17.13"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/source-academy/source-programs.git"
+  },
+  "bugs": {
+    "url": "https://github.com/source-academy/source-programs/issues"
+  },
+  "homepage": "https://github.com/source-academy/source-programs"
+}
+
