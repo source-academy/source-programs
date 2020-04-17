@@ -11,7 +11,7 @@
       "test": "./scripts/test.sh"
   },
   "dependencies": {
-      "js-slang": "^0.4.31",
+      "js-slang": "^0.4.33",
       "lodash": "^4.17.13"
   },
   "repository": {

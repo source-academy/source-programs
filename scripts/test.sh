@@ -22,15 +22,14 @@ failed=0
 
 test_source() {
 
-<<<<<<< HEAD
     # if program throws error, ignore the output and compare the error message only
     # NOTE: error output line is striped of line number as it is machine dependent
-    ERROR=$( { $JS_SLANG -e --chapter=$s --variant=$4 "$(cat $1 $2)">$DIR/__tests__/output; } 2>&1 )
+    ERROR=$( { $JS_SLANG -e --chapter=$3 "$(cat $1 $2)">$DIR/__tests__/output; } 2>&1 )
     if [ ! -z "$ERROR" ]
     then
         DIFF=$(diff <(echo $ERROR | cut -c11-) <(cat $2 | tail -1 | cut -c14-))
     else 
-        DIFF=$(diff <($JS_SLANG -e --chapter=4 "$(cat $1 $2)") \
+        DIFF=$(diff <(cat $DIR/__tests__/output) \
             <(cat $2 | tail -1 | cut -c4-))
     fi
     
@@ -76,8 +75,8 @@ main() {
 	then
 	    # call test_source on each test case in __tests__
 	    for i in "$DIR/__tests__/$(basename ${s} .js)".*
-        if [ -f "$i" ]; then
 	    do
+        if [ -f "$i" ]; then
             # check if first line of test file contains 'chapter=' and retrieve its value. Set to the default chapter if it does not
             chapter=$(awk -F 'chapter=' 'FNR==1{ if ($0~"chapter=") { print $2 } else { print '$DEFAULT_CHAPTER' } }' $i | awk -F ' ' '{ print $1 }')
         
@@ -90,8 +89,8 @@ main() {
             then chapter=4 ; test_source_framework $s $i $chapter $variant
             else test_source $s $i $chapter $variant
             fi
-        done
         fi
+        done
 	fi
     done
 }

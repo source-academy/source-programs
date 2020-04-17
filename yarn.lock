@@ -78,7 +78,7 @@ jest-html-reporter@^2.8.2:
     strip-ansi "3.0.1"
     xmlbuilder "13.0.2"
 
-js-slang@^0.4.31:
+js-slang@^0.4.35:
   version "0.4.33"
   resolved "https://registry.yarnpkg.com/js-slang/-/js-slang-0.4.33.tgz#c73bf577cd190431bea43378962307de2c33b02a"
   integrity sha512-r4A5R0MAc7kdF1ODRIhVwcBs6mafPIsg4yDXHzVxX/EfUQwRcbihuf2ASfdTjNQRxBuL5ZVG2uNPp3euPj4YbQ==
