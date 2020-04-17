@@ -22,6 +22,7 @@ failed=0
 
 test_source() {
 
+<<<<<<< HEAD
     # if program throws error, ignore the output and compare the error message only
     # NOTE: error output line is striped of line number as it is machine dependent
     ERROR=$( { $JS_SLANG -e --chapter=$s --variant=$4 "$(cat $1 $2)">$DIR/__tests__/output; } 2>&1 )
