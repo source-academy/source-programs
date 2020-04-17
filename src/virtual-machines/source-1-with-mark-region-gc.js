@@ -849,7 +849,8 @@ function initialize_machine(linesize, linenumber, blocknumber) {
 // succinct helper function to ensure that all blocks are occupied
 function all_blocks_occupied() {
   for (let i = 0; i < NUMBER_OF_BLOCKS; i = i + 1) {
-    if (HEAP[i * BLOCK_SIZE + BLOCK_STATE_SLOT] !== OCCUPIED) {
+    const state = HEAP[i * BLOCK_SIZE + BLOCK_STATE_SLOT];
+    if (state === FREE || state === RECYCLABLE) {
       return false;
     } else {}
   }
@@ -867,12 +868,15 @@ let TEMP_ROOT = -Infinity;
 // NEW expects tag in A and size in B
 // changes A, B, C, J, K
 function NEW() {
+    const trace_root = list("Allocating new node " + node_kind(A) + " of size " + stringify(B));
   J = A;
   K = B;
+//   visualize_heap('============================================================================================START' + stringify(A) + stringify(B));
   if (BUMP_HEAD + K > BUMP_TAIL) {
+    assert_false(OVERFLOW, "bump and head pointers should be at free block", list("OVERFLOW ALLOCATION: NEW()"));
     // if the hole is too small for the new node
-    // visualize_heap("hello");
     GET_FREE_BLOCK();
+    assert_valid_node(OS, pair("first check", trace_root));
     if (K > LINE_SIZE && RES !== NO_BLOCK_FOUND) {
       // use overflow allocator
       return ALLOCATE_OVERFLOW();
@@ -884,18 +888,25 @@ function NEW() {
     GET_BLOCK();
     HEAP[RES + BLOCK_STATE_SLOT] = OCCUPIED;
     ALLOCATE_TO_RECYCLABLE();
+
+    ref_mark(trace_root);
   } else {}
 
   if (BUMP_HEAD + K > BUMP_TAIL) {
+    assert_false(OVERFLOW, "bump and head pointers should be at free block", list("OVERFLOW ALLOCATION: NEW()"));
     GET_FREE_BLOCK();
     if (RES === NO_BLOCK_FOUND) {
       // mark and granular sweep
       display("Collecttttttt");
       MARK();
+      assert_valid_node(OS, pair("after mark", trace_root));
       FREE_REGION();
+      unmark_all();
+      assert_valid_node(OS, pair("after free", trace_root));
     } else {
       ALLOCATE_TO_FREE();
     }
+    ref_mark(trace_root);
   } else {}
 
   // if still no space for allocation
@@ -907,19 +918,20 @@ function NEW() {
 
   HEAP[BUMP_HEAD + TAG_SLOT] = J;
   HEAP[BUMP_HEAD + SIZE_SLOT] = K;
-  // TODO: remove assigning mark slot from NEW_* functions
   HEAP[BUMP_HEAD + MARK_SLOT] = UNMARKED;
 
   // update line limits
   A = BUMP_HEAD;
+  const line = ref_get_line(A, list("line 924"));
   GET_LINE();
+  assert_same(line, RES, trace_root);
   A = RES;
   GET_BLOCK();
 
   // loop through all lines and set line limits
   while (A <= RES + HEAP[RES + LAST_CHILD_SLOT] &&
-         HEAP[A + LINE_ADDRESS_SLOT] + LINE_SIZE <=
-         BUMP_HEAD + HEAP[BUMP_HEAD + SIZE_SLOT]) {
+         HEAP[A + LINE_ADDRESS_SLOT] + LINE_SIZE <
+         BUMP_HEAD + K) {
     // lines are filled
     HEAP[A + LINE_LIMIT_SLOT] = HEAP[A + LINE_ADDRESS_SLOT] + LINE_SIZE;
     A = A + LINE_BK_SIZE;
@@ -966,9 +978,187 @@ function ALLOCATE_BUMP_HEAD_AND_TAIL() {
   }
 }
 
+// requirement to clear object markings 
+let MARK_STACK = [];
+let TOP_MARK = -1;
+
+function push_stack(i) {
+    TOP_MARK = TOP_MARK + 1;
+    MARK_STACK[TOP_MARK] = i;
+}
+
+function pop_stack() {
+    TOP_MARK = TOP_MARK - 1;
+    return MARK_STACK[TOP_MARK + 1];
+}
+
+function unmark_all() {
+    while (TOP_MARK >= 0) {
+        const ptr = pop_stack();
+        HEAP[ptr + MARK_SLOT] = UNMARKED;
+    }
+}
+
+/**
+ * Assertions and reference implementations 
+ * FOR DEBUGGING
+ */
+
+let LIVE_NODES = list();
+
+function assert_true(bool, msg, stack) {
+    if (bool) {
+        // yay 
+    } else {
+        visualize_heap("");
+        show_registers("");
+        display(stack);
+        error(msg);
+    }
+}
+
+function assert_false(bool, msg, stack) {
+    return assert_true(!bool, msg, stack);
+}
+
+function assert_same(v1, v2, stack) {
+    return assert_true(v1 === v2, 
+                       "v1: " + stringify(v1) + " and v2: " + stringify(v2) + " are not the same", 
+                       stack);
+}
+
+function assert_same_as_ref(v1, ref_wrapper, stack) {
+    const new_stack = pair("assert_same_as_ref", stack);
+    return assert_same(v1, ref_wrapper(stack), new_stack);
+}
+
+/**
+ * Reference implemntation for the mark algorithm, returns a list of all live nodes
+ * @param {list} stack list of current executions
+ */
+function ref_mark(stack) {
+    const new_stack = pair("MARKING_REFERENCE", stack);
+    let marked = list();
+    function dfs(node_address, stack) {
+        const dfs_stack = pair("currently on: " + stringify(node_address), stack);
+        assert_valid_address(node_address, dfs_stack);
+        marked = pair(node_address, marked);
+        const first_child_index = HEAP[node_address + FIRST_CHILD_SLOT];
+        const last_child_index = HEAP[node_address + LAST_CHILD_SLOT];
+        for (let i = first_child_index; i < last_child_index; i = i + 1) {
+            const child_address = HEAP[node_address + i];
+            if (child_address !== undefined && length(member(child_address, marked)) === 0) {
+                dfs(child_address, dfs_stack);
+            } else {}
+        }
+    }
+    const rts_list = build_list(TOP_RTS, i => RTS[i]);
+    const roots = pair(OS, pair(ENV, rts_list));
+    map(a => a < 0 ? "not initialized" : dfs(a, new_stack), roots);
+    return marked;
+}
+
+function assert_valid_address(address, stack) {
+    const new_stack = pair("assert address in addressable space: " + stringify(address), stack);
+    assert_false(address === undefined, "node is undefined", new_stack);
+    const block_address = math_floor(address / BLOCK_SIZE) * BLOCK_SIZE;
+    const start = block_address + BLOCK_BK_SIZE + NUM_OF_LINES_PER_BLOCK * LINE_BK_SIZE;
+    const end = block_address + BLOCK_SIZE;
+    assert_true(start <= address && address < end,
+                "not in addressable space",
+                new_stack);
+}
+
+function assert_valid_node(node_address, stack) {
+    const new_stack = pair("assert node " + stringify(node_address) + " must not have undefined or unaddressable children",
+                            stack);
+    assert_false(node_address === undefined, "node is undefined", new_stack);
+    if (is_leaf_node(node_address)) {
+        const leaf_stack = pair("node identified as leaf", new_stack);
+        const size = HEAP[node_address + SIZE_SLOT];
+        for (let i = 0; i < size; i = i + 1) {
+            assert_false(HEAP[node_address + i] === undefined, "address " + stringify(node_address + i) + " is undefined", leaf_stack);
+        }
+    } else {
+        const branch_stack = pair("node not leaf", new_stack);
+        const firstchild = HEAP[node_address + FIRST_CHILD_SLOT];
+        const lastchild = HEAP[node_address + LAST_CHILD_SLOT];
+        for (let i = firstchild; i < lastchild; i = i + 1) {
+            assert_valid_address(HEAP[node_address + i], branch_stack);
+        }
+    }
+}
+
+function is_leaf_node(node) {
+    return node === BOOL_TAG || node === UNDEFINED_TAG || node === NUMBER_TAG;
+}
+
+function ref_get_block(address, stack) {
+    const new_stack = pair("getting block address of: ", stringify(address), stack);
+    assert_true(0 <= address && address < HEAP_SIZE, "address supplied not in heapspace", new_stack);
+    return math_floor(address / BLOCK_SIZE) * BLOCK_SIZE;
+}
+
+function ref_get_line(address, stack) {
+  const new_stack = pair("getting line address of: ", stringify(address),
+                         stack);
+  assert_valid_address(address, new_stack);
+  const block_address = ref_get_block(address, new_stack);
+  const start = block_address + BLOCK_BK_SIZE + NUM_OF_LINES_PER_BLOCK * LINE_BK_SIZE;
+  const line_no = (address - start) / LINE_SIZE;
+  const line_address = math_floor(line_no) * LINE_BK_SIZE + block_address + BLOCK_BK_SIZE;
+//   display("line address result", line_address);
+  return line_address;
+}
+
+function copy_rts(top) {
+    let copy = [];
+    for (let i = 0; i < top; i = i + 1) {
+        copy[i] = RTS[i];
+    }
+    return copy;
+}
+
+function assert_rts(copy, stack) {
+    const new_stack = pair("ensuring rts did not change since last snapshot: ", stack);
+    for (let i = 0; i < TOP_RTS; i = i + 1) {
+        assert_same(copy[i], RTS[i], new_stack);
+    }
+}
+
+function assert_lines_marked(node_address, stack) {
+    const new_stack = pair("assert lines marked for node: " + stringify(node_address), stack);
+    const size = HEAP[node_address + SIZE_SLOT];
+    for (let i = 0; i < size; i = i + 1) {
+        const line_address = ref_get_line(node_address + i, new_stack);
+        assert_marked(LINE_MARK_SLOT, line_address, new_stack);
+    }
+}
+
+function assert_marked(mark_offset, address, stack) {
+    const new_stack = pair("assert mark slot of address: " + stringify(address) + " is marked", stack);
+    assert_true(HEAP[address + mark_offset] === MARKED, 
+                "object is not marked",
+                new_stack);
+}
+
+function assert_unfree(address, stack) {
+    const new_stack = pair("assert node at " + stringify(address) + " has not been freed", stack);
+    const block_address = ref_get_block(address, new_stack);
+    assert_false(HEAP[block_address + BLOCK_STATE_SLOT] === FREE, "the block of this node should not be free", new_stack);
+    const size = HEAP[address + SIZE_SLOT];
+    for (let i = 0; i < size; i = i + 1) {
+        const line_address = ref_get_line(address, new_stack);
+        const msg = "line " + stringify(line_address) + " should not be free";
+        assert_false(HEAP[line_address + LINE_ADDRESS_SLOT] === HEAP[line_address + LINE_LIMIT_SLOT], 
+            msg, new_stack);
+    }
+}
+
 // Changes A, B, C, I, SCAN
 function MARK() {
-  display("MARK!");
+  const trace_root = list("START TRACE: MARK()");
+  const rts_copy = copy_rts(TOP_RTS);
   // keep old TOP_RTS to prevent deleting stacks
   B = TOP_RTS;
   // init roots for dfs
@@ -981,23 +1171,32 @@ function MARK() {
   A = ENV;
   PUSH_RTS(); // add current env
 
+  const live_nodes = ref_mark(trace_root);
+
   while (B < TOP_RTS) {
     POP_RTS();
     SCAN = RES;
     // mark node
     HEAP[SCAN + MARK_SLOT] = MARKED;
+    push_stack(SCAN);
     // mark node's block
     CURR_BLOCK = math_floor(SCAN / BLOCK_SIZE) * BLOCK_SIZE;
     HEAP[CURR_BLOCK + MARK_SLOT] = MARKED;
-    // mark node's start line to end line
+
     A = SCAN;
     GET_LINE();
-    A = RES;
+    // assertions
+    const get_line_wrapper = stack => ref_get_line(SCAN, pair("line 1125", stack));
+    assert_same_as_ref(RES, get_line_wrapper, pair("assert line address of node: " + stringify(SCAN), trace_root));
+
+    A = RES; // mark node's start line to end line
     while (A <= CURR_BLOCK + HEAP[CURR_BLOCK + LAST_CHILD_SLOT] &&
            HEAP[A + LINE_ADDRESS_SLOT] <= SCAN + HEAP[SCAN + SIZE_SLOT]) {
       HEAP[A + LINE_MARK_SLOT] = MARKED;
       A = A + LINE_BK_SIZE;
     }
+    assert_lines_marked(SCAN, pair("line 1137", trace_root));
+
     for (
       I = HEAP[SCAN + FIRST_CHILD_SLOT];
       I <= HEAP[SCAN + LAST_CHILD_SLOT];
@@ -1010,18 +1209,23 @@ function MARK() {
       GET_LINE();
       A = HEAP[SCAN + I]; // address of child
 
-      // child is marked and corresponding line also marked
+      // child is not marked 
       if (HEAP[A + MARK_SLOT] !== MARKED) {
         PUSH_RTS();
       } else {}
     }
   }
+  assert_rts(rts_copy, pair("line 1149, ", trace_root));
+  display(MARK_STACK);
 }
 
 // expects hole-size in K
 function FREE_REGION() {
+    const trace_root = list("TRACE START: FREE_REGION()");
   // granular collection
   // free blocks
+  const live_nodes = ref_mark(trace_root);
+
   for (I = 0; I < NUMBER_OF_BLOCKS; I = I + 1) {
     if (HEAP[I * BLOCK_SIZE + MARK_SLOT] === UNMARKED) {
       // if block is not MARKED, set state to FREE
@@ -1050,6 +1254,7 @@ function FREE_REGION() {
     // unmark whole block
     HEAP[I * BLOCK_SIZE + MARK_SLOT] = UNMARKED;
   }
+  map(a => assert_unfree(a, trace_root), live_nodes);
 
   // finds a hole of at least k size and allocate new bump head and tail
   ALLOCATE_TO_RECYCLABLE();
@@ -1115,6 +1320,7 @@ function ALLOCATE_OVERFLOW() {
   // since bump head and tail are at free block, new node is guaranteed to load properly
   A = J;
   NEW();
+  display("overflow allocation complete");
 }
 
 // Expects old RES in A
@@ -1334,7 +1540,6 @@ function NEW_NUMBER() {
   NEW();
   HEAP[RES + FIRST_CHILD_SLOT] = 6;
   HEAP[RES + LAST_CHILD_SLOT] = 5; // no children
-  HEAP[RES + MARK_SLOT] = UNMARKED;
   HEAP[RES + NUMBER_VALUE_SLOT] = E;
   A = RES;
   RESTORE_BUMP_PTRS();
@@ -1362,7 +1567,6 @@ function NEW_BOOL() {
   NEW();
   HEAP[RES + FIRST_CHILD_SLOT] = 6;
   HEAP[RES + LAST_CHILD_SLOT] = 5; // no children
-  HEAP[RES + MARK_SLOT] = UNMARKED;
   HEAP[RES + BOOL_VALUE_SLOT] = E;
   A = RES;
   RESTORE_BUMP_PTRS();
@@ -1386,7 +1590,6 @@ function NEW_UNDEFINED() {
   NEW();
   HEAP[RES + FIRST_CHILD_SLOT] = 5;
   HEAP[RES + LAST_CHILD_SLOT] = 4; // no children
-  HEAP[RES + MARK_SLOT] = UNMARKED;
   A = RES;
   RESTORE_BUMP_PTRS();
 }
@@ -1414,7 +1617,6 @@ function NEW_OS() {
   HEAP[RES + FIRST_CHILD_SLOT] = 5;
   // operand stack initially empty
   HEAP[RES + LAST_CHILD_SLOT] = 4;
-  HEAP[RES + MARK_SLOT] = UNMARKED;
   A = RES;
   RESTORE_BUMP_PTRS();
 }
@@ -1425,6 +1627,7 @@ function NEW_OS() {
 // expects its argument in A
 // changes A, B
 function PUSH_OS() {
+  assert_valid_node(A, list("PUSH OS()"));
   B = HEAP[OS + LAST_CHILD_SLOT]; // address of current top of OS
   B = B + 1;
   HEAP[OS + LAST_CHILD_SLOT] = B; // update address of current top of OS
@@ -1469,7 +1672,6 @@ function NEW_CLOSURE() {
   NEW();
   HEAP[RES + FIRST_CHILD_SLOT] = CLOSURE_ENV_SLOT;
   HEAP[RES + LAST_CHILD_SLOT] = CLOSURE_ENV_SLOT;
-  HEAP[RES + MARK_SLOT] = UNMARKED;
   HEAP[RES + CLOSURE_OS_SIZE_SLOT] = D;
   HEAP[RES + CLOSURE_ADDRESS_SLOT] = E;
   HEAP[RES + CLOSURE_ENV_SLOT] = ENV;
@@ -1508,7 +1710,6 @@ function NEW_RTS_FRAME() {
   NEW();
   HEAP[RES + FIRST_CHILD_SLOT] = RTS_FRAME_ENV_SLOT;
   HEAP[RES + LAST_CHILD_SLOT] = RTS_FRAME_OS_SLOT;
-  HEAP[RES + MARK_SLOT] = UNMARKED;
   HEAP[RES + RTS_FRAME_PC_SLOT] = PC + 2; // next instruction!
   HEAP[RES + RTS_FRAME_ENV_SLOT] = ENV;
   HEAP[RES + RTS_FRAME_OS_SLOT] = OS;
@@ -1551,8 +1752,6 @@ function NEW_ENVIRONMENT() {
   NEW();
   HEAP[RES + FIRST_CHILD_SLOT] = 5;
   HEAP[RES + LAST_CHILD_SLOT] = 4 + D;
-
-  HEAP[RES + MARK_SLOT] = UNMARKED;
   A = RES;
   RESTORE_BUMP_PTRS();
 }
@@ -1615,6 +1814,7 @@ function show_heap(s) {
     i = i + 1;
   }
 }
+
 function show_node(address) {
   const tag = HEAP[address];
   const size = HEAP[address + SIZE_SLOT];
@@ -1639,6 +1839,7 @@ function show_heap_value(address) {
 const thin_border = "-------------------------------------------";
 const inner_border = "+++++++++++++++++++++++++++++++++++++++++++";
 function visualize_heap(s) {
+    display(s);
     display("============ VISUALIZER ===================");
     display("BLOCK LAYOUT");
     display("NO. OF LINES: " + stringify(NUM_OF_LINES_PER_BLOCK) +
@@ -1969,15 +2170,11 @@ M[CALL] = () => {
   PUSH_RTS();
   A = N;
   NEW_OS();
-  // check for oom
-  if (!RUNNING) {
-    return undefined;
-  } else {
-  }
 
   OS = RES;
   PC = L;
   ENV = TEMP_ROOT;
+//   assert_valid_node(ENV, list("env node is fully copied"));
   TEMP_ROOT = -1;
 };
 
@@ -2002,6 +2199,7 @@ function run() {
       error(P[PC], "unknown op-code:");
     } else {
       M[P[PC]]();
+      assert_valid_node(OS, list("assert valid OS at PC: " + stringify(PC)));
     }
   }
   if (STATE === DIV_ERROR) {
@@ -2053,15 +2251,15 @@ function run() {
 // run();
 //
 //
-// initialize_machine(11, 4, 4);
-// P = parse_and_compile("         \
-// const about_pi = 3;             \
-// function square(x) {            \
-//     return x * x;               \
-// }                               \
-// 4 * about_pi * square(6371);    ");
-// //print_program(P);
-// run();
+initialize_machine(10, 4, 3);
+P = parse_and_compile("         \
+const about_pi = 3;             \
+function square(x) {            \
+    return x * x;               \
+}                               \
+4 * about_pi * square(6371);    ");
+//print_program(P);
+run();
 // //
 // //
 // initialize_machine(10, 10, 2);
@@ -2097,7 +2295,7 @@ function run() {
 // run();
 
 
-// initialize_machine(6, 20, 9);
+// initialize_machine(6, 10, 9);
 // P = parse_and_compile("                         \
 // function abs(x) {                               \
 //     return x >= 0 ? x : 0 - x;                  \
@@ -2138,18 +2336,17 @@ function run() {
 // // print_program(P);
 // run();
 
-initialize_machine(4, 11, 3);
-P = parse_and_compile(" \
-function x(a) {         \
-  const b = 2*a;        \
-  function y() {        \
-      return b + 1;     \
-  }                     \
-  return y;             \
-}                       \
-x(2)();                 ");
-run();
-visualize_heap("");
+// initialize_machine(10, 4, 3);
+// P = parse_and_compile(" \
+// function x(a) {         \
+//   const b = 2*a;        \
+//   function y() {        \
+//       return b + 1;     \
+//   }                     \
+//   return y;             \
+// }                       \
+// x(2)();                 ");
+// run();
 
 // cmd to run from pwd=source-program
 // node ../js-slang/dist/repl/cli.js src/virtual-machines/source-1-with-mark-region-gc.js
