@@ -10,8 +10,9 @@ The evaluators in this section all follow the general style of SICP JS Chapter 4
 
 * [`src/evaluators/source-0.js`](https://github.com/source-academy/source-programs/blob/master/src/evaluators/source-0.js): evaluator for Source §0 (calculator language)
 * [`src/evaluators/source-0pp.js`](https://github.com/source-academy/source-programs/blob/master/src/evaluators/source-0pp.js): evaluator for Source §0++ (calculator language plus conditionals, blocks and sequences)
-* [`src/evaluators/source-4-1.js`](https://github.com/source-academy/source-programs/blob/master/src/evaluators/source-1.js): evaluator for Source §1, described in SICP JS 4.1
+* [`src/evaluators/source-4-1.js`](https://github.com/source-academy/source-programs/blob/master/src/evaluators/source-4-1.js): evaluator for Source §1, described in SICP JS 4.1
 * [`src/evaluators/typed-source.js`](https://github.com/source-academy/source-programs/blob/master/src/evaluators/typed-source.js): evaluator for Typed Source (typed version of a Source §1 sublanguage)
+* [`src/evaluators/source-4-3.js`](https://github.com/source-academy/source-programs/blob/master/src/evaluators/source-4-3.js): meta-circular evaluator for Source §4.3 (non-deterministic programming)
 
 ## Steppers
 
@@ -39,11 +40,15 @@ The virtual machines in this section are SECD-style and follow a description in 
 
 ## Tool Demos
 
+(click to run; for actual sources, go to [`src/tool-demos/`](https://github.com/source-academy/source-programs/blob/master/src/tool-demos/))
+
 * [`src/tool-demos/stepper.js`](https://tinyurl.com/SICPJS-stepper): stepper tool (small-step semantics, based on substitution)
 * [`src/tool-demos/box-and-pointer-diagrams.js`](https://tinyurl.com/SICPJS-box-and-pointer): box-and-pointer diagram visualizer for pairs and lists (following SICP JS chapter 2)
 * [`src/tool-demos/environment-model.js`](https://tinyurl.com/SICPJS-env-diagram): environment model visualizer (following SICP JS chapter 3)
 
-## Library Demos
+## Module Demos
+
+(click to run; for actual sources, go to [`src/module-demos/`](https://github.com/source-academy/source-programs/blob/master/src/module-demos/))
 
 * [`src/module-demos/runes.js`](https://tinyurl.com/SICPJS-hearts): the "picture language" of SICP JS 2.2.4
 * [`src/module-demos/twist.js`](https://tinyurl.com/SICPJS-twist): some fun with the "picture language"
@@ -53,4 +58,36 @@ The virtual machines in this section are SECD-style and follow a description in 
 * [`src/module-demos/bohemian.js`](https://tinyurl.com/SICPJS-rhapsody): Bohemian Rhapsody cover using the "sounds" library 
 * [`src/module-demos/pix-n-flix.js`](https://tinyurl.com/SICP-distortion): a library for image and video processing, based on the constituent pixels
 
+## Test framework
+* [`src/test/framework/main.js`](https://github.com/source-academy/source-programs/blob/master/src/test/framework/): test framework for Source programs, written in Source §4
 
+# Testing
+
+For testing your Source programs, you need `node` and `yarn`.
+
+Write your test cases in a folder `__tests__` in each `src` subfolder. The name of the file specifies the targeted Source of your test case. For example, if `src/steppers/source-0.js` is the Source, a test case might be `src/steppers/__tests__/source-0.test1.js`.
+
+Each test case is appended to your Source, and then run with `js-slang` (using Source §4). The last line of the test case is a `//` comment that must contain the expected result. For example, a stepper test case may be:
+```
+parse_and_evaluate("! (1 === 1 && 2 > 3);");
+// true
+```
+Before you can run the tests, you need to install `js-slang` by typing:
+```
+% yarn
+% yarn install
+```
+Run all test cases by typing:
+```
+% yarn test
+```
+[Integration of the `test` script with `src/test/framework/` is pending; any help appreciated.]
+
+# License
+
+[![GPL 3][gpl3-image]][gpl3]
+All JavaScript programs in this repository are licensed under the 
+[GNU General Public License Version 3][gpl3].
+
+[gpl3]: https://www.gnu.org/licenses/gpl-3.0.en.html
+[gpl3-image]: https://upload.wikimedia.org/wikipedia/commons/thumb/7/79/License_icon-gpl.svg/50px-License_icon-gpl.svg.png
