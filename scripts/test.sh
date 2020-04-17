@@ -84,7 +84,7 @@ main() {
             variant=$(awk -F 'variant=' 'FNR==1{ if ($0~"variant=") { print $2 } else { print '$DEFAULT_VARIANT' } }' $i | awk -F ' ' '{ print $1 }')
             
             # check if first line of test file contains 'source-test'
-            use_source_test=$(awk 'FNR==1{ if ($0~"source-test") print "yes" }' $i)
+            use_source_test=$(awk 'FNR==1{ if ($0~"framework") print "yes" }' $i)
             if [[ $use_source_test == "yes" ]]
             then chapter=4 ; test_source_framework $s $i $chapter $variant
             else test_source $s $i $chapter $variant
