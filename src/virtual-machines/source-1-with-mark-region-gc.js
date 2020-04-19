@@ -1113,14 +1113,20 @@ function ref_get_line(address, stack) {
 
 function copy_rts(top) {
     let copy = [];
-    for (let i = 0; i < top; i = i + 1) {
+    for (let i = 0; i <= top; i = i + 1) {
         copy[i] = RTS[i];
     }
     return copy;
 }
 
+/**
+ * Ensures that RTS stack has not been modified since ~copy~
+ * @param {array} copy array of duplicated stack before changes
+ * @param {array} stack current RTS array
+ */
 function assert_rts(copy, stack) {
     const new_stack = pair("ensuring rts did not change since last snapshot: ", stack);
+    assert_same(array_length(copy), TOP_RTS + 1, new_stack);
     for (let i = 0; i < TOP_RTS; i = i + 1) {
         assert_same(copy[i], RTS[i], new_stack);
     }
@@ -1143,7 +1149,7 @@ function assert_marked(mark_offset, address, stack) {
 }
 
 function assert_unfree(address, stack) {
-    const new_stack = pair("assert node at " + stringify(address) + " has not been freed", stack);
+    const new_stack = pair("assert node at " + stringify(address) + " should not be free", stack);
     const block_address = ref_get_block(address, new_stack);
     assert_false(HEAP[block_address + BLOCK_STATE_SLOT] === FREE, "the block of this node should not be free", new_stack);
     const size = HEAP[address + SIZE_SLOT];
@@ -2285,57 +2291,57 @@ function run() {
 // run();
 
 
-// initialize_machine(20, 10, 2);
-// P = parse_and_compile("                                     \
-// function recurse(x, y, operation, initvalue) {              \
-//     return y === 0                                          \
-//         ? initvalue                                         \
-//         : operation(x, recurse(x, y - 1,                    \
-//                     operation, initvalue));                 \
-// }                                                           \
-//                                                             \
-// function f(x, z) { return x * z; }                          \
-// recurse(2, 3, f, 1);                                        \
-//                                                             \
-// function g(x, z) { return x + z; }                          \
-// recurse(2, 3, g, 0);                                        \
-//                                                             \
-// function h(x, z) { return x / z; }                          \
-// recurse(2, 3, h, 128);                                          ");
-// //print_program(P);
-// run();
-
-
-initialize_machine(6, 10, 9);
-P = parse_and_compile("                         \
-function abs(x) {                               \
-    return x >= 0 ? x : 0 - x;                  \
-}                                               \
-function square(x) {                            \
-    return x * x;                               \
-}                                               \
-function average(x,y) {                         \
-    return (x + y) / 2;                         \
-}                                               \
-function sqrt(x) {                              \
-    function good_enough(guess, x) {            \
-        return abs(square(guess) - x) < 0.001;  \
-    }                                           \
-    function improve(guess, x) {                \
-        return average(guess, x / guess);       \
-    }                                           \
-    function sqrt_iter(guess, x) {              \
-        return good_enough(guess, x)            \
-                   ? guess                      \
-                   : sqrt_iter(improve(         \
-                                guess, x), x);  \
-    }                                           \
-    return sqrt_iter(1.0, x);                   \
-}                                               \
-                                                \
-sqrt(5);                                        ");
+initialize_machine(20, 10, 2);
+P = parse_and_compile("                                     \
+function recurse(x, y, operation, initvalue) {              \
+    return y === 0                                          \
+        ? initvalue                                         \
+        : operation(x, recurse(x, y - 1,                    \
+                    operation, initvalue));                 \
+}                                                           \
+                                                            \
+function f(x, z) { return x * z; }                          \
+recurse(2, 3, f, 1);                                        \
+                                                            \
+function g(x, z) { return x + z; }                          \
+recurse(2, 3, g, 0);                                        \
+                                                            \
+function h(x, z) { return x / z; }                          \
+recurse(2, 3, h, 128);                                          ");
 //print_program(P);
 run();
+
+
+// initialize_machine(6, 10, 9);
+// P = parse_and_compile("                         \
+// function abs(x) {                               \
+//     return x >= 0 ? x : 0 - x;                  \
+// }                                               \
+// function square(x) {                            \
+//     return x * x;                               \
+// }                                               \
+// function average(x,y) {                         \
+//     return (x + y) / 2;                         \
+// }                                               \
+// function sqrt(x) {                              \
+//     function good_enough(guess, x) {            \
+//         return abs(square(guess) - x) < 0.001;  \
+//     }                                           \
+//     function improve(guess, x) {                \
+//         return average(guess, x / guess);       \
+//     }                                           \
+//     function sqrt_iter(guess, x) {              \
+//         return good_enough(guess, x)            \
+//                    ? guess                      \
+//                    : sqrt_iter(improve(         \
+//                                 guess, x), x);  \
+//     }                                           \
+//     return sqrt_iter(1.0, x);                   \
+// }                                               \
+//                                                 \
+// sqrt(5);                                        ");
+// //print_program(P);
+// run();
 
 
 // initialize_machine(10, 5, 2);
