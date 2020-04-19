@@ -783,6 +783,8 @@ function show_registers(s) {
   display(K, "K  :");
   display(L, "L  :");
   display(N, "N  :");
+  display(BUMP_HEAD, "BUMP_HEAD  :");
+  display(BUMP_TAIL, "BUMP_TAIL  :");
   display(OS, "OS :");
   display(ENV, "ENV:");
   display(RTS, "RTS:");
@@ -888,8 +890,6 @@ function NEW() {
     GET_BLOCK();
     HEAP[RES + BLOCK_STATE_SLOT] = OCCUPIED;
     ALLOCATE_TO_RECYCLABLE();
-
-    ref_mark(trace_root);
   } else {}
 
   if (BUMP_HEAD + K > BUMP_TAIL) {
@@ -898,16 +898,16 @@ function NEW() {
     if (RES === NO_BLOCK_FOUND) {
       // mark and granular sweep
       display("Collecttttttt");
+      show_executing("what is going on");
       MARK();
       assert_valid_node(OS, pair("after mark", trace_root));
-      visualize_heap("");
+      visualize_heap("AFTER MARK");
       FREE_REGION();
       unmark_all();
       assert_valid_node(OS, pair("after free", trace_root));
     } else {
       ALLOCATE_TO_FREE();
     }
-    ref_mark(trace_root);
   } else {}
 
   // if still no space for allocation
@@ -944,7 +944,10 @@ function NEW() {
   HEAP[RES + BLOCK_STATE_SLOT] = RECYCLABLE;
   // return
   RES = BUMP_HEAD;
+  assert_unfree(RES, trace_root);
   BUMP_HEAD = BUMP_HEAD + K;
+  LIVE_NODES = ref_mark(trace_root);
+  
 }
 
 // Finds next recyclable block, if none available, find next free block
@@ -1150,6 +1153,19 @@ function assert_marked(mark_offset, address, stack) {
                 new_stack);
 }
 
+function assert_node_marked(node_address, stack) {
+  const new_stack = pair("assert node: " + stringify(node_address) + " is marked", stack);
+  assert_marked(MARK_SLOT, node_address, new_stack);
+  assert_lines_marked(node_address, new_stack);
+  const block_address = ref_get_block(node_address, new_stack);
+  assert_marked(MARK_SLOT, block_address, new_stack);
+}
+
+/**
+ * Make sures that the block and lines of a node is not free 
+ * @param {number} address Address of the node in the HEAP
+ * @param {list} stack stacktrace stack
+ */
 function assert_unfree(address, stack) {
     const new_stack = pair("assert node at " + stringify(address) + " should not be free", stack);
     const block_address = ref_get_block(address, new_stack);
@@ -1178,6 +1194,10 @@ function MARK() {
   PUSH_RTS(); // add current os
   A = ENV;
   PUSH_RTS(); // add current env
+  if (TEMP_ROOT !== -1) {
+    A = TEMP_ROOT;
+    PUSH_RTS();
+  } else {}
 
   const live_nodes = ref_mark(trace_root);
 
@@ -1227,6 +1247,7 @@ function MARK() {
       } else {}
     }
   }
+  map(add => assert_node_marked(add, trace_root), live_nodes);
   assert_rts(rts_copy, pair("line 1149, ", trace_root));
   display(MARK_STACK, "mark stack");
   display(live_nodes, "reference stack");
@@ -1648,7 +1669,9 @@ function NEW_OS() {
 // expects its argument in A
 // changes A, B
 function PUSH_OS() {
-  assert_valid_node(A, list("PUSH OS()"));
+  if (A === 407) {
+    display("ADDING 407");
+  } else {}
   B = HEAP[OS + LAST_CHILD_SLOT]; // address of current top of OS
   B = B + 1;
   HEAP[OS + LAST_CHILD_SLOT] = B; // update address of current top of OS
@@ -1661,6 +1684,9 @@ function POP_OS() {
   B = HEAP[OS + LAST_CHILD_SLOT]; // address of current top of OS
   HEAP[OS + LAST_CHILD_SLOT] = B - 1; // update address of current top of OS
   RES = HEAP[OS + B];
+  if (RES=== 407) {
+    display("REMOVING 407");
+  } else {}
 }
 
 // closure nodes layout
