@@ -900,6 +900,7 @@ function NEW() {
       display("Collecttttttt");
       MARK();
       assert_valid_node(OS, pair("after mark", trace_root));
+      visualize_heap("");
       FREE_REGION();
       unmark_all();
       assert_valid_node(OS, pair("after free", trace_root));
@@ -997,6 +998,7 @@ function unmark_all() {
         const ptr = pop_stack();
         HEAP[ptr + MARK_SLOT] = UNMARKED;
     }
+    MARK_STACK = [];
 }
 
 /**
@@ -1182,9 +1184,13 @@ function MARK() {
   while (B < TOP_RTS) {
     POP_RTS();
     SCAN = RES;
-    // mark node
-    HEAP[SCAN + MARK_SLOT] = MARKED;
-    push_stack(SCAN);
+    // mark node if unmarked
+    if (HEAP[SCAN + MARK_SLOT] === MARKED) {
+      continue;
+    } else {
+      HEAP[SCAN + MARK_SLOT] = MARKED;
+      push_stack(SCAN);
+    }
     // mark node's block
     CURR_BLOCK = math_floor(SCAN / BLOCK_SIZE) * BLOCK_SIZE;
     HEAP[CURR_BLOCK + MARK_SLOT] = MARKED;
@@ -1222,7 +1228,8 @@ function MARK() {
     }
   }
   assert_rts(rts_copy, pair("line 1149, ", trace_root));
-  display(MARK_STACK);
+  display(MARK_STACK, "mark stack");
+  display(live_nodes, "reference stack");
 }
 
 // expects hole-size in K
