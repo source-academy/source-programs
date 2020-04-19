@@ -1309,8 +1309,12 @@ function ALLOCATE_TO_FREE() {
   }
 }
 
+let old_bumphead = -Infinity;
+let old_bumptail = -Infinity;
 function ALLOCATE_OVERFLOW() {
   display("overflow allocation");
+  old_bumphead = BUMP_HEAD;
+  old_bumptail = BUMP_TAIL;
   OVERFLOW = true;
   A = BUMP_HEAD;
   PUSH_RTS();
@@ -1334,6 +1338,10 @@ function RESTORE_BUMP_PTRS() {
     POP_RTS();
     BUMP_HEAD = RES;
     OVERFLOW = false;
+    assert_true(old_bumphead === BUMP_HEAD, "bump head pointer not restored", list("restore ptrs"));
+    assert_true(old_bumptail === BUMP_TAIL, "bump tail pointer not restored", list("restore ptrs"));
+    old_bumphead = -Infinity;
+    old_bumptail = -Infinity;
   } else {}
   RES = A;
 }
@@ -1753,7 +1761,10 @@ function NEW_ENVIRONMENT() {
   HEAP[RES + FIRST_CHILD_SLOT] = 5;
   HEAP[RES + LAST_CHILD_SLOT] = 4 + D;
   A = RES;
+  const correct_ptr = RES;
   RESTORE_BUMP_PTRS();
+  const ptr_from_restore = RES;
+  assert_same(correct_ptr, ptr_from_restore, list("EXTEND ptr check"));
 }
 
 // expects env in A, by-how-many in B
@@ -2251,15 +2262,15 @@ function run() {
 // run();
 //
 //
-initialize_machine(10, 4, 3);
-P = parse_and_compile("         \
-const about_pi = 3;             \
-function square(x) {            \
-    return x * x;               \
-}                               \
-4 * about_pi * square(6371);    ");
-//print_program(P);
-run();
+// initialize_machine(10, 4, 3);
+// P = parse_and_compile("         \
+// const about_pi = 3;             \
+// function square(x) {            \
+//     return x * x;               \
+// }                               \
+// 4 * about_pi * square(6371);    ");
+// //print_program(P);
+// run();
 // //
 // //
 // initialize_machine(10, 10, 2);
@@ -2295,36 +2306,36 @@ run();
 // run();
 
 
-// initialize_machine(6, 10, 9);
-// P = parse_and_compile("                         \
-// function abs(x) {                               \
-//     return x >= 0 ? x : 0 - x;                  \
-// }                                               \
-// function square(x) {                            \
-//     return x * x;                               \
-// }                                               \
-// function average(x,y) {                         \
-//     return (x + y) / 2;                         \
-// }                                               \
-// function sqrt(x) {                              \
-//     function good_enough(guess, x) {            \
-//         return abs(square(guess) - x) < 0.001;  \
-//     }                                           \
-//     function improve(guess, x) {                \
-//         return average(guess, x / guess);       \
-//     }                                           \
-//     function sqrt_iter(guess, x) {              \
-//         return good_enough(guess, x)            \
-//                    ? guess                      \
-//                    : sqrt_iter(improve(         \
-//                                 guess, x), x);  \
-//     }                                           \
-//     return sqrt_iter(1.0, x);                   \
-// }                                               \
-//                                                 \
-// sqrt(5);                                        ");
-// //print_program(P);
-// run();
+initialize_machine(6, 10, 9);
+P = parse_and_compile("                         \
+function abs(x) {                               \
+    return x >= 0 ? x : 0 - x;                  \
+}                                               \
+function square(x) {                            \
+    return x * x;                               \
+}                                               \
+function average(x,y) {                         \
+    return (x + y) / 2;                         \
+}                                               \
+function sqrt(x) {                              \
+    function good_enough(guess, x) {            \
+        return abs(square(guess) - x) < 0.001;  \
+    }                                           \
+    function improve(guess, x) {                \
+        return average(guess, x / guess);       \
+    }                                           \
+    function sqrt_iter(guess, x) {              \
+        return good_enough(guess, x)            \
+                   ? guess                      \
+                   : sqrt_iter(improve(         \
+                                guess, x), x);  \
+    }                                           \
+    return sqrt_iter(1.0, x);                   \
+}                                               \
+                                                \
+sqrt(5);                                        ");
+//print_program(P);
+run();
 
 
 // initialize_machine(10, 5, 2);
