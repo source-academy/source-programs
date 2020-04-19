@@ -870,7 +870,7 @@ let TEMP_ROOT = -Infinity;
 // NEW expects tag in A and size in B
 // changes A, B, C, J, K
 function NEW() {
-    const trace_root = list("Allocating new node " + node_kind(A) + " of size " + stringify(B));
+  const trace_root = list("Allocating new node " + node_kind(A) + " of size " + stringify(B));
   J = A;
   K = B;
 //   visualize_heap('============================================================================================START' + stringify(A) + stringify(B));
@@ -898,10 +898,8 @@ function NEW() {
     if (RES === NO_BLOCK_FOUND) {
       // mark and granular sweep
       display("Collecttttttt");
-      show_executing("what is going on");
       MARK();
       assert_valid_node(OS, pair("after mark", trace_root));
-      visualize_heap("AFTER MARK");
       FREE_REGION();
       unmark_all();
       assert_valid_node(OS, pair("after free", trace_root));
@@ -1057,9 +1055,9 @@ function ref_mark(stack) {
             } else {}
         }
     }
-    const rts_list = build_list(TOP_RTS, i => RTS[i]);
+    const rts_list = build_list(OVERFLOW ? TOP_RTS - 2 : TOP_RTS, i => RTS[i]);
     const roots = pair(OS, pair(ENV, rts_list));
-    map(a => a < 0 ? "not initialized" : dfs(a, new_stack), roots);
+    map(a => a < 0 ? "not initialized" : dfs(a, new_stack), TEMP_ROOT === -1 ? roots : pair(TEMP_ROOT, roots));
     return marked;
 }
 
@@ -1172,9 +1170,9 @@ function assert_unfree(address, stack) {
     assert_false(HEAP[block_address + BLOCK_STATE_SLOT] === FREE, "the block of this node should not be free", new_stack);
     const size = HEAP[address + SIZE_SLOT];
     for (let i = 0; i < size; i = i + 1) {
-        const line_address = ref_get_line(address, new_stack);
-        const msg = "line " + stringify(line_address) + " should not be free";
-        assert_false(HEAP[line_address + LINE_ADDRESS_SLOT] === HEAP[line_address + LINE_LIMIT_SLOT], 
+        const line_address = ref_get_line(address + i, new_stack);
+        const msg = "line limit of " + stringify(line_address) + " should not be smaller than live node";
+        assert_true(address + i < HEAP[line_address + LINE_LIMIT_SLOT], 
             msg, new_stack);
     }
 }
@@ -1249,8 +1247,6 @@ function MARK() {
   }
   map(add => assert_node_marked(add, trace_root), live_nodes);
   assert_rts(rts_copy, pair("line 1149, ", trace_root));
-  display(MARK_STACK, "mark stack");
-  display(live_nodes, "reference stack");
 }
 
 // expects hole-size in K
@@ -2324,57 +2320,57 @@ function run() {
 // run();
 
 
-initialize_machine(20, 10, 2);
-P = parse_and_compile("                                     \
-function recurse(x, y, operation, initvalue) {              \
-    return y === 0                                          \
-        ? initvalue                                         \
-        : operation(x, recurse(x, y - 1,                    \
-                    operation, initvalue));                 \
-}                                                           \
-                                                            \
-function f(x, z) { return x * z; }                          \
-recurse(2, 3, f, 1);                                        \
-                                                            \
-function g(x, z) { return x + z; }                          \
-recurse(2, 3, g, 0);                                        \
-                                                            \
-function h(x, z) { return x / z; }                          \
-recurse(2, 3, h, 128);                                          ");
-//print_program(P);
-run();
-
-
-// initialize_machine(6, 10, 9);
-// P = parse_and_compile("                         \
-// function abs(x) {                               \
-//     return x >= 0 ? x : 0 - x;                  \
-// }                                               \
-// function square(x) {                            \
-//     return x * x;                               \
-// }                                               \
-// function average(x,y) {                         \
-//     return (x + y) / 2;                         \
-// }                                               \
-// function sqrt(x) {                              \
-//     function good_enough(guess, x) {            \
-//         return abs(square(guess) - x) < 0.001;  \
-//     }                                           \
-//     function improve(guess, x) {                \
-//         return average(guess, x / guess);       \
-//     }                                           \
-//     function sqrt_iter(guess, x) {              \
-//         return good_enough(guess, x)            \
-//                    ? guess                      \
-//                    : sqrt_iter(improve(         \
-//                                 guess, x), x);  \
-//     }                                           \
-//     return sqrt_iter(1.0, x);                   \
-// }                                               \
-//                                                 \
-// sqrt(5);                                        ");
+// initialize_machine(20, 10, 2);
+// P = parse_and_compile("                                     \
+// function recurse(x, y, operation, initvalue) {              \
+//     return y === 0                                          \
+//         ? initvalue                                         \
+//         : operation(x, recurse(x, y - 1,                    \
+//                     operation, initvalue));                 \
+// }                                                           \
+//                                                             \
+// function f(x, z) { return x * z; }                          \
+// recurse(2, 3, f, 1);                                        \
+//                                                             \
+// function g(x, z) { return x + z; }                          \
+// recurse(2, 3, g, 0);                                        \
+//                                                             \
+// function h(x, z) { return x / z; }                          \
+// recurse(2, 3, h, 128);                                          ");
 // //print_program(P);
 // run();
+
+
+initialize_machine(6, 10, 9);
+P = parse_and_compile("                         \
+function abs(x) {                               \
+    return x >= 0 ? x : 0 - x;                  \
+}                                               \
+function square(x) {                            \
+    return x * x;                               \
+}                                               \
+function average(x,y) {                         \
+    return (x + y) / 2;                         \
+}                                               \
+function sqrt(x) {                              \
+    function good_enough(guess, x) {            \
+        return abs(square(guess) - x) < 0.001;  \
+    }                                           \
+    function improve(guess, x) {                \
+        return average(guess, x / guess);       \
+    }                                           \
+    function sqrt_iter(guess, x) {              \
+        return good_enough(guess, x)            \
+                   ? guess                      \
+                   : sqrt_iter(improve(         \
+                                guess, x), x);  \
+    }                                           \
+    return sqrt_iter(1.0, x);                   \
+}                                               \
+                                                \
+sqrt(5);                                        ");
+//print_program(P);
+run();
 
 
 // initialize_machine(10, 5, 2);
