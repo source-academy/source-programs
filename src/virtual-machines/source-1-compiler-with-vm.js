@@ -312,6 +312,20 @@ function apply_primitive_procedure_procedure(arglist){
     }
 }
 
+function gcd_machine() {
+	return make_machine(list("a", "b", "t"),
+			list(list("rem", binary_function((a, b) => a % b)),
+				list("=", binary_function((a, b) => a === b))),
+			list("test-b",
+				test(list(op("="), reg("b"), constant(0))),
+				branch(label("gcd-done")),
+				assign("t", list(op("rem"), reg("a"), reg("b"))),
+				assign("a", list(reg("b"))),
+				assign("b", list(reg("t"))),
+				go_to(label("test-b")),
+				"gcd-done"));
+}        
+
 function make_machine(register_names, ops, controller_text) {
 	const machine = make_new_machine();
 
@@ -400,7 +414,7 @@ function make_new_machine() {
 			register_table = pair(list(name, make_register(name)), register_table);
 
 		} else {
-			error(name, "Multiple defined register: ");
+			error(name, "Multiply defined register: ");
 		}
 
 		return "register_allocated";
@@ -1715,7 +1729,6 @@ function print_list_regs(l){
     }
 }
 
-// For displaying compiled instructions.
 function pretty_print_instructions(instruction_sequence){
     display("==Registers Needed==============");
     display(print_list_regs(registers_needed(instruction_sequence)));
@@ -1727,44 +1740,43 @@ function pretty_print_instructions(instruction_sequence){
     display("",a);
     //display(head(statements(instruction_sequence)));
     //return printstatements(statements(instruction_sequence));
+
 }
 
-// Top level compile.
-function get_compiled_code() {
-    // Enter string here.
-    const string_input = "\
-    5 * 123;\
-    ";                     
+// Only modify user_input in get_compiled()
+
+/*
+function get_compiled() {
+    // Enter code to be compiled here:
+    const user_input = "123;";
     
-    const rm_code = parse_and_compile(string_input);
-    pretty_print_instructions(rm_code);
-    return rm_code;
-}       
+    const compiled_code = parse_and_compile(user_input);
+    pretty_print_instructions(compiled_code);
+    return compiled_code;
+}      
 
 function source_machine() {
     const ops = list(
-        list("make_top_environment", make_top_environment_procedure),
-        list("extend_environment", extend_environment_procedure),
-        list("extend_environment_block", extend_environment_block_procedure),
-        list("define_constant", define_constant_procedure),
-        list("lookup_variable_value", lookup_variable_value_procedure),
-        list("list", list_procedure),
-        list("cons", cons_procedure),
-        list("is_false", is_false_procedure),
-        list("make_compiled_procedure", make_compiled_procedure_procedure),
-        list("compiled_procedure_env", compiled_procedure_env_procedure),
-        list("compiled_procedure_entry", compiled_procedure_entry_procedure),
-        list("is_primitive_procedure", is_primitive_procedure_procedure),
-        list("compiled_procedure_entry", compiled_procedure_entry_procedure),
-        list("compiled_procedure_entry", compiled_procedure_entry_procedure),
-        list("apply_primitive_procedure", apply_primitive_procedure_procedure)
+        list("make_top_environment",make_top_environment_procedure),
+        list("extend_environment",extend_environment_procedure),
+        list("extend_environment_block",extend_environment_block_procedure),
+        list("define_constant",define_constant_procedure),
+        list("lookup_variable_value",lookup_variable_value_procedure),
+        list("list",list_procedure),
+        list("cons",cons_procedure),
+        list("is_false",is_false_procedure),
+        list("make_compiled_procedure",make_compiled_procedure_procedure),
+        list("compiled_procedure_env",compiled_procedure_env_procedure),
+        list("compiled_procedure_entry",compiled_procedure_entry_procedure),
+        list("is_primitive_procedure",is_primitive_procedure_procedure),
+        list("compiled_procedure_entry",compiled_procedure_entry_procedure),
+        list("compiled_procedure_entry",compiled_procedure_entry_procedure),
+        list("apply_primitive_procedure",apply_primitive_procedure_procedure)
     );
-    
-    const x = statements(get_compiled_code());
-    const machine = make_machine(all_regs(), ops, x);
-    
-	machine("stack")("initialize");
-    set_register_contents(machine, "env", make_default_top_environment_procedure(list()));
+    const  x = statements(get_compiled());
+    const machine = make_machine(all_regs(),ops,x);
+    machine("stack")("initialize");
+    set_register_contents(machine, "env",make_default_top_environment_procedure(list()));
 
 	return machine;
 }  
@@ -1772,3 +1784,4 @@ function source_machine() {
 const ad = source_machine();
 display(start(ad));
 display(get_register_contents(ad, "val"));
+*/
