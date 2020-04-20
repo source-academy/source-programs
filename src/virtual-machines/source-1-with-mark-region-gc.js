@@ -783,6 +783,8 @@ function show_registers(s) {
   display(K, "K  :");
   display(L, "L  :");
   display(N, "N  :");
+  display(BUMP_HEAD, "BUMP_HEAD  :");
+  display(BUMP_TAIL, "BUMP_TAIL  :");
   display(OS, "OS :");
   display(ENV, "ENV:");
   display(RTS, "RTS:");
@@ -836,14 +838,25 @@ function initialize_machine(linesize, linenumber, blocknumber) {
   NUMBER_OF_BLOCKS = blocknumber;
   BLOCK_SIZE = (linesize + LINE_BK_SIZE) * NUM_OF_LINES_PER_BLOCK + BLOCK_BK_SIZE;
   HEAP_SIZE = BLOCK_SIZE * blocknumber;
-  display(HEAP_SIZE, "\nRunning VM with heap size:");
-  display(linesize * linenumber * blocknumber, "\nEffective memory size:");
+  // display(HEAP_SIZE, "\nRunning VM with heap size:");
+  // display(linesize * linenumber * blocknumber, "\nEffective memory size:");
   HEAPBOTTOM = 0;
   INITIALIZE_BLOCKS_AND_LINES();
   TEMP_ROOT = -1;
   RUNNING = true;
   STATE = NORMAL;
   PC = 0;
+}
+
+// succinct helper function to ensure that all blocks are occupied
+function all_blocks_occupied() {
+  for (let i = 0; i < NUMBER_OF_BLOCKS; i = i + 1) {
+    const state = HEAP[i * BLOCK_SIZE + BLOCK_STATE_SLOT];
+    if (state === FREE || state === RECYCLABLE) {
+      return false;
+    } else {}
+  }
+  return true;
 }
 
 // We introduce TEMP_ROOT register to handle instructions
@@ -857,12 +870,15 @@ let TEMP_ROOT = -Infinity;
 // NEW expects tag in A and size in B
 // changes A, B, C, J, K
 function NEW() {
+  const trace_root = list("Allocating new node " + node_kind(A) + " of size " + stringify(B));
   J = A;
   K = B;
+//   visualize_heap('============================================================================================START' + stringify(A) + stringify(B));
   if (BUMP_HEAD + K > BUMP_TAIL) {
+    assert_false(OVERFLOW, "bump and head pointers should be at free block", list("OVERFLOW ALLOCATION: NEW()"));
     // if the hole is too small for the new node
-    // visualize_heap("hello");
     GET_FREE_BLOCK();
+    assert_valid_node(OS, pair("first check", trace_root));
     if (K > LINE_SIZE && RES !== NO_BLOCK_FOUND) {
       // use overflow allocator
       return ALLOCATE_OVERFLOW();
@@ -877,19 +893,22 @@ function NEW() {
   } else {}
 
   if (BUMP_HEAD + K > BUMP_TAIL) {
+    assert_false(OVERFLOW, "bump and head pointers should be at free block", list("OVERFLOW ALLOCATION: NEW()"));
     GET_FREE_BLOCK();
     if (RES === NO_BLOCK_FOUND) {
       // mark and granular sweep
-      display("Collecttttttt");
       MARK();
+      assert_valid_node(OS, pair("after mark", trace_root));
       FREE_REGION();
+      unmark_all();
+      assert_valid_node(OS, pair("after free", trace_root));
     } else {
       ALLOCATE_TO_FREE();
     }
   } else {}
 
   // if still no space for allocation
-  if (BUMP_HEAD + K > BUMP_TAIL) {
+  if (BUMP_HEAD + K > BUMP_TAIL || all_blocks_occupied()) {
     STATE = OUT_OF_MEMORY_ERROR;
     RUNNING = false;
     error("reached oom");
@@ -897,17 +916,20 @@ function NEW() {
 
   HEAP[BUMP_HEAD + TAG_SLOT] = J;
   HEAP[BUMP_HEAD + SIZE_SLOT] = K;
-  // TODO: remove assigning mark slot from NEW_* functions
   HEAP[BUMP_HEAD + MARK_SLOT] = UNMARKED;
 
   // update line limits
   A = BUMP_HEAD;
+  const line = ref_get_line(A, list("line 924"));
   GET_LINE();
+  assert_same(line, RES, trace_root);
   A = RES;
   GET_BLOCK();
+
   // loop through all lines and set line limits
   while (A <= RES + HEAP[RES + LAST_CHILD_SLOT] &&
-         HEAP[A + LINE_ADDRESS_SLOT] + LINE_SIZE <= BUMP_HEAD + HEAP[BUMP_HEAD + SIZE_SLOT]) {
+         HEAP[A + LINE_ADDRESS_SLOT] + LINE_SIZE <
+         BUMP_HEAD + K) {
     // lines are filled
     HEAP[A + LINE_LIMIT_SLOT] = HEAP[A + LINE_ADDRESS_SLOT] + LINE_SIZE;
     A = A + LINE_BK_SIZE;
@@ -919,7 +941,10 @@ function NEW() {
   HEAP[RES + BLOCK_STATE_SLOT] = RECYCLABLE;
   // return
   RES = BUMP_HEAD;
+  assert_unfree(RES, trace_root);
   BUMP_HEAD = BUMP_HEAD + K;
+  LIVE_NODES = ref_mark(trace_root);
+  
 }
 
 // Finds next recyclable block, if none available, find next free block
@@ -934,24 +959,227 @@ function GET_NEXT_BLOCK() {
 // expects free/recyclable block address in A
 // Finds first hole and sets bump head and bump tail
 function ALLOCATE_BUMP_HEAD_AND_TAIL() {
-  // finds a hole (one or more free lines) and allocate new bump head and tail
-  SCAN = A + HEAP[A + FIRST_CHILD_SLOT];
-  while (SCAN <= A + HEAP[A + LAST_CHILD_SLOT]) {
-    // if line is free/empty
-    if (HEAP[SCAN + LINE_LIMIT_SLOT] === HEAP[SCAN + LINE_ADDRESS_SLOT]) {
-      // set bump head to start of line
-      BUMP_HEAD = HEAP[SCAN + LINE_ADDRESS_SLOT];
-      ALLOCATE_BUMP_TAIL();
-      break;
-    } else {
-      SCAN = SCAN + LINE_BK_SIZE;
+  if (HEAP[A + BLOCK_STATE_SLOT] === FREE) {
+    BUMP_HEAD = HEAP[A + HEAP[A + FIRST_CHILD_SLOT]];
+    BUMP_TAIL = A + BLOCK_SIZE;
+  } else {
+    // finds a hole (one or more free lines) and allocate new bump head and tail
+    SCAN = A + HEAP[A + FIRST_CHILD_SLOT];
+    while (SCAN <= A + HEAP[A + LAST_CHILD_SLOT]) {
+      // if line is free/empty
+      if (HEAP[SCAN + LINE_LIMIT_SLOT] === HEAP[SCAN + LINE_ADDRESS_SLOT]) {
+        // set bump head to start of line
+        BUMP_HEAD = HEAP[SCAN + LINE_ADDRESS_SLOT];
+        ALLOCATE_BUMP_TAIL();
+        break;
+      } else {
+        SCAN = SCAN + LINE_BK_SIZE;
+      }
     }
   }
 }
 
+// requirement to clear object markings 
+let MARK_STACK = [];
+let TOP_MARK = -1;
+
+function push_stack(i) {
+    TOP_MARK = TOP_MARK + 1;
+    MARK_STACK[TOP_MARK] = i;
+}
+
+function pop_stack() {
+    TOP_MARK = TOP_MARK - 1;
+    return MARK_STACK[TOP_MARK + 1];
+}
+
+function unmark_all() {
+    while (TOP_MARK >= 0) {
+        const ptr = pop_stack();
+        HEAP[ptr + MARK_SLOT] = UNMARKED;
+    }
+    MARK_STACK = [];
+}
+
+/**
+ * Assertions and reference implementations 
+ * FOR DEBUGGING
+ */
+
+let LIVE_NODES = list();
+
+function assert_true(bool, msg, stack) {
+    if (bool) {
+        // yay 
+    } else {
+        visualize_heap("");
+        show_registers("");
+        display(stack);
+        error(msg);
+    }
+}
+
+function assert_false(bool, msg, stack) {
+    return assert_true(!bool, msg, stack);
+}
+
+function assert_same(v1, v2, stack) {
+    return assert_true(v1 === v2, 
+                       "v1: " + stringify(v1) + " and v2: " + stringify(v2) + " are not the same", 
+                       stack);
+}
+
+function assert_same_as_ref(v1, ref_wrapper, stack) {
+    const new_stack = pair("assert_same_as_ref", stack);
+    return assert_same(v1, ref_wrapper(stack), new_stack);
+}
+
+/**
+ * Reference implemntation for the mark algorithm, returns a list of all live nodes
+ * @param {list} stack list of current executions
+ */
+function ref_mark(stack) {
+    const new_stack = pair("MARKING_REFERENCE", stack);
+    let marked = list();
+    function dfs(node_address, stack) {
+        const dfs_stack = pair("currently on: " + stringify(node_address), stack);
+        assert_valid_address(node_address, dfs_stack);
+        marked = pair(node_address, marked);
+        const first_child_index = HEAP[node_address + FIRST_CHILD_SLOT];
+        const last_child_index = HEAP[node_address + LAST_CHILD_SLOT];
+        for (let i = first_child_index; i < last_child_index; i = i + 1) {
+            const child_address = HEAP[node_address + i];
+            if (child_address !== undefined && length(member(child_address, marked)) === 0) {
+                dfs(child_address, dfs_stack);
+            } else {}
+        }
+    }
+    const rts_list = build_list(OVERFLOW ? TOP_RTS - 2 : TOP_RTS, i => RTS[i]);
+    const roots = pair(OS, pair(ENV, rts_list));
+    map(a => a < 0 ? "not initialized" : dfs(a, new_stack), TEMP_ROOT === -1 ? roots : pair(TEMP_ROOT, roots));
+    return marked;
+}
+
+function assert_valid_address(address, stack) {
+    const new_stack = pair("assert address in addressable space: " + stringify(address), stack);
+    assert_false(address === undefined, "node is undefined", new_stack);
+    const block_address = math_floor(address / BLOCK_SIZE) * BLOCK_SIZE;
+    const start = block_address + BLOCK_BK_SIZE + NUM_OF_LINES_PER_BLOCK * LINE_BK_SIZE;
+    const end = block_address + BLOCK_SIZE;
+    assert_true(start <= address && address < end,
+                "not in addressable space",
+                new_stack);
+}
+
+function assert_valid_node(node_address, stack) {
+    const new_stack = pair("assert node " + stringify(node_address) + " must not have undefined or unaddressable children",
+                            stack);
+    assert_false(node_address === undefined, "node is undefined", new_stack);
+    if (is_leaf_node(node_address)) {
+        const leaf_stack = pair("node identified as leaf", new_stack);
+        const size = HEAP[node_address + SIZE_SLOT];
+        for (let i = 0; i < size; i = i + 1) {
+            assert_false(HEAP[node_address + i] === undefined, "address " + stringify(node_address + i) + " is undefined", leaf_stack);
+        }
+    } else {
+        const branch_stack = pair("node not leaf", new_stack);
+        const firstchild = HEAP[node_address + FIRST_CHILD_SLOT];
+        const lastchild = HEAP[node_address + LAST_CHILD_SLOT];
+        for (let i = firstchild; i < lastchild; i = i + 1) {
+            assert_valid_address(HEAP[node_address + i], branch_stack);
+        }
+    }
+}
+
+function is_leaf_node(node) {
+    return node === BOOL_TAG || node === UNDEFINED_TAG || node === NUMBER_TAG;
+}
+
+function ref_get_block(address, stack) {
+    const new_stack = pair("getting block address of: ", stringify(address), stack);
+    assert_true(0 <= address && address < HEAP_SIZE, "address supplied not in heapspace", new_stack);
+    return math_floor(address / BLOCK_SIZE) * BLOCK_SIZE;
+}
+
+function ref_get_line(address, stack) {
+  const new_stack = pair("getting line address of: ", stringify(address),
+                         stack);
+  assert_valid_address(address, new_stack);
+  const block_address = ref_get_block(address, new_stack);
+  const start = block_address + BLOCK_BK_SIZE + NUM_OF_LINES_PER_BLOCK * LINE_BK_SIZE;
+  const line_no = (address - start) / LINE_SIZE;
+  const line_address = math_floor(line_no) * LINE_BK_SIZE + block_address + BLOCK_BK_SIZE;
+//   display("line address result", line_address);
+  return line_address;
+}
+
+function copy_rts(top) {
+    let copy = [];
+    for (let i = 0; i <= top; i = i + 1) {
+        copy[i] = RTS[i];
+    }
+    return copy;
+}
+
+/**
+ * Ensures that RTS stack has not been modified since ~copy~
+ * @param {array} copy array of duplicated stack before changes
+ * @param {array} stack current RTS array
+ */
+function assert_rts(copy, stack) {
+    const new_stack = pair("ensuring rts did not change since last snapshot: ", stack);
+    assert_same(array_length(copy), TOP_RTS + 1, new_stack);
+    for (let i = 0; i < TOP_RTS; i = i + 1) {
+        assert_same(copy[i], RTS[i], new_stack);
+    }
+}
+
+function assert_lines_marked(node_address, stack) {
+    const new_stack = pair("assert lines marked for node: " + stringify(node_address), stack);
+    const size = HEAP[node_address + SIZE_SLOT];
+    for (let i = 0; i < size; i = i + 1) {
+        const line_address = ref_get_line(node_address + i, new_stack);
+        assert_marked(LINE_MARK_SLOT, line_address, new_stack);
+    }
+}
+
+function assert_marked(mark_offset, address, stack) {
+    const new_stack = pair("assert mark slot of address: " + stringify(address) + " is marked", stack);
+    assert_true(HEAP[address + mark_offset] === MARKED, 
+                "object is not marked",
+                new_stack);
+}
+
+function assert_node_marked(node_address, stack) {
+  const new_stack = pair("assert node: " + stringify(node_address) + " is marked", stack);
+  assert_marked(MARK_SLOT, node_address, new_stack);
+  assert_lines_marked(node_address, new_stack);
+  const block_address = ref_get_block(node_address, new_stack);
+  assert_marked(MARK_SLOT, block_address, new_stack);
+}
+
+/**
+ * Make sures that the block and lines of a node is not free 
+ * @param {number} address Address of the node in the HEAP
+ * @param {list} stack stacktrace stack
+ */
+function assert_unfree(address, stack) {
+    const new_stack = pair("assert node at " + stringify(address) + " should not be free", stack);
+    const block_address = ref_get_block(address, new_stack);
+    assert_false(HEAP[block_address + BLOCK_STATE_SLOT] === FREE, "the block of this node should not be free", new_stack);
+    const size = HEAP[address + SIZE_SLOT];
+    for (let i = 0; i < size; i = i + 1) {
+        const line_address = ref_get_line(address + i, new_stack);
+        const msg = "line limit of " + stringify(line_address) + " should not be smaller than live node";
+        assert_true(address + i < HEAP[line_address + LINE_LIMIT_SLOT], 
+            msg, new_stack);
+    }
+}
+
 // Changes A, B, C, I, SCAN
 function MARK() {
-  display("MARK!");
+  const trace_root = list("START TRACE: MARK()");
+  const rts_copy = copy_rts(TOP_RTS);
   // keep old TOP_RTS to prevent deleting stacks
   B = TOP_RTS;
   // init roots for dfs
@@ -963,26 +1191,41 @@ function MARK() {
   PUSH_RTS(); // add current os
   A = ENV;
   PUSH_RTS(); // add current env
+  if (TEMP_ROOT !== -1) {
+    A = TEMP_ROOT;
+    PUSH_RTS();
+  } else {}
+
+  const live_nodes = ref_mark(trace_root);
 
   while (B < TOP_RTS) {
     POP_RTS();
     SCAN = RES;
-    // mark node
-    HEAP[SCAN + MARK_SLOT] = MARKED;
+    // mark node if unmarked
+    if (HEAP[SCAN + MARK_SLOT] === MARKED) {
+      continue;
+    } else {
+      HEAP[SCAN + MARK_SLOT] = MARKED;
+      push_stack(SCAN);
+    }
     // mark node's block
     CURR_BLOCK = math_floor(SCAN / BLOCK_SIZE) * BLOCK_SIZE;
     HEAP[CURR_BLOCK + MARK_SLOT] = MARKED;
-    // mark node's start line to end line
+
     A = SCAN;
     GET_LINE();
-    A = RES;
-    while (
-      A <= HEAP[CURR_BLOCK + LAST_CHILD_SLOT] &&
-        HEAP[A + LINE_ADDRESS_SLOT] <= SCAN + HEAP[SCAN + SIZE_SLOT]
-    ) {
+    // assertions
+    const get_line_wrapper = stack => ref_get_line(SCAN, pair("line 1125", stack));
+    assert_same_as_ref(RES, get_line_wrapper, pair("assert line address of node: " + stringify(SCAN), trace_root));
+
+    A = RES; // mark node's start line to end line
+    while (A <= CURR_BLOCK + HEAP[CURR_BLOCK + LAST_CHILD_SLOT] &&
+           HEAP[A + LINE_ADDRESS_SLOT] <= SCAN + HEAP[SCAN + SIZE_SLOT]) {
       HEAP[A + LINE_MARK_SLOT] = MARKED;
       A = A + LINE_BK_SIZE;
     }
+    assert_lines_marked(SCAN, pair("line 1137", trace_root));
+
     for (
       I = HEAP[SCAN + FIRST_CHILD_SLOT];
       I <= HEAP[SCAN + LAST_CHILD_SLOT];
@@ -995,22 +1238,23 @@ function MARK() {
       GET_LINE();
       A = HEAP[SCAN + I]; // address of child
 
-      if (
-        // child is marked and corresponding line also marked
-        HEAP[A + MARK_SLOT] === MARKED &&
-          HEAP[RES + LINE_MARK_SLOT] === MARKED
-      ) {
-      } else {
+      // child is not marked 
+      if (HEAP[A + MARK_SLOT] !== MARKED) {
         PUSH_RTS();
-      }
+      } else {}
     }
   }
+  map(add => assert_node_marked(add, trace_root), live_nodes);
+  assert_rts(rts_copy, pair("line 1149, ", trace_root));
 }
 
 // expects hole-size in K
 function FREE_REGION() {
+    const trace_root = list("TRACE START: FREE_REGION()");
   // granular collection
   // free blocks
+  const live_nodes = ref_mark(trace_root);
+
   for (I = 0; I < NUMBER_OF_BLOCKS; I = I + 1) {
     if (HEAP[I * BLOCK_SIZE + MARK_SLOT] === UNMARKED) {
       // if block is not MARKED, set state to FREE
@@ -1022,12 +1266,12 @@ function FREE_REGION() {
       // free lines in non-free block
       for (
         // line pseudo node address in SCAN
-        SCAN = HEAP[I * BLOCK_SIZE + FIRST_CHILD_SLOT];
-        SCAN < HEAP[I * BLOCK_SIZE + LAST_CHILD_SLOT];
+        SCAN = I * BLOCK_SIZE + HEAP[I * BLOCK_SIZE + FIRST_CHILD_SLOT];
+        SCAN < I * BLOCK_SIZE + HEAP[I * BLOCK_SIZE + LAST_CHILD_SLOT];
         SCAN = SCAN + LINE_BK_SIZE
       ) {
         if (HEAP[SCAN + LINE_MARK_SLOT] === UNMARKED) {
-          // free line not marked
+          // free line that is not marked
           HEAP[SCAN + LINE_LIMIT_SLOT] = HEAP[SCAN + LINE_ADDRESS_SLOT];
           // set block to recyclable
           HEAP[I * BLOCK_SIZE + BLOCK_STATE_SLOT] = RECYCLABLE;
@@ -1039,6 +1283,7 @@ function FREE_REGION() {
     // unmark whole block
     HEAP[I * BLOCK_SIZE + MARK_SLOT] = UNMARKED;
   }
+  map(a => assert_unfree(a, trace_root), live_nodes);
 
   // finds a hole of at least k size and allocate new bump head and tail
   ALLOCATE_TO_RECYCLABLE();
@@ -1086,23 +1331,24 @@ function ALLOCATE_TO_RECYCLABLE() {
 function ALLOCATE_TO_FREE() {
   for (I = 0; I < NUMBER_OF_BLOCKS; I = I + 1) {
     if (HEAP[I * BLOCK_SIZE + BLOCK_STATE_SLOT] === FREE) {
-      BUMP_HEAD = I * BLOCK_SIZE + HEAP[HEAP[I * BLOCK_SIZE + FIRST_CHILD_SLOT]];
+      BUMP_HEAD = HEAP[I * BLOCK_SIZE + HEAP[I * BLOCK_SIZE + FIRST_CHILD_SLOT]];
       BUMP_TAIL = I * BLOCK_SIZE + BLOCK_SIZE;
       break;
     } else {}
   }
 }
 
+let old_bumphead = -Infinity;
+let old_bumptail = -Infinity;
 function ALLOCATE_OVERFLOW() {
-  display("overflow allocation");
+  old_bumphead = BUMP_HEAD;
+  old_bumptail = BUMP_TAIL;
   OVERFLOW = true;
   A = BUMP_HEAD;
   PUSH_RTS();
   A = BUMP_TAIL;
   PUSH_RTS();
-  // RES is still address of free block
-  A = RES;
-  ALLOCATE_BUMP_HEAD_AND_TAIL();
+  ALLOCATE_TO_FREE();
   // since bump head and tail are at free block, new node is guaranteed to load properly
   A = J;
   NEW();
@@ -1119,6 +1365,10 @@ function RESTORE_BUMP_PTRS() {
     POP_RTS();
     BUMP_HEAD = RES;
     OVERFLOW = false;
+    assert_true(old_bumphead === BUMP_HEAD, "bump head pointer not restored", list("restore ptrs"));
+    assert_true(old_bumptail === BUMP_TAIL, "bump tail pointer not restored", list("restore ptrs"));
+    old_bumphead = -Infinity;
+    old_bumptail = -Infinity;
   } else {}
   RES = A;
 }
@@ -1325,7 +1575,6 @@ function NEW_NUMBER() {
   NEW();
   HEAP[RES + FIRST_CHILD_SLOT] = 6;
   HEAP[RES + LAST_CHILD_SLOT] = 5; // no children
-  HEAP[RES + MARK_SLOT] = UNMARKED;
   HEAP[RES + NUMBER_VALUE_SLOT] = E;
   A = RES;
   RESTORE_BUMP_PTRS();
@@ -1353,7 +1602,6 @@ function NEW_BOOL() {
   NEW();
   HEAP[RES + FIRST_CHILD_SLOT] = 6;
   HEAP[RES + LAST_CHILD_SLOT] = 5; // no children
-  HEAP[RES + MARK_SLOT] = UNMARKED;
   HEAP[RES + BOOL_VALUE_SLOT] = E;
   A = RES;
   RESTORE_BUMP_PTRS();
@@ -1377,7 +1625,6 @@ function NEW_UNDEFINED() {
   NEW();
   HEAP[RES + FIRST_CHILD_SLOT] = 5;
   HEAP[RES + LAST_CHILD_SLOT] = 4; // no children
-  HEAP[RES + MARK_SLOT] = UNMARKED;
   A = RES;
   RESTORE_BUMP_PTRS();
 }
@@ -1405,7 +1652,6 @@ function NEW_OS() {
   HEAP[RES + FIRST_CHILD_SLOT] = 5;
   // operand stack initially empty
   HEAP[RES + LAST_CHILD_SLOT] = 4;
-  HEAP[RES + MARK_SLOT] = UNMARKED;
   A = RES;
   RESTORE_BUMP_PTRS();
 }
@@ -1460,7 +1706,6 @@ function NEW_CLOSURE() {
   NEW();
   HEAP[RES + FIRST_CHILD_SLOT] = CLOSURE_ENV_SLOT;
   HEAP[RES + LAST_CHILD_SLOT] = CLOSURE_ENV_SLOT;
-  HEAP[RES + MARK_SLOT] = UNMARKED;
   HEAP[RES + CLOSURE_OS_SIZE_SLOT] = D;
   HEAP[RES + CLOSURE_ADDRESS_SLOT] = E;
   HEAP[RES + CLOSURE_ENV_SLOT] = ENV;
@@ -1499,7 +1744,6 @@ function NEW_RTS_FRAME() {
   NEW();
   HEAP[RES + FIRST_CHILD_SLOT] = RTS_FRAME_ENV_SLOT;
   HEAP[RES + LAST_CHILD_SLOT] = RTS_FRAME_OS_SLOT;
-  HEAP[RES + MARK_SLOT] = UNMARKED;
   HEAP[RES + RTS_FRAME_PC_SLOT] = PC + 2; // next instruction!
   HEAP[RES + RTS_FRAME_ENV_SLOT] = ENV;
   HEAP[RES + RTS_FRAME_OS_SLOT] = OS;
@@ -1542,10 +1786,11 @@ function NEW_ENVIRONMENT() {
   NEW();
   HEAP[RES + FIRST_CHILD_SLOT] = 5;
   HEAP[RES + LAST_CHILD_SLOT] = 4 + D;
-
-  HEAP[RES + MARK_SLOT] = UNMARKED;
   A = RES;
+  const correct_ptr = RES;
   RESTORE_BUMP_PTRS();
+  const ptr_from_restore = RES;
+  assert_same(correct_ptr, ptr_from_restore, list("EXTEND ptr check"));
 }
 
 // expects env in A, by-how-many in B
@@ -1606,25 +1851,109 @@ function show_heap(s) {
     i = i + 1;
   }
 }
-function visualize_heap(s) {
-  const len = array_length(HEAP);
-  let acc = "";
-  for (let i = 0; i < len; i = i + BLOCK_SIZE) {
-    for (let j = 0; j < HEAP[I + 2]; j = j + 1) {
-     
-    }
+
+function show_node(address) {
+  const tag = HEAP[address];
+  const size = HEAP[address + SIZE_SLOT];
+  display("======================");
+  display(node_kind(tag), address);
+  for (let i = 1; i < size; i = i + 1) {
+    display(stringify(address + i) + ": " + stringify(HEAP[address + i]));
   }
+  display("======================");
 }
 
 function show_heap_value(address) {
-  display(
-    undefined,
-    "result: heap node of type = " +
+  return "result: heap node of type = " +
       node_kind(HEAP[address]) +
       ", value = " +
-      stringify(HEAP[address + NUMBER_VALUE_SLOT])
-  );
+      stringify(HEAP[address + NUMBER_VALUE_SLOT]);
 }
+
+const thin_border = "-------------------------------------------";
+const inner_border = "+++++++++++++++++++++++++++++++++++++++++++";
+function visualize_heap(s) {
+    display(s);
+    display("============ VISUALIZER ===================");
+    display("BLOCK LAYOUT");
+    display("NO. OF LINES: " + stringify(NUM_OF_LINES_PER_BLOCK) +
+            ", LINE SIZE: " + stringify(LINE_SIZE));
+    display(thin_border);
+    for (let i = 0; i < NUMBER_OF_BLOCKS; i = i + 1) {
+        show_block(i * BLOCK_SIZE);
+    }
+}
+
+function show_block(blkaddress) {
+    display("BLOCK ADDR: " + stringify(blkaddress));
+    display("STATE: " + blk_state(blkaddress) + ", " + mk_state(blkaddress));
+    display(inner_border);
+    // concatenate line status
+    const first_line_addr = blkaddress + BLOCK_BK_SIZE;
+    const last_line_addr = blkaddress + BLOCK_BK_SIZE + NUM_OF_LINES_PER_BLOCK * LINE_BK_SIZE;
+    // display(thin_border);
+    for (let i = first_line_addr; i < last_line_addr; i = i + LINE_BK_SIZE) {
+        let top = line_header + stringify(i) + " ";
+        let bottom = get_line_header(i);
+        const padding = array_length(top) - array_length(bottom);
+        if (padding < 0) {
+            top = pad(top, -padding);
+        } else {
+            bottom = pad(bottom, padding);
+        }
+        show_line(i, top, bottom);
+    }
+    display(thin_border);
+}
+
+function get_line_header(i) {
+    const line_limit = HEAP[i + LINE_LIMIT_SLOT];
+    const occupancy = line_limit - HEAP[i];
+    let display_text = "M:[" + (HEAP[i + LINE_MARK_SLOT] === MARKED ? "✓" : "✗") + "] | ";
+    display_text = display_text + stringify(occupancy) + "/" + stringify(LINE_SIZE);
+    return display_text;
+}
+
+function show_line(address, top, bottom) {
+    let addr_acc = "| ";
+    let value_acc = "| ";
+    const end = HEAP[address + LINE_LIMIT_SLOT];
+    for (let i = HEAP[address]; i < end; i = i + 1) {
+        let a = stringify(i);
+        let v = stringify(HEAP[i]);
+        const padding = array_length(a) - array_length(v);
+        if (padding < 0) {
+            a = pad(a, -padding);
+        } else {
+            v = pad(v, padding);
+        }
+        addr_acc = addr_acc + a + " | ";
+        value_acc = value_acc + v + " | ";
+    }
+    display(top + addr_acc);
+    display(bottom + value_acc);
+    return addr_acc + "\n" + value_acc;
+}
+
+function pad(str, v) {
+    return v <= 0 ? str : pad_f(str + " ", v - 1);
+}
+
+function pad_f(str, v) {
+    return v <= 0? str : pad(" " + str, v - 1);
+}
+
+function blk_state(blkaddress) {
+    const states = ["OCCUPIED", "RECYCLABLE", "FREE", "HEADROOM"];
+    return states[HEAP[blkaddress + BLOCK_STATE_SLOT]];
+}
+
+function mk_state(blkaddress) {
+    const states = ["UNMARKED", "MARKED"];
+    return states[HEAP[blkaddress + MARK_SLOT]];
+}
+
+const line_header = "LINE NO: ";
 
 // SVMLa implementation
 
@@ -1875,15 +2204,11 @@ M[CALL] = () => {
   PUSH_RTS();
   A = N;
   NEW_OS();
-  // check for oom
-  if (!RUNNING) {
-    return undefined;
-  } else {
-  }
 
   OS = RES;
   PC = L;
   ENV = TEMP_ROOT;
+//   assert_valid_node(ENV, list("env node is fully copied"));
   TEMP_ROOT = -1;
 };
 
@@ -1901,16 +2226,14 @@ M[RTN] = () => {
 M[DONE] = () => {
   RUNNING = false;
 };
-let step = 0;
+
 function run() {
   while (RUNNING) {
     if (M[P[PC]] === undefined) {
       error(P[PC], "unknown op-code:");
     } else {
-      if (step === 3) {
-        show_executing("");
-      } else {}
       M[P[PC]]();
+      assert_valid_node(OS, list("assert valid OS at PC: " + stringify(PC)));
     }
   }
   if (STATE === DIV_ERROR) {
@@ -1920,144 +2243,14 @@ function run() {
     error(RES, "memory exhausted despite garbage collection");
   } else {
     POP_OS();
-    show_heap_value(RES);
+    return show_heap_value(RES);
   }
 }
-// VM test cases for Mark-Region collection
 
-// initialize_machine(3, 10, 3);
-// P = parse_and_compile(
-//   "     \
-// function f(x) {             \
-//     return x + 1;           \
-// }                           \
-// f(2);                       "
-// );
-// print_program(P);
-// run();
-//
-initialize_machine(3, 20, 3); // exactly 200 needed
-P = parse_and_compile(
-  "             \
-const a = 2;                        \
-const b = 7;                        \
-function f(x, y) {                  \
-    const c = 100;                  \
-    const d = 500;                  \
-    return x - y * a + b - c + d;   \
-}                                   \
-f(30, 10);                          "
-// returns 417
-);
-run();
+function parse_and_compile_and_run(linesize, linenumber, blocknumber, string) {
+    initialize_machine(linesize, linenumber, blocknumber);
+    P = parse_and_compile(string);
+    const output = run();
+    return output;
+}
 
-// initialize_machine(290);
-// P = parse_and_compile("         \
-// function factorial(n) {         \
-//     return n === 1 ? 1          \
-//         : n * factorial(n - 1); \
-// }                               \
-// factorial(4);                   ");
-// //print_program(P);
-// run();
-//
-//
-// initialize_machine(156);
-// P = parse_and_compile("         \
-// const about_pi = 3;             \
-// function square(x) {            \
-//     return x * x;               \
-// }                               \
-// 4 * about_pi * square(6371);    ");
-// //print_program(P);
-// run();
-//
-//
-// initialize_machine(206);
-// P = parse_and_compile("           \
-// function power(x, y) {            \
-//     return y === 0                \
-//         ? 1                       \
-//         : x * power(x, y - 1);    \
-// }                                 \
-// power(17, 1);                     ");
-// //print_program(P);
-// run();
-//
-//
-// initialize_machine(442);
-// P = parse_and_compile("                                     \
-// function recurse(x, y, operation, initvalue) {              \
-//     return y === 0                                          \
-//         ? initvalue                                         \
-//         : operation(x, recurse(x, y - 1,                    \
-//                     operation, initvalue));                 \
-// }                                                           \
-//                                                             \
-// function f(x, z) { return x * z; }                          \
-// recurse(2, 3, f, 1);                                        \
-//                                                             \
-// function g(x, z) { return x + z; }                          \
-// recurse(2, 3, g, 0);                                        \
-//                                                             \
-// function h(x, z) { return x / z; }                          \
-// recurse(2, 3, h, 128);                                      ");
-// //print_program(P);
-// run();
-//
-//
-// initialize_machine(696);
-// P = parse_and_compile("                         \
-// function abs(x) {                               \
-//     return x >= 0 ? x : 0 - x;                  \
-// }                                               \
-// function square(x) {                            \
-//     return x * x;                               \
-// }                                               \
-// function average(x,y) {                         \
-//     return (x + y) / 2;                         \
-// }                                               \
-// function sqrt(x) {                              \
-//     function good_enough(guess, x) {            \
-//         return abs(square(guess) - x) < 0.001;  \
-//     }                                           \
-//     function improve(guess, x) {                \
-//         return average(guess, x / guess);       \
-//     }                                           \
-//     function sqrt_iter(guess, x) {              \
-//         return good_enough(guess, x)            \
-//                    ? guess                      \
-//                    : sqrt_iter(improve(         \
-//                                 guess, x), x);  \
-//     }                                           \
-//     return sqrt_iter(1.0, x);                   \
-// }                                               \
-//                                                 \
-// sqrt(5);                                        ");
-// //print_program(P);
-// run();
-//
-//
-// initialize_machine(140);
-// P = parse_and_compile(" \
-// function f(x) {         \
-//     x + 1;              \
-// }                       \
-// f(3);                   ");
-// run();
-//
-//
-// initialize_machine(176);
-// P = parse_and_compile(" \
-// function x(a) {         \
-//   const b = 2*a;        \
-//   function y() {        \
-//       return b + 1;     \
-//   }                     \
-//   return y;             \
-// }                       \
-// x(2)();                 ");
-// run();
-
-// cmd to run from pwd=source-program
-// node ../js-slang/dist/repl/cli.js src/virtual-machines/source-1-with-mark-region-gc.js
