@@ -1568,3 +1568,4 @@ function x(a) {         \
 }                       \
 x(2)();                 ");
 run();
+show_heap("");
