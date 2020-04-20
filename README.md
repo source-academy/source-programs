@@ -37,6 +37,8 @@ The virtual machines in this section are SECD-style and follow a description in 
 * [`src/virtual-machines/source-1.js`](https://github.com/source-academy/source-programs/blob/master/src/virtual-machines/source-1.js): virtual machine for a Source §1 sublanguage (without memory management)
 * [`src/virtual-machines/source-1-with-copying-gc.js`](https://github.com/source-academy/source-programs/blob/master/src/virtual-machines/source-1-with-copying-gc.js): virtual machine for a Source §1 sublanguage with a Cheney-style stop-and-copy garbage collector
 * [`src/virtual-machines/register-machine-gcd.js`](https://github.com/source-academy/source-programs/blob/master/src/virtual-machines/register-machine-gcd.js): register machine following SICP JS Section 5.2, using GCD example
+* [`src/virtual-machines/source-2-with-copying-gc.js`](https://github.com/source-academy/source-programs/blob/master/src/virtual-machines/source-2-with-copying-gc.js): virtual machine for a Source §2 sublanguage with a Cheney-style stop-and-copy garbage collector
+* [`src/virtual-machines/source-2-with-ms-gc.js`](https://github.com/source-academy/source-programs/blob/master/src/virtual-machines/source-2-with-ms-gc.js): virtual machine for a Source §2 sublanguage with a Mark-and-Sweep-style garbage collector
 
 ## Tool Demos
 
@@ -67,21 +69,51 @@ For testing your Source programs, you need `node` and `yarn`.
 
 Write your test cases in a folder `__tests__` in each `src` subfolder. The name of the file specifies the targeted Source of your test case. For example, if `src/steppers/source-0.js` is the Source, a test case might be `src/steppers/__tests__/source-0.test1.js`.
 
+Only the tests written will be run.
+
 Each test case is appended to your Source, and then run with `js-slang` (using Source §4). The last line of the test case is a `//` comment that must contain the expected result. For example, a stepper test case may be:
-```
+
+``` js
 parse_and_evaluate("! (1 === 1 && 2 > 3);");
 // true
 ```
+
 Before you can run the tests, you need to install `js-slang` by typing:
-```
+
+``` sh
 % yarn
 % yarn install
 ```
+
 Run all test cases by typing:
-```
+
+``` sh
 % yarn test
 ```
-[Integration of the `test` script with `src/test/framework/` is pending; any help appreciated.]
+
+For failure cases (where you program is to throw error, e.g. memory exhausted error for virtual machines), you can include the error message as per normal. The lastest JS-Slang already throws the error message explicitly, without letting the underlying TypeScript handling it. Hence, an error message
+
+``` sh
+Line 2073: Error: memory exhausted despite garbage collection undefined
+```
+
+can be written in the test file:
+
+``` js
+// Line 2073: Error: memory exhausted despite garbage collection undefined
+```
+
+or
+
+``` js
+// Error: memory exhausted despite garbage collection undefined
+```
+
+where only the part that starts from `Error:` will be compared. Line number is be ignored as it varies. If line number is needed for a particular reason, it can be appended to the back.
+
+>**Note**: for virtual machine tests, you will have to make a function that outputs a single line output without the help of any `displays()`, as the test currently only supports 1 line comparison. Help to make this generic is appreciated.
+
+>Integration of the `test` script with `src/test/framework/` is pending a fix to the `--variant` parameter; any help appreciated.
 
 # License
 
