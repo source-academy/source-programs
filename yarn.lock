@@ -79,9 +79,9 @@ jest-html-reporter@^2.8.2:
     xmlbuilder "13.0.2"
 
 js-slang@^0.4.33:
-  version "0.4.36"
-  resolved "https://registry.yarnpkg.com/js-slang/-/js-slang-0.4.36.tgz#92ad2bbb197ff4030a533f4de2c906e9b7354f2a"
-  integrity sha512-X2wwudIrsUe9kmYw7O8cPDVI+nMJBgogCERG0q0HuvC6y8Kge2VfGeIk8gl8zNF7GPcJ4vnPcoL9iqvlghFQSA==
+  version "0.4.33"
+  resolved "https://registry.yarnpkg.com/js-slang/-/js-slang-0.4.33.tgz#c73bf577cd190431bea43378962307de2c33b02a"
+  integrity sha512-r4A5R0MAc7kdF1ODRIhVwcBs6mafPIsg4yDXHzVxX/EfUQwRcbihuf2ASfdTjNQRxBuL5ZVG2uNPp3euPj4YbQ==
   dependencies:
     "@types/estree" "0.0.39"
     "@types/lodash.assignin" "^4.2.6"
