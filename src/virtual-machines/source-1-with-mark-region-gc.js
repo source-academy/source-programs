@@ -838,8 +838,8 @@ function initialize_machine(linesize, linenumber, blocknumber) {
   NUMBER_OF_BLOCKS = blocknumber;
   BLOCK_SIZE = (linesize + LINE_BK_SIZE) * NUM_OF_LINES_PER_BLOCK + BLOCK_BK_SIZE;
   HEAP_SIZE = BLOCK_SIZE * blocknumber;
-  display(HEAP_SIZE, "\nRunning VM with heap size:");
-  display(linesize * linenumber * blocknumber, "\nEffective memory size:");
+  // display(HEAP_SIZE, "\nRunning VM with heap size:");
+  // display(linesize * linenumber * blocknumber, "\nEffective memory size:");
   HEAPBOTTOM = 0;
   INITIALIZE_BLOCKS_AND_LINES();
   TEMP_ROOT = -1;
@@ -1864,13 +1864,10 @@ function show_node(address) {
 }
 
 function show_heap_value(address) {
-  display(
-    undefined,
-    "result: heap node of type = " +
+  return "result: heap node of type = " +
       node_kind(HEAP[address]) +
       ", value = " +
-      stringify(HEAP[address + NUMBER_VALUE_SLOT])
-  );
+      stringify(HEAP[address + NUMBER_VALUE_SLOT]);
 }
 
 const thin_border = "-------------------------------------------";
@@ -2246,7 +2243,7 @@ function run() {
     error(RES, "memory exhausted despite garbage collection");
   } else {
     POP_OS();
-    show_heap_value(RES);
+    return show_heap_value(RES);
   }
 }
 
@@ -2256,4 +2253,4 @@ function parse_and_compile_and_run(linesize, linenumber, blocknumber, string) {
     const output = run();
     return output;
 }
-// VM test cases for Mark-Region collection
+

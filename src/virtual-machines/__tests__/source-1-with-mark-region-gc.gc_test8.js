@@ -3,4 +3,4 @@ parse_and_compile_and_run(10, 6, 2,
     x + 1;              \
 }                       \
 f(3);                   ");
-// result: heap node of type = undefined, value = undefined undefined
+// 'result: heap node of type = undefined, value = undefined'

@@ -15,4 +15,4 @@ recurse(2, 3, g, 0);                                        \
                                                             \
 function h(x, z) { return x / z; }                          \
 recurse(2, 3, h, 128);                                          ");
-// result: heap node of type = number, value = 0.015625 undefined
+// 'result: heap node of type = number, value = 0.015625'

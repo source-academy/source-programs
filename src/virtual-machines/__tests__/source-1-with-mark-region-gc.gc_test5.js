@@ -6,4 +6,4 @@ function power(x, y) {            \
         : x * power(x, y - 1);    \
 }                                 \
 power(17, 1);                     ");
-// result: heap node of type = number, value = 17 undefined
+// 'result: heap node of type = number, value = 17'

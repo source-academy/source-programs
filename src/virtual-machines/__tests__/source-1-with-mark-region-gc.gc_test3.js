@@ -5,4 +5,4 @@ function factorial(n) {         \
         : n * factorial(n - 1); \
 }                               \
 factorial(4);                   ");
-// result: heap node of type = number, value = 24 undefined
+// 'result: heap node of type = number, value = 24'

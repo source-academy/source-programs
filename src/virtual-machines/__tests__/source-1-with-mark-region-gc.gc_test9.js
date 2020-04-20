@@ -8,5 +8,4 @@ function x(a) {         \
   return y;             \
 }                       \
 x(2)();                 ");
-// result: heap node of type = number, value = 5 undefined
-// linenumber 4
+// 'result: heap node of type = number, value = 5'

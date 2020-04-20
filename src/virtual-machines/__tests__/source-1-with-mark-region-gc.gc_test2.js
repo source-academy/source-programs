@@ -9,4 +9,4 @@ function f(x, y) {                  \
 }                                   \
 f(30, 10);                          "
   ); // exactly 200 needed
-// result: heap node of type = number, value = 417 undefined
+// 'result: heap node of type = number, value = 417'

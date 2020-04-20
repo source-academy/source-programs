@@ -26,4 +26,4 @@ function sqrt(x) {                              \
 }                                               \
                                                 \
 sqrt(5);                                        ");
-// result: heap node of type = number, value = 2.2360688956433634 undefined
+// 'result: heap node of type = number, value = 2.2360688956433634'
