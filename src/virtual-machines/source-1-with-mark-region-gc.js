@@ -897,7 +897,6 @@ function NEW() {
     GET_FREE_BLOCK();
     if (RES === NO_BLOCK_FOUND) {
       // mark and granular sweep
-      display("Collecttttttt");
       MARK();
       assert_valid_node(OS, pair("after mark", trace_root));
       FREE_REGION();
@@ -1342,7 +1341,6 @@ function ALLOCATE_TO_FREE() {
 let old_bumphead = -Infinity;
 let old_bumptail = -Infinity;
 function ALLOCATE_OVERFLOW() {
-  display("overflow allocation");
   old_bumphead = BUMP_HEAD;
   old_bumptail = BUMP_TAIL;
   OVERFLOW = true;
@@ -1354,7 +1352,6 @@ function ALLOCATE_OVERFLOW() {
   // since bump head and tail are at free block, new node is guaranteed to load properly
   A = J;
   NEW();
-  display("overflow allocation complete");
 }
 
 // Expects old RES in A
@@ -1665,9 +1662,6 @@ function NEW_OS() {
 // expects its argument in A
 // changes A, B
 function PUSH_OS() {
-  if (A === 407) {
-    display("ADDING 407");
-  } else {}
   B = HEAP[OS + LAST_CHILD_SLOT]; // address of current top of OS
   B = B + 1;
   HEAP[OS + LAST_CHILD_SLOT] = B; // update address of current top of OS
@@ -1680,9 +1674,6 @@ function POP_OS() {
   B = HEAP[OS + LAST_CHILD_SLOT]; // address of current top of OS
   HEAP[OS + LAST_CHILD_SLOT] = B - 1; // update address of current top of OS
   RES = HEAP[OS + B];
-  if (RES=== 407) {
-    display("REMOVING 407");
-  } else {}
 }
 
 // closure nodes layout

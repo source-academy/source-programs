@@ -1,4 +1,4 @@
-parse_and_compile_and_run(8, 10, 9,
+parse_and_compile_and_run(7, 9, 9,
 "                         \
 function abs(x) {                               \
     return x >= 0 ? x : 0 - x;                  \
