@@ -1,6 +1,6 @@
 // memory exhaustion test
 
-parse_and_compile_and_run(1000,
+parse_and_compile_and_run(300,
 "\
 const z = 100000000000;\
 function foo(x) {\
