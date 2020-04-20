@@ -1154,7 +1154,7 @@ let HEAPBOTTOM = -Infinity;
 
 const NORMAL = 0;
 const DIV_ERROR = 1;
-const OUT_OF_MEMORY_ERROR = 2; // not used yet: memory currently unbounded
+const OUT_OF_MEMORY_ERROR = 2;
 
 // general node layout
 const TAG_SLOT = 0;
@@ -1408,7 +1408,7 @@ function POP_OS() {
 //
 // 0: tag  = -109
 // 1: size = 5  // naive implementation
-// 2: first child = 4
+// 2: first child = 5
 // 3: last child  = 4
 // 4: string value
 
@@ -1422,7 +1422,7 @@ function NEW_STRING() {
     A = STRING_TAG;
     B = STRING_SIZE;
     NEW();
-    HEAP[RES + FIRST_CHILD_SLOT] = 4;
+    HEAP[RES + FIRST_CHILD_SLOT] = 5;
     HEAP[RES + LAST_CHILD_SLOT] = 4;
     HEAP[RES + STRING_VALUE_SLOT] = C;
 }
@@ -2071,7 +2071,7 @@ function run() {
         POP_OS();
         error(RES, "execution aborted:");
     } else if (STATE ===  OUT_OF_MEMORY_ERROR) {
-        error(RES, "memory exhausted despite garbage collection");
+        error(undefined, "memory exhausted despite garbage collection");
     } else {
         POP_OS();
         return show_heap_value(RES) + "; GC count: " + stringify(GC_COUNT);

@@ -59,13 +59,13 @@ function is_undefined_expression(stmt) {
 // and have "name" and "value" properties
 
 function is_constant_declaration(stmt) {
-   return is_tagged_list(stmt, "constant_declaration");
+    return is_tagged_list(stmt, "constant_declaration");
 }
 function constant_declaration_name(stmt) {
-   return head(tail(head(tail(stmt))));
+    return head(tail(head(tail(stmt))));
 }
 function constant_declaration_value(stmt) {
-   return head(tail(tail(stmt)));
+    return head(tail(tail(stmt)));
 }
 
 // applications are tagged with "application"
@@ -985,8 +985,7 @@ function parse_and_compile(string) {
             max_stack_size =
             compile_function_definition(expr, index_table);
         } else if (is_name(expr)) {
-            add_binary_instruction(LD, 
-                                   index_of(index_table, name_of_name(expr)), 
+            add_binary_instruction(LD, index_of(index_table, name_of_name(expr)), 
                                    env_to_lookup(index_table, name_of_name(expr)));
             max_stack_size = 1;
         } else if (is_sequence(expr)) {
@@ -1062,6 +1061,14 @@ function parse_and_compile(string) {
     return machine_code;
 }
 
+// for testing purpose
+function parse_and_compile_and_run(heapsize, string) {
+    initialize_machine(heapsize);
+    P = parse_and_compile(string);
+    const output = run();
+    return output;
+}
+
 // VIRTUAL MACHINE
 
 // "registers" are the global variables of our machine.
@@ -1073,12 +1080,15 @@ function parse_and_compile(string) {
 let P = [];
 // PC is program counter: index of the next instruction
 let PC = -Infinity;
+// HEAP is array containing all dynamically allocated data structures
+let HEAP = NaN;
 // OS is address of current environment in HEAP; initially a dummy value
 let ENV = -Infinity;
 // OS is address of current operand stack in HEAP; initially a dummy value
 let OS = -Infinity;
 // temporary value, used by PUSH and POP; initially a dummy value
 let RES = -Infinity;
+// tem
 
 // RTS: runtime stack
 let RTS = [];
@@ -1089,7 +1099,6 @@ let RUNNING = NaN;
 
 // exit state: NORMAL, DIV_ERROR, OUT_OF_MEMORY_ERROR, etc
 let STATE = NaN;
-
 // some general-purpose registers
 let A = 0;
 let B = 0;
@@ -1098,12 +1107,12 @@ let D = 0;
 let E = 0;
 let F = 0;
 let G = 0;
+let H = 0;
 let I = 0;
 let J = 0;
 let K = 0;
 let L = 0;
 let N = 0;
-let H = 0;
 
 function show_executing(s) {
     display(undefined, "--- RUN ---" + s);
@@ -1135,8 +1144,6 @@ function show_registers(s) {
     display(TOP_RTS, "TOP_RTS:");
 }
 
-// HEAP is array containing all dynamically allocated data structures
-let HEAP = NaN;
 // allocation pointer
 let FREE_PTR = -Infinity;
 // scan pointer in Mark and Sweep
@@ -1168,9 +1175,10 @@ const LAST_CHILD_SLOT = 3;
 
 let SPACESIZE = -Infinity;
 let TOPOFSPACE = -Infinity;
+let GC_COUNT = 0;
 
 function initialize_machine(heapsize) {
-    display(heapsize, "\nRunning VM with heap size:");
+    // display(heapsize, "\nRunning VM with heap size:");
     HEAP = [];
     HEAP_SIZE = heapsize;
     HEAPBOTTOM = 0;
@@ -1180,6 +1188,7 @@ function initialize_machine(heapsize) {
     FREE_PTR = RES;
     HEAD_FREE_NODE = FREE_PTR;
     LAST_FREE_NODE = FREE_PTR;
+    TEMP_ROOT = -1;
     RUNNING = true;
     STATE = NORMAL;
     PC = 0;
@@ -1193,6 +1202,14 @@ function initialize_free_list() {
     HEAP[RES + PREV_FREE_NODE_SLOT] = undefined;
     HEAP[RES + NEXT_FREE_NODE_SLOT] = undefined;
 }
+
+// We introduce TEMP_ROOT register to handle instructions 
+// that allocate nodes on the heap and then may flip.
+// The address of those nodes are assigned to TEMP_ROOT.
+// TEMP_ROOT is treated as a root in garbage collection,
+// and thus gets updated to point to the correct copy in
+// the to-space.
+let TEMP_ROOT = -Infinity;
 
 // indicated if the heap has been garbage collected
 let COLLECTED = true;
@@ -1211,47 +1228,58 @@ function NEW() {
         COLLECTED = false;
         MARK();
         SWEEP(); // updates FREE_PTR
+        GC_COUNT = GC_COUNT + 1;
         FIND_NEXT_FREENODE();
-        display(FREE_PTR, "FREE_PTR");
         COLLECTED = true;
     } else {}
     // if still no available node found, out of memory
     if (FREE_PTR === undefined) {
         // exit from the program
-        // STATE = OUT_OF_MEMORY_ERROR;
-        // RUNNING = false;
-        // show_heap("");
-        display(HEAD_FREE_NODE);
-        display(FREE_PTR);
-        error("out of memory");
+        STATE = OUT_OF_MEMORY_ERROR;
+        RUNNING = false;
+        error(FREE_PTR, "memory exhausted despite garbage collection");
     } else {}
 
     // by now FREE_PTR should be the free node
 
-    // if the remaining space can accommodate the smallest node
     if (HEAP[FREE_PTR + SIZE_SLOT] > K + UNDEFINED_SIZE) {
         HEAP[FREE_PTR + K] = HEAP[FREE_PTR];
         HEAP[FREE_PTR + K + SIZE_SLOT] = HEAP[FREE_PTR + SIZE_SLOT] - K;
         HEAP[FREE_PTR + K + PREV_FREE_NODE_SLOT] = HEAP[FREE_PTR + PREV_FREE_NODE_SLOT];
         HEAP[FREE_PTR + K + NEXT_FREE_NODE_SLOT] = HEAP[FREE_PTR + NEXT_FREE_NODE_SLOT];
+
+        // adjust the pointers in the prev and next free node
+        // if they are not the head free node or tail free node
         if (FREE_PTR === HEAD_FREE_NODE) {
             HEAD_FREE_NODE = HEAD_FREE_NODE + K;
-        } else {}
+        } else {
+            HEAP[HEAP[FREE_PTR + PREV_FREE_NODE_SLOT] + NEXT_FREE_NODE_SLOT] 
+                = HEAP[HEAP[FREE_PTR + PREV_FREE_NODE_SLOT] + NEXT_FREE_NODE_SLOT] + K;
+        }
         if (FREE_PTR === LAST_FREE_NODE) {
             LAST_FREE_NODE = LAST_FREE_NODE + K;
-        } else {}
+        } else {
+            HEAP[HEAP[FREE_PTR + NEXT_FREE_NODE_SLOT] + PREV_FREE_NODE_SLOT] 
+                = HEAP[HEAP[FREE_PTR + NEXT_FREE_NODE_SLOT] + PREV_FREE_NODE_SLOT] + K;
+        }
     } else {
         // else discard the space, creating size < 4 fragmentation
         // and remove the current node from the doubly linked list
         if (FREE_PTR === HEAD_FREE_NODE) {
             HEAD_FREE_NODE = HEAP[FREE_PTR + NEXT_FREE_NODE_SLOT];
+            if (HEAD_FREE_NODE !== undefined) {
+                // free list is not exhausted
+                HEAP[HEAD_FREE_NODE + PREV_FREE_NODE_SLOT] = undefined;
+            } else {}
         } else {
-          HEAP[HEAP[FREE_PTR + PREV_FREE_NODE_SLOT] + NEXT_FREE_NODE_SLOT] =
+            HEAP[HEAP[FREE_PTR + PREV_FREE_NODE_SLOT] + NEXT_FREE_NODE_SLOT] =
             HEAP[FREE_PTR + NEXT_FREE_NODE_SLOT];
             if (FREE_PTR !== LAST_FREE_NODE) {
-            HEAP[HEAP[FREE_PTR + NEXT_FREE_NODE_SLOT] + PREV_FREE_NODE_SLOT] =
-                HEAP[FREE_PTR + PREV_FREE_NODE_SLOT];
-            } else {}
+                HEAP[HEAP[FREE_PTR + NEXT_FREE_NODE_SLOT] + PREV_FREE_NODE_SLOT] =
+                    HEAP[FREE_PTR + PREV_FREE_NODE_SLOT];
+            } else {
+                LAST_FREE_NODE = HEAP[FREE_PTR + PREV_FREE_NODE_SLOT];
+            }
         }
     }
 
@@ -1264,8 +1292,8 @@ function NEW() {
 // expects size of new node in K
 function FIND_NEXT_FREENODE() {
     while (FREE_PTR !== undefined 
-           && K > HEAP[FREE_PTR + SIZE_SLOT]
-           && FREE_PTR < TOPOFSPACE) {
+        && K > HEAP[FREE_PTR + SIZE_SLOT]
+        && FREE_PTR < TOPOFSPACE) {
         if (FREE_PTR === undefined) {
             break;
         } else {}
@@ -1282,26 +1310,31 @@ const MARK_SLOT = 0;
 
 // Changes A, B, C, I, SCAN
 function MARK() {
-    // show_heap("?");
-    display("MARK!");
-    
     // keep old TOP_RTS to prevent deleting stacks
     B = TOP_RTS;
     // init roots for dfs
     for (I = 0; I <= B; I = I + 1) {
-      A = RTS[I]; // add all rts stacks
-      PUSH_RTS();
+        A = RTS[I]; // add all rts stacks
+        PUSH_RTS();
     }
     A = OS;
     PUSH_RTS(); // add current os
     A = ENV;
     PUSH_RTS(); // add current env
- 
+    if (TEMP_ROOT >= 0) {
+        A = TEMP_ROOT;
+        PUSH_RTS();
+    } else {}
+
     while (B < TOP_RTS) {
       POP_RTS();
       SCAN = RES;
-      // mark node
-      HEAP[SCAN + MARK_SLOT] = HEAP[SCAN + MARK_SLOT] + 99;
+      // mark node if it is not marked
+      A = SCAN;
+      IS_MARKED();
+      if (!RES) {
+        HEAP[SCAN + MARK_SLOT] = HEAP[SCAN + MARK_SLOT] + 99;
+      } else {}
 
       // mark children if any
       for (
@@ -1312,11 +1345,11 @@ function MARK() {
         // child is invalid or not yet loaded or parent env of top env (-Infinity)
         if (HEAP[SCAN + I] === undefined 
             || HEAP[SCAN + I] === -Infinity) { continue; } else {}
-  
+
         A = HEAP[SCAN + I]; // address of child
         IS_MARKED();
         if (!RES) {
-          PUSH_RTS();
+            PUSH_RTS();
         } else {}
       }
     }
@@ -1330,30 +1363,49 @@ function IS_MARKED() {
 function SWEEP() {
     SCAN = HEAPBOTTOM;
     
+    // scan the entire heap space
     while (SCAN < TOPOFSPACE) {
+        // the heap space is assumed to be clean (no dirty slots lying around)
         if (HEAP[SCAN] === undefined) {
             SCAN = SCAN + 1;
             continue;
         } else {}
         
         A = SCAN;
+        if (HEAP[A + TAG_SLOT] === FREE_TAG) {
+            SCAN = SCAN + HEAP[A + SIZE_SLOT];
+            continue;
+        } else {}
         IS_MARKED();
         if (!RES) {
+            // free unmarked node
             FREE();
             B = RES;
-            NEW_FREENODE();
-            // if the free list is exhausted
-            if (HEAD_FREE_NODE === undefined) {
-                HEAD_FREE_NODE = RES;
-                LAST_FREE_NODE = RES;
+            
+            // expand the last free node 
+            // if it is immediately before the current node
+            // to achieve a more contiguous free spaceb
+            if (LAST_FREE_NODE !== undefined
+                && A === LAST_FREE_NODE 
+                    + HEAP[LAST_FREE_NODE + SIZE_SLOT]
+                && A !== HEAD_FREE_NODE) {
+                HEAP[LAST_FREE_NODE + SIZE_SLOT] = 
+                    HEAP[LAST_FREE_NODE + SIZE_SLOT] + B;
             } else {
-                // else, append the free list
-                HEAP[RES + PREV_FREE_NODE_SLOT] = LAST_FREE_NODE;
-                HEAP[RES + NEXT_FREE_NODE_SLOT] = undefined;
-                HEAP[LAST_FREE_NODE + NEXT_FREE_NODE_SLOT] = RES;
+                // else create new free node
+                NEW_FREENODE();
+                // if the free list is exhausted
+                if (HEAD_FREE_NODE === undefined) {
+                    HEAD_FREE_NODE = RES;
+                    LAST_FREE_NODE = RES;
+                } else {
+                    // else, append the free list
+                    HEAP[RES + PREV_FREE_NODE_SLOT] = LAST_FREE_NODE;
+                    HEAP[RES + NEXT_FREE_NODE_SLOT] = undefined;
+                    HEAP[LAST_FREE_NODE + NEXT_FREE_NODE_SLOT] = RES;
+                }
+                LAST_FREE_NODE = RES;
             }
-            LAST_FREE_NODE = RES;
-
         } else {
             // unmark
             HEAP[A + MARK_SLOT] = HEAP[A + MARK_SLOT] - 99;
@@ -1369,9 +1421,6 @@ function SWEEP() {
 // changes B, I
 function FREE() {
     B = HEAP[A + SIZE_SLOT];
-    if (B === 2) {
-        error("??");
-    } else {}
     for (I = A; I < A + B; I = I + 1) {
         HEAP[I] = undefined;
     }
@@ -1486,6 +1535,9 @@ function NEW_OS() {
 // the operand stack OS
 // PUSH expects its argument in A
 function PUSH_OS() {
+    if (OS === 5) {
+        // show_heap("");
+    } else {}
     B = HEAP[OS + LAST_CHILD_SLOT]; // address of current top of OS
     B = B + 1;
     HEAP[OS + LAST_CHILD_SLOT] = B; // update address of current top of OS
@@ -1646,6 +1698,7 @@ function PUSH_RTS() {
 // places stack frame into RES
 function POP_RTS() {
     RES = RTS[TOP_RTS];
+    RTS[TOP_RTS] = undefined;
     TOP_RTS = TOP_RTS - 1;
 }
 
@@ -1664,8 +1717,9 @@ function POP_RTS() {
 
 const ENV_TAG = -102;
 const PARENT_ENVIRONMENT_SLOT = 4;
+let OLD_ENV = -Infinity;
 
-// expects number of env entries in A
+// expects number of env entries in A, env to extend in E
 // changes B
 function NEW_ENVIRONMENT() {
     C = A;
@@ -1674,7 +1728,7 @@ function NEW_ENVIRONMENT() {
     NEW();
     HEAP[RES + FIRST_CHILD_SLOT] = 4;
     HEAP[RES + LAST_CHILD_SLOT] = 4 + C;
-    HEAP[RES + PARENT_ENVIRONMENT_SLOT] = ENV;
+    HEAP[RES + PARENT_ENVIRONMENT_SLOT] = E;
 }
 
 // debugging: show current heap
@@ -1710,15 +1764,14 @@ function show_heap(s) {
 
 function show_heap_value(address) {
     if (node_kind(HEAP[address])=== "pair") {
-        let display_text = "result: heap node of type = " +
-                           node_kind(HEAP[address]) + ", value = " +
-                           show_pair_value(address);
-        display(undefined, display_text);
+        return "result: heap node of type = " +
+               node_kind(HEAP[address]) + ", value = " +
+               show_pair_value(address);
     } else {
-        display(undefined, "result: heap node of type = " +
+        return "result: heap node of type = " +
                 node_kind(HEAP[address]) +
                 ", value = " +
-                stringify(HEAP[address + NUMBER_VALUE_SLOT]));
+                stringify(HEAP[address + NUMBER_VALUE_SLOT]);
     }
 }
 
@@ -1964,6 +2017,7 @@ M[LD] = () =>      { E = ENV;
                          C = C - 1;
                      }
                      // now E is the environment the name lives in
+                    //  show_heap("");
                      A = HEAP[E + HEAP[E + FIRST_CHILD_SLOT] + 1
                                 + P[PC + 1]];
                      // +1 to account for parent env addr
@@ -1989,8 +2043,17 @@ M[CALL] = () =>    { G = P[PC + 1];  // lets keep number of arguments in G
                      // H is now the first child slot of the environment
                      A = HEAP[F + CLOSURE_ENV_EXTENSION_COUNT_SLOT];
                      // A is now the environment extension count
+                     E = HEAP[F + CLOSURE_ENV_SLOT];
+                     // E is now the environmnet to extend
                      NEW_ENVIRONMENT(); // after this, RES is new env
                      E = RES;
+
+                     // Heap address of new environment can 
+                     // be changed by NEW_RS_FRAME and NEW_OS below.
+                     // Assigning TEMP_ROOT to address makes sure we
+                     // restore the updated value before competing CALL.
+                     TEMP_ROOT = E;
+
                      H = E + H + G;
                      // H is now address where last argument goes in new env
                      for (C = H; C > H - G; C = C - 1) {
@@ -2005,7 +2068,8 @@ M[CALL] = () =>    { G = P[PC + 1];  // lets keep number of arguments in G
                      A = HEAP[F + CLOSURE_OS_SIZE_SLOT]; // closure stack size
                      NEW_OS();    // uses B and C
                      OS = RES;
-                     ENV = E;
+                     ENV = TEMP_ROOT;
+                     TEMP_ROOT = -1;
                    };
 
 M[CALLVAR] = () =>  { G = P[PC + 1];  // lets keep number of arguments in G
@@ -2017,7 +2081,16 @@ M[CALLVAR] = () =>  { G = P[PC + 1];  // lets keep number of arguments in G
                      A = HEAP[F + CLOSURE_ENV_EXTENSION_COUNT_SLOT] + G - 1;
                      // A is now the environment extension count
                      // NOTE: -1 to ignore the placeholder variable
+                     E = HEAP[F + CLOSURE_ENV_SLOT];
+                     // E is now the environmnet to extend
                      NEW_ENVIRONMENT(); // after this, RES is new env
+
+                     // Heap address of new environment can 
+                     // be changed by NEW_RS_FRAME and NEW_OS below.
+                     // Assigning TEMP_ROOT to address makes sure we
+                     // restore the updated value before competing CALL.
+                     TEMP_ROOT = E;
+
                      E = RES;
                      H = E + H + G;
                      // H is now address where last argument goes in new env
@@ -2036,6 +2109,7 @@ M[CALLVAR] = () =>  { G = P[PC + 1];  // lets keep number of arguments in G
                      NEW_OS();    // uses B and C
                      OS = RES;
                      ENV = E;
+                     TEMP_ROOT = -1;
                    };
 
 M[LDNULL] = () =>  { NEW_NULL();
@@ -2113,7 +2187,7 @@ function insert_primitive(p) {
             } else {
                 // gets arguments based on list of types
                 const args =
-                  map(x => {
+                    map(x => {
                         if (x === "num") {
                             POP_OS();  // get number node and extract value
                             return HEAP[RES + NUMBER_VALUE_SLOT];
@@ -2168,279 +2242,6 @@ function run() {
         error(RES, "memory exhausted despite garbage collection");
     } else {
         POP_OS();
-        show_heap_value(RES);
+        return show_heap_value(RES) + "; GC count: " + stringify(GC_COUNT);
     }
 }
-
-
-// EXAMPLES
-
-/*
-// simple hand-coded example, computing 21 - 4
-P =
-[ START,
-  LDCN, 21,
-  LDCN, 4,
-  MINUS,
-  DONE
-];
-run();
-*/
-
-/*
-// simple hand-coded example, computing 3 * (17 + 4)
-P =
-[ START,
-  LDCN, 3,
-  LDCN, 17,
-  LDCN, 4,
-  PLUS,
-  TIMES,
-  DONE
-];
-run();
-*/
-
-// compiler and VM test cases
-
-// P = parse_and_compile("const x = pair(500, pair(1, 2)); \
-// \
-// //head(x);\
-// //tail(x);");
-// print_program(P);
-// run();
-
-initialize_machine(1200);
-P = parse_and_compile("\
-const z = 100000000000;\
-function foo(x) {\
-    return x + z;\
-}\
-foo(200000);\
-list(1,2,3,4);\
-list(1,2,3,4);\
-list(1,2,3,4);\
-list(1,2,3,4);\
-list(1,2,3,4);\
-list(1,2,3,4);\
-list(1,2,3,4);\
-list(1,2,3,4);\
-list(1,2,3,4);\
-list(1,2,3,4);\
-list(1,2,3,4);\
-");
-print_program(P);
-run();
-
-/*
-P = parse_and_compile("false ? 11 : 22;");
-display(P);
-run();
-*/
-
-/*
-P = parse_and_compile("! (true || false);");
-print_program(P);
-run();
-*/
-
-/*
- P = parse_and_compile("1 + 1 === 2;");
- print_program(P);
- run();
-*/
-
-/*
-P = parse_and_compile("1 + 2 * 3 * 4 - 5;");
-run();
-*/
-
-/*
-P = parse_and_compile("1 + 1 / 0;");
-run();
-*/
-
-/*
-P = parse_and_compile("1000 + 2000 / 3000;");
-print_program(P);
-run();
-*/
-
-/*
-P = parse_and_compile("1; 2; 3;");
-print_program(P);
-run();
-*/
-
-/*
-P = parse_and_compile("const x = 1; x + 2;");
-print_program(P);
-run();
-*/
-
-/*
-P = parse_and_compile("undefined;");
-print_program(P);
-run();
-*/
-
-/*
-P = parse_and_compile("     \
-function f(x) {             \
-    return x + 1;           \
-}                           \
-f(2);                       ");
-print_program(P);
-run();
-*/
-
-/*
-P = parse_and_compile("             \
-const a = 2;                        \
-const b = 7;                        \
-function f(x, y) {                  \
-    const c = 100;                  \
-    const d = 500;                  \
-    return x - y * a + b - c + d;   \
-}                                   \
-f(30, 10);                          ");
-print_program(P);
-run();
-*/
-
-/*
-P = parse_and_compile("         \
-function factorial(n) {         \
-    return n === 1 ? 1          \
-        : n * factorial(n - 1); \
-}                               \
-factorial(4);                   ");
-//print_program(P);
-run();
-*/
-
-/*
-P = parse_and_compile("         \
-const about_pi = 3;             \
-function square(x) {            \
-    return x * x;               \
-}                               \
-4 * about_pi * square(6371);    ");
-//print_program(P);
-run();
-*/
-
-/*
-P = parse_and_compile("           \
-function power(x, y) {            \
-    return y === 0                \
-        ? 1                       \
-        : x * power(x, y - 1);    \
-}                                 \
-power(17, 3);                     ");
-//print_program(P);
-run();
-*/
-
-/*
-P = parse_and_compile("                                     \
-function recurse(x, y, operation, initvalue) {              \
-    return y === 0                                          \
-        ? initvalue                                         \
-        : operation(x, recurse(x, y - 1,                    \
-                    operation, initvalue));                 \
-}                                                           \
-                                                            \
-function f(x, z) { return x * z; }                          \
-recurse(2, 3, f, 1);                                        \
-                                                            \
-function g(x, z) { return x + z; }                          \
-recurse(2, 3, g, 0);                                        \
-                                                            \
-function h(x, z) { return x / z; }                          \
-recurse(2, 3, h, 128);                                      ");
-//print_program(P);
-run();
-*/
-
-
-// P = parse_and_compile("                         \
-// function abs(x) {                               \
-//     return x >= 0 ? x : 0 - x;                  \
-// }                                               \
-// function square(x) {                            \
-//     return x * x;                               \
-// }                                               \
-// function average(x,y) {                         \
-//     return (x + y) / 2;                         \
-// }                                               \
-// function sqrt(x) {                              \
-//     function good_enough(guess, x) {            \
-//         return abs(square(guess) - x) < 0.001;  \
-//     }                                           \
-//     function improve(guess, x) {                \
-//         return average(guess, x / guess);       \
-//     }                                           \
-//     function sqrt_iter(guess, x) {              \
-//         return good_enough(guess, x)            \
-//                    ? guess                      \
-//                    : sqrt_iter(improve(         \
-//                                 guess, x), x);  \
-//     }                                           \
-//     return sqrt_iter(1.0, x);                   \
-// }                                               \
-//                                                 \
-// sqrt(5);                                        ");
-// //print_program(P);
-// run();
-
-
-/*
-P = parse_and_compile(" \
-function f(x) {         \
-    x + 1;              \
-}                       \
-f(3);                   ");
-run();
-*/
-
-// P = parse_and_compile("                        \
-// function remove_duplicates(lst) {                                             \
-//     if(is_empty_list(lst)) {                                                  \
-//         return null;                                                          \
-//     } else {                                                                  \
-//         return accumulate((x, y) => pair(x, remove_all(y)), lst, lst);        \
-//     }                                                                         \
-// }                                                                             \
-// remove_duplicates(pair(2, enum_list(0, 3))); ");
-// //print_program(P);
-// run();
-
-// P = parse_and_compile("                                                       \
-// function permutations(lst) {                                                  \
-//     if(is_empty_list(lst)) {                                                  \
-//         return pair(null, null);                                              \
-//     } else {                                                                  \
-//         const f = e => map(x => pair(e, x), permutations(remove(e, lst)));    \
-//         return accumulate((x,y) => append(f(x), y), null, lst);               \
-//     }                                                                         \
-// }                                                                             \
-// permutations(enum_list(0, 3)); ");
-// //print_program(P);
-// run();
-
-// P = parse_and_compile("                                                       \
-// function subset(lst) {                                                        \
-//     if(is_empty_list(lst)) {                                                  \
-//         return pair(null, null);                                              \
-//     } else {                                                                  \
-//         const first = head(lst);                                              \
-//         const rest = subset(tail(lst));                                       \
-//         const with_first = map(l => pair(first, l), rest);                    \
-//         return append(with_first, rest);                                      \
-//     }                                                                         \
-// }                                                                             \
-// subset(enum_list(0, 3)); ");
-// //print_program(P);
-// run();
-

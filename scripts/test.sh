@@ -27,7 +27,7 @@ test_source() {
     ERROR=$( { $JS_SLANG -e --chapter=$3 "$(cat $1 $2)">$DIR/__tests__/output; } 2>&1 )
     if [ ! -z "$ERROR" ]
     then
-        DIFF=$(diff <(echo $ERROR | cut -c11-) <(cat $2 | tail -1 | cut -c14-))
+        DIFF=$(diff <(echo $ERROR | grep -o 'Error:.*') <(cat $2 | tail -1 | grep -o 'Error:.*'))
     else 
         DIFF=$(diff <(cat $DIR/__tests__/output) \
             <(cat $2 | tail -1 | cut -c4-))
