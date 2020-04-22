@@ -66,6 +66,8 @@ The virtual machines in this section are SECD-style and follow a description in 
 
 # Testing
 
+[requires bash (any version) and awk (BSD awk 20070501); does not work with gawk]
+
 For testing your Source programs, you need `node` and `yarn`.
 
 Write your test cases in a folder `__tests__` in each `src` subfolder. The name of the file specifies the targeted Source of your test case. For example, if `src/steppers/source-0.js` is the Source, a test case might be `src/steppers/__tests__/source-0.test1.js`.
