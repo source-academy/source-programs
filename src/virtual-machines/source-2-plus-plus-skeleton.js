@@ -1,26 +1,26 @@
 /*
 Included here:
-* compiler S1- to sVML
-* sVM implementation with Cheney garbage collection
+* compiler S2++ to sVML
+* sVM implementation without memory management
+  WITHOUT records and exception handling
 * examples
 */
 
 /* 
-
-Compiler for language Source §1- to sVML
-
-following Lecture Week 5 of CS4215
-
+Compiler for language Source §2++
+using virtual machine SVML1, Lecture Week 5 of CS4215
 Instructions: press "Run" to evaluate an example expression
               (scroll down and un-comment one example)
               
-The language Source §1- is defined as follows:
-
+The language Source §2++ is defined as follows:
 stmt    ::= expr ;
          |  const x = expr ;
          |  return expr ;
          |  stmt stmt ;
-
+         |  function x( params ) { stmt }
+         |  throw expr ;
+         |  try { stmt } catch(x) { stmt }
+         |  stmt stmt
 expr    ::= number
          |  true | false
          |  expr ? expr : expr
@@ -29,13 +29,14 @@ expr    ::= number
          |  expr binop expr
          |  unop expr
          |  expr ( expr (, expr)* )
-         |  ( params ) => { stmt } ;
+         |  ( params ) => { stmt }
+         |  { (P : expr)... }
 binop   ::= + | - | * | / | < | > | <= | >= | === | !==
 unop    ::= !              
 params  ::= ε | name ( , name ) . . .
 */
 
-// SYNTAX OF SOURCE §1 
+// SYNTAX OF SOURCE §2++ 
 
 // Functions from SICP JS Section 4.1.2
 // with slight modifications
@@ -80,6 +81,11 @@ function constant_declaration_value(stmt) {
 function is_application(expr) {
     return is_tagged_list(expr, "application");
 }
+
+function make_application(operator, operands) {
+    return list("application", operator, operands);
+}
+
 // we distinguish primitive applications by their
 // operator name
 
@@ -163,6 +169,10 @@ function function_definition_body(stmt) {
    return head(tail(tail(stmt)));
 }
 
+function make_function_definition(parameters, body) {
+    return list("function_definition", parameters, body);
+}
+
 // sequences of statements are just represented
 // by tagged lists of statements by the parser.
 
@@ -198,6 +208,67 @@ function return_statement_expression(stmt) {
    return head(tail(stmt));
 }
 
+// blocks contain a body
+
+function is_block(stmt) {
+   return is_tagged_list(stmt, "block");
+}
+function block_body(stmt) {
+   return head(tail(stmt));
+}
+
+// object expressions are tagged with "object_expression"
+
+function is_object_expression(stmt) {
+    return is_tagged_list(stmt, "object_expression");
+}
+
+function object_expression_bindings(stmt) {
+    return head(tail(stmt));
+}
+
+// object access are tagged with "object_acess"
+
+function is_object_access(stmt) {
+    return is_tagged_list(stmt, "object_access");
+}
+
+function object_access_object(stmt) {
+    return head(tail(stmt));
+}
+
+function object_access_property(stmt) {
+    return head(tail(tail(stmt)));
+}
+
+// try-catch statements are tagged with "try_statement"
+
+function is_try_catch_statement(stmt) {
+    return is_tagged_list(stmt, "try_statement");
+}
+
+function try_catch_statement_try_statement(stmt) {
+    return head(tail(stmt));
+}
+
+function try_catch_statement_exception_name(stmt) {
+    return head(tail(tail(stmt)));
+}
+
+function try_catch_statement_catch_statement(stmt) {
+    return head(tail(tail(tail(stmt))));
+}
+
+// throw statements are tagged with "try_statement"
+
+function is_throw_statement(stmt) {
+    return is_tagged_list(stmt, "throw_statement");
+}
+
+function throw_statement_expression(stmt) {
+    return head(tail(stmt));
+}
+
 // OP-CODES
 
 // op-codes of machine instructions, used by compiler
@@ -225,7 +296,12 @@ const LDF     = 18; // followed by: max_stack_size, address, env extensn count
 const CALL    = 19; 
 const LD      = 20; // followed by: index of value in environment
 const RTN     = 21;
-const DONE    = 22; 
+const THROW   = 22;
+const TRY     = 23;
+const ENDTRY  = 24;
+const DOT     = 25;
+const RCD     = 26;
+const DONE    = 27; 
 
 // some auxiliary constants
 // to keep track of the inline data
@@ -261,6 +337,11 @@ const OPCODES = list(
     pair(CALL,    "CALL   "),
     pair(LD,      "LD     "),
     pair(RTN,     "RTN    "),
+    pair(THROW,   "THROW  "),
+    pair(TRY,     "TRY    "),
+    pair(ENDTRY,  "ENDTRY "),
+    pair(DOT,     "DOT    "),
+    pair(RCD,     "RCD    "),
     pair(DONE,    "DONE   "));
     
 // get a the name of an opcode, for debugging
@@ -286,20 +367,92 @@ function print_program(P) {
         i = i + 1;
         if (op === LDCN || op === LDCB || op === GOTO || 
             op === JOF || op === ASSIGN ||
-            op === LDF || op === LD || op === CALL) {
+            op === LDF || op === LD || op === CALL || op === TRY) {
             s = s + " " + stringify(P[i]);
             i = i + 1;
         } else {}
-        if (op === LDF) {
+        if (op === LDF || op === RCD) {
             s = s + " " + stringify(P[i]) + " " +
                 stringify(P[i + 1]);
             i = i + 2;
         } else {}
-        display(undefined, s);
+        display("", s);
     }
 }
 
 // COMPILER FROM SOURCE TO SVML
+
+// table implementation from 
+// SICP JS 3.3.3 Representing Tables
+function lookup(key, table) {
+    const record = assoc(key, tail(table));
+    return record === undefined
+           ? undefined
+           : tail(record);
+}
+function assoc(key, records) {
+    return is_null(records)
+           ? undefined
+           : equal(key, head(head(records)))
+             ? head(records)
+             : assoc(key, tail(records));
+}
+function insert(key, value, table) {
+    const record = assoc(key, tail(table));
+    return record === undefined
+           ? set_tail(table, pair(pair(key, value),
+                                  tail(table)))
+           : set_tail(record, value);
+}
+function make_table() {
+    return list("*table*");
+}
+
+// sorting needed for properties
+
+// Merge sort
+
+function merge_sort(xs) {
+    if ( is_null(xs) || is_null(tail(xs))) {
+        return xs;
+    } else {
+        const mid = middle(length(xs)) ;
+        return merge ( merge_sort(take(xs, mid)),
+                       merge_sort(drop(xs, mid)));
+    }
+}
+
+function middle(n) {
+    return math_floor(n / 2) ;
+}
+
+function merge(xs, ys) {
+    if ( is_null(xs)) {
+        return ys;
+    } else if (is_null(ys)) {
+        return xs;
+    } else {
+        const x = head(xs) ;
+        const y = head(ys) ;
+        if (x < y) {
+            return pair(x, merge(tail(xs), ys));
+        } else {
+            return pair(y, merge(xs, tail(ys)));
+        }
+    }
+}
+
+function take(xs, n) {
+    return (n === 0) 
+        ? null
+        : pair(head(xs), take(tail(xs), n - 1));
+}
+
+function drop(xs, n) {
+    return n === 0
+        ? xs
+        : drop(tail(xs), n - 1);
+}
 
 // parse given string and compile it to machine code
 // return the machine code in an array
@@ -385,14 +538,16 @@ function parse_and_compile(string) {
 
     // index_table keeps track of environment addresses
     // assigned to names
-    function make_empty_index_table() {
+    function make_empty_environment_index_table() {
         return null;
     }
-    function extend_index_table(t, s) {
+    
+    function extend_environment_index_table(t, s) {
         return is_null(t) 
             ? list(pair(s, 0))
             : pair(pair(s, tail(head(t)) + 1), t);
     }
+    
     function index_of(t, s) {
         return is_null(t)
             ? error(s, "name not found:")
@@ -401,6 +556,45 @@ function parse_and_compile(string) {
             : index_of(tail(t), s);
     }
 
+    // mapping from property names (strings) to 
+    // integers, each uniquely identifying the property.
+    const IDP = make_table();
+    let next_idp = 0; // next free ID in IDP
+    
+    function get_IDP(string) {
+        if (lookup(string, IDP) === undefined) {
+            insert(string, next_idp, IDP);
+            next_idp = next_idp + 1;
+        } else {}
+        return lookup(string, IDP);
+    }
+    
+    // mapping from record signatures (strings with all
+    // property names in alphabetical order) to integers, 
+    // each uniquely identifying the record type.
+    const IDR = make_table();
+    let next_idr = 0; // next free ID in IDR
+    
+    function get_IDR(string) {
+        if (lookup(string, IDR) === undefined) {
+            insert(string, next_idr, IDR);
+            next_idr = next_idr + 1;
+        } else {}
+        return lookup(string, IDR);
+    }
+    
+    // index_table (called p in Notes 07) is an array
+    // indexed using idr's, containing arrays indexed
+    // using idp's, containing the index of the property
+    // with idp in records of the idr kind.
+    const record_index_table = [];
+    
+    function put_index_in_record_index_table(idr, idp, the_index) {
+        if (record_index_table[idr] === undefined) {
+            record_index_table[idr] = [];
+        } else {}
+        record_index_table[idr][idp] = the_index;
+    }
     // a small complication: the toplevel function
     // needs to return the value of the last statement
     let toplevel = true;
@@ -446,13 +640,14 @@ function parse_and_compile(string) {
     // computing the arguments. Note that the arguments
     // themselves accumulate on the operand stack, which
     // explains the "i + compile(...)"
-    function compile_arguments(exprs, index_table) {
+    function compile_arguments(exprs, environment_index_table) {
         let i = 0;
         let s = length(exprs);
         let max_stack_size = 0;
         while (i < s) {
             max_stack_size = math_max(i + 
-                                      compile(head(exprs), index_table, 
+                                      compile(head(exprs), 
+                                              environment_index_table, 
                                           false),
                                       max_stack_size);
             i = i + 1;
@@ -461,7 +656,7 @@ function parse_and_compile(string) {
         return max_stack_size;
     }
     
-    function compile_boolean_operation(expr, index_table) {
+    function compile_boolean_operation(expr, environment_index_table) {
         if (boolean_operator_name(expr) === "&&") {
             return compile(make_conditional_expression(
                                          first_operand(
@@ -470,7 +665,7 @@ function parse_and_compile(string) {
                                              rest_operands(
                                                  operands(expr))),
                                          false), 
-                                     index_table,
+                                     environment_index_table,
                                      false);
         } else {
             return compile(make_conditional_expression(
@@ -480,18 +675,19 @@ function parse_and_compile(string) {
                                          first_operand(
                                              rest_operands(
                                                  operands(expr)))),
-                                     index_table,
+                                     environment_index_table,
                                      false);
         }
     }
     
-    function compile_conditional_expression(expr, index_table, insert_flag) {
+    function compile_conditional_expression(expr, environment_index_table,
+                                            insert_flag) {
         const m_1 = compile(cond_expr_pred(expr), 
-                            index_table, false);
+                            environment_index_table, false);
         add_unary_instruction(JOF, NaN);
         const JOF_address_address = insert_pointer - 1;
         const m_2 = compile(cond_expr_cons(expr), 
-                            index_table, insert_flag);
+                            environment_index_table, insert_flag);
         let GOTO_address_address = NaN;
         if (!insert_flag) {
             add_unary_instruction(GOTO, NaN);
@@ -499,19 +695,20 @@ function parse_and_compile(string) {
         } else {}
         machine_code[JOF_address_address] = insert_pointer;
         const m_3 = compile(cond_expr_alt(expr), 
-                            index_table, insert_flag);
+                            environment_index_table, insert_flag);
         if (!insert_flag) {
             machine_code[GOTO_address_address] = insert_pointer;
         } else {}
         return math_max(m_1, m_2, m_3);
     }
     
-    function compile_primitive_application(expr, index_table) {
+    function compile_primitive_application(expr, environment_index_table) {
         const op = primitive_operator_name(expr);
         const ops = operands(expr);
         const operand_1 = first_operand(ops);
         if (op === "!") {
-            const max_stack_size = compile(operand_1, index_table, false);
+            const max_stack_size = compile(operand_1, 
+                                           environment_index_table, false);
             add_nullary_instruction(NOT);
             return max_stack_size;
         } else {
@@ -526,30 +723,30 @@ function parse_and_compile(string) {
                           : op === ">" ? GREATER
                           : op === ">=" ? GEQ
                           : error(op, "unknown operator:");
-            const m_1 = compile(operand_1, index_table, false);
-            const m_2 = compile(operand_2, index_table, false);
+            const m_1 = compile(operand_1, environment_index_table, false);
+            const m_2 = compile(operand_2, environment_index_table, false);
             add_nullary_instruction(op_code);
             return math_max(m_1, 1 + m_2);
         }
     }
             
-    function compile_application(expr, index_table) {    
+    function compile_application(expr, environment_index_table) {    
         const max_stack_operator = compile(operator(expr),
-                                       index_table, false);
+                                       environment_index_table, false);
         const max_stack_operands = compile_arguments(operands(expr),
-                                       index_table);
+                                       environment_index_table);
         add_unary_instruction(CALL, length(operands(expr)));
         return math_max(max_stack_operator, max_stack_operands + 1);
     }
     
-    function compile_function_definition(expr, index_table) {
+    function compile_function_definition(expr, environment_index_table) {
         const body = function_definition_body(expr);
         const locals = local_names(body);
         const parameters = 
             map(x => name_of_name(x), function_definition_parameters(expr));
         const extended_index_table =
-            accumulate((s, it) => extend_index_table(it, s),
-                       index_table,
+            accumulate((s, it) => extend_environment_index_table(it, s),
+                       environment_index_table,
                        append(reverse(locals), 
                        reverse(parameters)));
         add_ternary_instruction(LDF, NaN, NaN, 
@@ -562,34 +759,136 @@ function parse_and_compile(string) {
         return 1;
     }
     
-    function compile_sequence(expr, index_table, insert_flag) {
+    function compile_sequence(expr, environment_index_table, insert_flag) {
         const statements = sequence_statements(expr);
         if (is_empty_sequence(statements)) {
             return 0;
         } else if (is_last_statement(statements)) {
             return compile(first_statement(statements), 
-                           index_table, insert_flag);
+                           environment_index_table, insert_flag);
         } else {
             const m_1 = compile(first_statement(statements), 
-                                index_table, false);
+                                environment_index_table, false);
             add_nullary_instruction(POP);
             const m_2 = compile(make_sequence(rest_statements(statements)), 
-                                index_table, insert_flag);
+                                environment_index_table, insert_flag);
             return math_max(m_1, m_2);
         }
     }
     
-    function compile_constant_declaration(expr, index_table) {
+    function compile_constant_declaration(expr, environment_index_table) {
         const name = constant_declaration_name(expr);
-        const index = index_of(index_table, name);
+        const index = index_of(environment_index_table, name);
         const max_stack_size = compile(constant_declaration_value(expr),
-                                 index_table, false);
+                                 environment_index_table, false);
         add_unary_instruction(ASSIGN, index);
         add_nullary_instruction(LDCU);
         return max_stack_size;
     }
     
-    function compile(expr, index_table, insert_flag) {
+    // we compile away blocks by putting them in 
+    // applications of nullary functions:
+    // { stmt } => ( () => { stmt } )()
+    
+    function compile_block(expr, index_table) {
+        const body = block_body(expr);
+        if (is_return_statement(body) ||
+            (is_sequence(body) &&
+             filter(is_return_statement, 
+                    sequence_statements(body)) !== null)) {
+                       error(expr, 
+                         "current limitation: no return in try-catch allowed");
+        } else {
+            return compile(
+                   make_application(
+                       make_function_definition(null, block_body(expr)),
+                       null),
+                   index_table,
+                   false);
+        }
+    }
+    
+    function compile_object_access(expr, environment_index_table) {
+        const max_stack_size = compile(object_access_object(expr),
+                                 environment_index_table, false);
+        const idp = get_IDP(head(tail(object_access_property(expr))));
+        add_unary_instruction(LDCN, idp);
+        add_nullary_instruction(DOT);
+        return max_stack_size + 1;
+    }
+    
+    function compile_object_expression(expr, environment_index_table) {
+        let bindings = object_expression_bindings(expr);
+        const unsorted_property_names =
+            map(x => head(tail(head(x))), bindings);
+        const sorted_property_names =
+            merge_sort(unsorted_property_names);
+        // calculates the index of property name s in 
+        // sorted_property_names
+        function record_index(s) {
+            function ind(ss, i) {
+                return head(ss) === s ? i : ind(tail(ss), i + 1);
+            }
+            return ind(sorted_property_names, 0);
+        }
+        // computes a unique string from the properties
+        const signature =
+            accumulate((s, ss) => s + "," + ss, "", sorted_property_names);
+        const idr = get_IDR(signature);
+        let i = 0;
+        let s = length(bindings);
+        let max_stack_size = 0;
+        while (i < s) {
+            const property_name = head(tail(head(head(bindings))));
+            const idp = get_IDP(property_name);
+            add_unary_instruction(LDCN, idp);
+            put_index_in_record_index_table(idr, idp, record_index(property_name));
+            max_stack_size = math_max(i * 2 + 
+                                      compile(tail(head(bindings)), 
+                                              environment_index_table, 
+                                              false),
+                                      max_stack_size);
+            i = i + 1;
+            bindings = tail(bindings);
+        }
+        add_binary_instruction(RCD, s, idr);
+        return max_stack_size;            
+    }
+    
+    function compile_try_catch_statement(expr, environment_index_table, insert_flag) {
+        add_unary_instruction(TRY, NaN);
+        const catch_address_address = insert_pointer - 1;
+        const max_stack_size_1 = 
+            compile(try_catch_statement_try_statement(expr),
+                    environment_index_table, false);
+        add_nullary_instruction(ENDTRY);
+        let GOTO_address_address = NaN;
+
+        add_unary_instruction(GOTO, NaN);
+        GOTO_address_address = insert_pointer - 1;
+
+        machine_code[catch_address_address] = insert_pointer;
+        const catch_name = name_of_name(try_catch_statement_exception_name(expr));
+        const extended_index_table = 
+            extend_environment_index_table(environment_index_table, catch_name);
+        const max_stack_size_2 =
+            compile(try_catch_statement_catch_statement(expr),
+                    extended_index_table, false);
+
+        machine_code[GOTO_address_address] = insert_pointer;
+
+        return math_max(max_stack_size_1, max_stack_size_2);
+    }
+    
+    function compile_throw_statement(expr, environment_index_table) {
+        const max_stack_size =
+            compile(throw_statement_expression(expr), 
+                    environment_index_table, false);
+        add_nullary_instruction(THROW);
+        return max_stack_size;
+    }
+
+    function compile(expr, environment_index_table, insert_flag) {
         let max_stack_size = 0;
         if (is_number(expr)) {
             add_unary_instruction(LDCN, expr);
@@ -602,36 +901,51 @@ function parse_and_compile(string) {
             max_stack_size = 1;
         } else if (is_boolean_operation(expr)) {
             max_stack_size = 
-            compile_boolean_operation(expr, index_table);
+            compile_boolean_operation(expr, environment_index_table);
         } else if (is_conditional_expression(expr)) {
             max_stack_size = 
-            compile_conditional_expression(expr, index_table, insert_flag);
+            compile_conditional_expression(expr, 
+                environment_index_table, insert_flag);
             insert_flag = false;
         } else if (is_primitive_application(expr)) {
             max_stack_size = 
-            compile_primitive_application(expr, index_table);
+            compile_primitive_application(expr, environment_index_table);
         } else if (is_application(expr)) {
             max_stack_size = 
-            compile_application(expr, index_table);
+            compile_application(expr, environment_index_table);
         } else if (is_function_definition(expr)) {
             max_stack_size =
-            compile_function_definition(expr, index_table);
+            compile_function_definition(expr, environment_index_table);
         } else if (is_name(expr)) {
-            add_unary_instruction(LD, index_of(index_table, 
+            add_unary_instruction(LD, index_of(environment_index_table, 
                                   name_of_name(expr)));
             max_stack_size = 1;
         } else if (is_sequence(expr)) {
             max_stack_size =
-            compile_sequence(expr, index_table, insert_flag);
+            compile_sequence(expr, environment_index_table, insert_flag);
             insert_flag = false;
         } else if (is_constant_declaration(expr)) {
             max_stack_size =
-            compile_constant_declaration(expr, index_table);
+            compile_constant_declaration(expr, environment_index_table);
         } else if (is_return_statement(expr)) {
             max_stack_size = compile(return_statement_expression(expr), 
-                                     index_table, false);
+                                     environment_index_table, false);
+        } else if (is_block(expr)) {
+            max_stack_size = compile_block(expr, environment_index_table);
+        } else if (is_object_expression(expr)) {
+            max_stack_size = 
+            compile_object_expression(expr, environment_index_table);
+        } else if (is_object_access(expr)) {
+            max_stack_size = 
+            compile_object_access(expr, environment_index_table);
+        } else if (is_try_catch_statement(expr)) {
+            max_stack_size = 
+            compile_try_catch_statement(expr, environment_index_table, insert_flag);
+        } else if (is_throw_statement(expr)) {
+            max_stack_size = 
+            compile_throw_statement(expr, environment_index_table);
         } else {
-            error(expr, "unknown expression:");
+            error(expr, "unknown statement:");
         }
         
         // handling of return
@@ -642,7 +956,10 @@ function parse_and_compile(string) {
                        (is_self_evaluating(expr) ||
                         is_undefined_expression(expr) ||
                         is_application(expr) ||
-                        is_primitive_application(expr))
+                        is_primitive_application(expr) ||
+                        is_object_access(expr) || 
+                        is_try_catch_statement(expr) ||
+                        is_block(expr))
                       ) {
                 add_nullary_instruction(RTN);
             } else {
@@ -653,8 +970,9 @@ function parse_and_compile(string) {
         } else {}
         return max_stack_size;
     }
-    
+
     const program = parse(string);
+    
     add_nullary_instruction(START);
     add_ternary_instruction(LDF, NaN, NaN, 
                             length(local_names(program)));
@@ -665,8 +983,8 @@ function parse_and_compile(string) {
     
     const locals = reverse(local_names(program));
     const program_names_index_table =
-         accumulate((s, it) => extend_index_table(it, s),
-                    make_empty_index_table(),
+         accumulate((s, it) => extend_environment_index_table(it, s),
+                    make_empty_environment_index_table(),
                     locals);
     
     push_to_compile(make_to_compile_task(
@@ -675,10 +993,21 @@ function parse_and_compile(string) {
                         LDF_address_address, 
                         program_names_index_table));
     continue_to_compile();
-    return machine_code;
+    
+    const div_by_zero_error_address = insert_pointer;
+    
+    compile(parse("throw {DivisionByZero: true};"), null, false);
+
+    display(IDP, "IDP:");
+    display(IDR, "IDR:");
+    
+    return list(machine_code, record_index_table, 
+                div_by_zero_error_address);
+    
 }
 
-// VIRTUAL MACHINE WITH CHENEY GARBAGE COLLECTOR
+
+// VIRTUAL MACHINE
 
 // "registers" are the global variables of our machine. 
 // These contain primitive values (numbers or boolean 
@@ -687,8 +1016,19 @@ function parse_and_compile(string) {
 // P is an array that contains an SVML machine program: 
 // the op-codes of instructions and their arguments
 let P = [];
+// RECORD_INDEX_TABLE is register containing the 
+// table that has for every record type and record ID the
+// correct index (this table is called "p" in Notes 07).
+let RECORD_INDEX_TABLE = [];
+// DIV_BY_ZERO_ERROR_ADDRESS is a global register that
+// has the code address in P that throws the div-by-zero exception
+let DIV_BY_ZERO_ERROR_ADDRESS = NaN;
 // PC is program counter: index of the next instruction
-let PC = -Infinity;
+let PC = 0;
+// HEAP is array containing all dynamically allocated data structures
+const HEAP = [];
+// next free slot in heap
+let FREE = 0;
 // OS is address of current environment in HEAP; initially a dummy value
 let ENV = -Infinity;
 // OS is address of current operand stack in HEAP; initially a dummy value
@@ -696,20 +1036,7 @@ let OS = -Infinity;
 // temporary value, used by PUSH and POP; initially a dummy value
 let RES = -Infinity;   
 
-// RTS: runtime stack
-let RTS = [];
-let TOP_RTS = -1;
-
-// boolean that says whether machine is running
-let RUNNING = NaN;
-
-// exit state: NORMAL, DIV_ERROR, OUT_OF_MEMORY_ERROR, etc
-let STATE = NaN;
-
-// //////////////////////////////
 // some general-purpose registers
-// //////////////////////////////
-
 let A = 0;
 let B = 0;
 let C = 0;
@@ -718,11 +1045,6 @@ let E = 0;
 let F = 0;
 let G = 0;
 let H = 0;
-let I = 0;
-let J = 0;
-let K = 0;
-let L = 0;
-let N = 0;
 
 function show_executing(s) {
     display(undefined, "--- RUN ---" + s);
@@ -743,174 +1065,34 @@ function show_registers(s) {
     display(  F, "F  :");
     display(  G, "G  :");
     display(  H, "H  :");
-    display(  I, "I  :");
-    display(  J, "J  :");
-    display(  K, "K  :");
-    display(  L, "L  :");
-    display(  N, "N  :");
     display( OS, "OS :");
     display(ENV, "ENV:");
     display(RTS, "RTS:");
     display(TOP_RTS, "TOP_RTS:");
 }
 
-// HEAP is array containing all dynamically allocated data structures
-let HEAP = NaN;
-// next free slot in heap
-let FREE = -Infinity;
-// scan pointer in Cheney
-let SCAN = -Infinity;
-// the size of the heap is fixed
-let HEAP_SIZE = -Infinity;
-// smallest heap address
-let HEAPBOTTOM = -Infinity;
+// register that says if machine is running                   
+let RUNNING = true;
+
+const NORMAL = 0;
+const DIV_ERROR = 1;
+const OUT_OF_MEMORY_ERROR = 2; // not used yet: memory currently unbounded
+
+let STATE = NORMAL;
 
 // general node layout
 const TAG_SLOT = 0;
 const SIZE_SLOT = 1;
 const FIRST_CHILD_SLOT = 2;
 const LAST_CHILD_SLOT = 3;
-	
-// ///////////////////////////////////
-// Cheney's Copying Garbage Collection
-// ///////////////////////////////////
-
-// initialize spaces for Cheney's algorithm
-
-let SPACESIZE = -Infinity;
-let TOSPACE = -Infinity;
-let FROMSPACE = -Infinity;
-let TOPOFSPACE = -Infinity; 
-
-function initialize_machine(heapsize) {
-    display(heapsize, "\nRunning VM with heap size:");
-    HEAP = [];
-    HEAP_SIZE = heapsize;
-    HEAPBOTTOM = 0;
-    SPACESIZE = HEAP_SIZE / 2;
-    TOSPACE = HEAPBOTTOM;
-    FROMSPACE = TOSPACE + SPACESIZE;
-    TOPOFSPACE = TOSPACE + SPACESIZE - 1; 
-    FREE = TOSPACE;
-    TEMP_ROOT = -1;
-    RUNNING = true;
-    STATE = NORMAL;
-    PC = 0;
-}
-
-// We introduce TEMP_ROOT register to handle instructions 
-// that allocate nodes on the heap and then may flip.
-// The address of those nodes are assigned to TEMP_ROOT.
-// TEMP_ROOT is treated as a root in garbage collection,
-// and thus gets updated to point to the correct copy in
-// the to-space.
-let TEMP_ROOT = -Infinity;
 
 // NEW expects tag in A and size in B
-// changes A, B, C, J, K
 function NEW() {
-    J = A;
-    K = B;
-    if (FREE + K > TOPOFSPACE) {
-       display(FREE, "Flip! FREE:");
-	   FLIP();
-    } else {}
-	if (FREE + K > TOPOFSPACE) {
-       STATE = OUT_OF_MEMORY_ERROR;
-       RUNNING = false;
-	} else {}
-    HEAP[FREE + TAG_SLOT] = J;
-    HEAP[FREE + SIZE_SLOT] = K;
+    HEAP[FREE + TAG_SLOT] = A;
+    HEAP[FREE + SIZE_SLOT] = B;
     RES = FREE;
-    FREE = FREE + K;
+    FREE = FREE + B;
 }
-
-// use tag slot as forwarding address;
-// the trick: since tags are negative, they
-// can never be confused with heap addresses
-const FORWARDINGADDRESS = 0;
-
-// changes B, C, I
-function FLIP() {
-    A = FROMSPACE;
-    FROMSPACE = TOSPACE; 
-    TOSPACE = A;
-    TOPOFSPACE = TOSPACE + SPACESIZE - 1;
-    FREE = TOSPACE;
-    SCAN = TOSPACE;
-    
-    A = OS;
-    COPY();
-    OS = RES;
-    
-    A = ENV;
-    COPY();
-    ENV = RES;
-    
-    // TEMP_ROOT is temporary root of garbage
-    // collection, used in EXTEND and CALL
-    if (TEMP_ROOT >= 0) {
-        A = TEMP_ROOT;
-        COPY();
-        TEMP_ROOT = RES;
-    } else {}
-    
-    for (I = 0; I <= TOP_RTS; I = I + 1) {
-        A = RTS[I];
-        COPY();
-        RTS[I] = RES;
-    }
-    while (SCAN < FREE) {
-        for (I = HEAP[SCAN + FIRST_CHILD_SLOT];
-             I <= HEAP[SCAN + LAST_CHILD_SLOT];
-             I = I + 1) {
-            A = HEAP[SCAN + I];
-            COPY();
-            HEAP[SCAN + I] = RES;
-        }
-        SCAN = SCAN + HEAP[SCAN + SIZE_SLOT];   
-    }
-}
-
-// expects node to be copied in A
-// changes B, C
-function COPY() {
-    if (A === undefined) {
-        RES = undefined;
-    } else {
-    ALREADY_COPIED();
-    if (RES) {
-        RES = HEAP[A + FORWARDINGADDRESS];
-    } else {
-        B = FREE;
-        MOVE();
-        FREE = FREE + HEAP[A + SIZE_SLOT];
-        HEAP[A + FORWARDINGADDRESS] = B;
-        RES = B;
-    }
-    }
-}
-
-// expects node in A
-function ALREADY_COPIED() {
-    RES = HEAP[A + FORWARDINGADDRESS] >= TOSPACE
-	  	  && 
-		  HEAP[A + FORWARDINGADDRESS] <= FREE;
-}
-
-// expects source in A and destination in B
-// changes C
-function MOVE() {
-	for (C = 0; C < HEAP[A + SIZE_SLOT]; C = C + 1) {
-		HEAP[B + C] = HEAP[A + C];
-	}
-}
-
-// machine states                 
-
-const NORMAL = 0;
-const DIV_ERROR = 1;
-const OUT_OF_MEMORY_ERROR = 2; 
 
 // number nodes layout
 //
@@ -924,16 +1106,14 @@ const NUMBER_TAG = -100;
 const NUMBER_SIZE = 5;
 const NUMBER_VALUE_SLOT = 4;
 
-// expects number in A
-// changes A, B, C, D, E, J, K
 function NEW_NUMBER() {
-    E = A;
+    C = A;
     A = NUMBER_TAG;
     B = NUMBER_SIZE;
     NEW();
     HEAP[RES + FIRST_CHILD_SLOT] = 6;
     HEAP[RES + LAST_CHILD_SLOT] = 5; // no children
-    HEAP[RES + NUMBER_VALUE_SLOT] = E;
+    HEAP[RES + NUMBER_VALUE_SLOT] = C;
 }
 
 // bool nodes layout
@@ -948,16 +1128,14 @@ const BOOL_TAG = -101;
 const BOOL_SIZE = 5;
 const BOOL_VALUE_SLOT = 4;
 
-// expects boolean in A
-// changes A, B, C, D, E, J, K
 function NEW_BOOL() {
-    E = A;
+    C = A;
     A = BOOL_TAG;
     B = BOOL_SIZE;
     NEW();
     HEAP[RES + FIRST_CHILD_SLOT] = 6;
     HEAP[RES + LAST_CHILD_SLOT] = 5; // no children
-    HEAP[RES + BOOL_VALUE_SLOT] = E;
+    HEAP[RES + BOOL_VALUE_SLOT] = C;
 }
 
 // undefined nodes layout
@@ -970,7 +1148,6 @@ function NEW_BOOL() {
 const UNDEFINED_TAG = -106;
 const UNDEFINED_SIZE = 4;
 
-// changes A, B, C, D, J, K
 function NEW_UNDEFINED() {
     A = UNDEFINED_TAG;
     B = UNDEFINED_SIZE;
@@ -992,11 +1169,10 @@ function NEW_UNDEFINED() {
 const OS_TAG = -105;
 
 // expects max size in A
-// changes A, B, C, D, E, J, K
 function NEW_OS() {
-    E = A;
+    C = A;
     A = OS_TAG;
-    B = E + 4;
+    B = C + 4;
     NEW();
 	HEAP[RES + FIRST_CHILD_SLOT] = 4;
 	// operand stack initially empty
@@ -1005,9 +1181,7 @@ function NEW_OS() {
 
 // PUSH and POP are convenient subroutines that operate on
 // the operand stack OS
-
-// expects its argument in A
-// changes A, B
+// PUSH expects its argument in A
 function PUSH_OS() {
     B = HEAP[OS + LAST_CHILD_SLOT]; // address of current top of OS
     B = B + 1; 
@@ -1016,7 +1190,7 @@ function PUSH_OS() {
 }
 
 // POP puts the top-most value into RES
-// changes B
+// uses B
 function POP_OS() {
     B = HEAP[OS + LAST_CHILD_SLOT]; // address of current top of OS
     HEAP[OS + LAST_CHILD_SLOT] = B - 1; // update address of current top of OS
@@ -1041,21 +1215,21 @@ const CLOSURE_ADDRESS_SLOT = 5;
 const CLOSURE_ENV_SLOT = 6;
 const CLOSURE_ENV_EXTENSION_COUNT_SLOT = 7;
 
-// expects stack size in A, P address in B, environment extension count in C
-// changes A, B, C, D, E, F, J, K
+// expects stack size in A, address in B, environment extension count in C
 function NEW_CLOSURE() {
-    D = A;
-    E = B;
-    F = C;
+    E = A;
+    F = B;
     A = CLOSURE_TAG;
     B = CLOSURE_SIZE;
     NEW();
+    A = E;
+    B = F;
 	HEAP[RES + FIRST_CHILD_SLOT] = CLOSURE_ENV_SLOT;
 	HEAP[RES + LAST_CHILD_SLOT] = CLOSURE_ENV_SLOT;
-	HEAP[RES + CLOSURE_OS_SIZE_SLOT] = D;
-	HEAP[RES + CLOSURE_ADDRESS_SLOT] = E;
+	HEAP[RES + CLOSURE_OS_SIZE_SLOT] = A;
+	HEAP[RES + CLOSURE_ADDRESS_SLOT] = B;
     HEAP[RES + CLOSURE_ENV_SLOT] = ENV;
-    HEAP[RES + CLOSURE_ENV_EXTENSION_COUNT_SLOT] = F;
+    HEAP[RES + CLOSURE_ENV_EXTENSION_COUNT_SLOT] = C;
 }
 
 // expects closure in A, environment in B
@@ -1080,7 +1254,6 @@ const RTS_FRAME_ENV_SLOT = 5;
 const RTS_FRAME_OS_SLOT = 6;
 
 // expects current PC, ENV, OS in their registers
-// changes A, B, C, D, J, K
 function NEW_RTS_FRAME() {
     A = RTS_FRAME_TAG;
     B = RTS_FRAME_SIZE;
@@ -1091,6 +1264,10 @@ function NEW_RTS_FRAME() {
 	HEAP[RES + RTS_FRAME_ENV_SLOT] = ENV;
     HEAP[RES + RTS_FRAME_OS_SLOT] = OS;
 }
+
+
+const RTS = [];
+let TOP_RTS = -1;
 
 // expects stack frame in A
 function PUSH_RTS() {
@@ -1103,6 +1280,8 @@ function POP_RTS() {
     RES = RTS[TOP_RTS];
     TOP_RTS = TOP_RTS - 1;
 }
+
+
 
 // environment nodes layout
 //
@@ -1117,31 +1296,26 @@ function POP_RTS() {
 const ENV_TAG = -102;
 
 // expects number of env entries in A
-// changes A, B, C, D, J, K
+// changes B
 function NEW_ENVIRONMENT() {
-    D = A;
+    C = A;
     A = ENV_TAG;
-    B = D + 4;
+    B = C + 4;
     NEW();
     HEAP[RES + FIRST_CHILD_SLOT] = 4;
-    HEAP[RES + LAST_CHILD_SLOT] = 3 + D;
+    HEAP[RES + LAST_CHILD_SLOT] = 3 + C;
 }
 
 // expects env in A, by-how-many in B
-// changes A, B, C, D
-// Using TEMP_ROOT to make sure the
-// origin on copying is updated when 
-// garbage collection happens in NEW_ENVIRONMENT
 function EXTEND() {
-    TEMP_ROOT = A;
+    D = A;
     A = HEAP[A + SIZE_SLOT] - 4 + B;
     NEW_ENVIRONMENT();
-    for (B = HEAP[TEMP_ROOT + FIRST_CHILD_SLOT]; 
-         B <= HEAP[TEMP_ROOT + LAST_CHILD_SLOT];
+    for (B = HEAP[D + FIRST_CHILD_SLOT]; 
+         B <= HEAP[D + LAST_CHILD_SLOT];
          B = B + 1) {
-        HEAP[RES + B] = HEAP[TEMP_ROOT + B];
+        HEAP[RES + B] = HEAP[D + B];
     }
-    TEMP_ROOT = -1;
 }
 
 // debugging: show current heap
@@ -1176,6 +1350,7 @@ function show_heap_value(address) {
                 node_kind(HEAP[address]) +
                 ", value = " + 
                 stringify(HEAP[address + NUMBER_VALUE_SLOT]));
+    
 }
 
 // SVMLa implementation
@@ -1203,7 +1378,7 @@ const M = [];
 M[START] = () =>   { A = 1; // first OS only needs to hold one closure
                      NEW_OS();
                      OS = RES;
-                     A = 0; // first environment is empty
+                     A = 0;
                      NEW_ENVIRONMENT();
                      ENV = RES;
                      PC = PC + 1;
@@ -1327,10 +1502,8 @@ M[DIV] = () =>     { POP_OS();
                      PUSH_OS();
                      PC = PC + 1;
                      E = E === 0;
-                     if (E) { 
-                         STATE = DIV_ERROR; 
-                         RUNNING = false;
-                     } else {}
+                     if (E) { STATE = DIV_ERROR; } else {}
+                     if (E) { RUNNING = false; } else {}
                    };
                    
 M[POP] = () =>     { POP_OS();
@@ -1376,34 +1549,24 @@ M[CALL] = () =>    { G = P[PC + 1];  // lets keep number of arguments in G
                      H = HEAP[A + LAST_CHILD_SLOT]; 
                      // H is now offset of last child slot
                      B = HEAP[F + CLOSURE_ENV_EXTENSION_COUNT_SLOT];
-                     // B is now the environment extension count      
-                     L = HEAP[F + CLOSURE_ADDRESS_SLOT];
-                     N = HEAP[F + CLOSURE_OS_SIZE_SLOT]; // closure stack size
-
+                     // B is now the environment extension count
                      EXTEND(); // after this, RES is new env
-                     
-                     // Heap address of new environment can 
-                     // be changed by NEW_RS_FRAME and NEW_OS below.
-                     // Assigning TEMP_ROOT to address makes sure we
-                     // restore the updated value before competing CALL.
-                     TEMP_ROOT = RES;
-                     
-                     H = RES + H + G; 
+                     E = RES;
+                     H = E + H + G; 
                      // H is now address where last argument goes in new env
                      for (C = H; C > H - G; C = C - 1) {
                          POP_OS(); // now RES has the address of the next arg
                          HEAP[C] = RES; // copy argument into new env
                      }
-                     POP_OS(); // closure is on top of OS; pop; no more needed
-                     NEW_RTS_FRAME(); // saves PC + 2, ENV, OS 
+                     POP_OS(); // closure is on top of OS; pop it as not needed
+                     NEW_RTS_FRAME(); // saves PC+2, ENV, OS
                      A = RES;
                      PUSH_RTS();
-                     A = N;
-                     NEW_OS();    
+                     PC = HEAP[F + CLOSURE_ADDRESS_SLOT];
+                     A = HEAP[F + CLOSURE_OS_SIZE_SLOT]; // closure stack size
+                     NEW_OS();    // uses B and C
                      OS = RES;
-                     PC = L;
-                     ENV = TEMP_ROOT;
-                     TEMP_ROOT = -1;
+                     ENV = E;
                    };
                    
 M[RTN] = () =>     { POP_RTS();
@@ -1421,6 +1584,8 @@ M[DONE] = () =>    { RUNNING = false;
                    
 function run() {
     while (RUNNING) { 
+        //show_registers("run loop");
+        //show_heap("run loop");
         if (M[P[PC]] === undefined) {
             error(P[PC], "unknown op-code:");
         } else {
@@ -1430,27 +1595,79 @@ function run() {
     if (STATE === DIV_ERROR) {
         POP_OS();
         error(RES, "execution aborted:");
-    } else if (STATE ===  OUT_OF_MEMORY_ERROR) {
-        error(RES, "memory exhausted despite garbage collection");
     } else {
         POP_OS();
         show_heap_value(RES); 
     }
 }
 
-// VM test cases for Cheney garbage collection
 
-initialize_machine(130);
-P = parse_and_compile("     \
+// EXAMPLES
+
+// compiler and VM test cases
+
+/*
+const compiled = 
+parse_and_compile("true ? 11 : 22;");
+*/
+
+/*
+const compiled = 
+parse_and_compile("false ? 11 : 22;");
+*/
+
+/*
+const compiled = 
+parse_and_compile("! (true || false);");
+*/
+
+/*
+const compiled = 
+parse_and_compile("1 + 1 === 2;");
+*/
+
+/*
+const compiled = 
+parse_and_compile("1 + 2 * 3 * 4 - 5;");
+*/
+
+/*
+const compiled = 
+parse_and_compile("1 + 1 / 0;");
+*/
+
+/*
+const compiled = 
+parse_and_compile("1000 + 2000 / 3000;");
+*/
+
+/*
+const compiled = 
+parse_and_compile("1; 2; 3;");
+*/
+
+/*
+const compiled = 
+parse_and_compile("const x = 1; x + 2;");
+*/
+
+/*
+const compiled = 
+parse_and_compile("undefined;");
+*/
+
+/*
+const compiled = 
+parse_and_compile("         \
 function f(x) {             \
     return x + 1;           \
 }                           \
 f(2);                       ");
-run();
+*/
 
-
-initialize_machine(198); // exactly 200 needed
-P = parse_and_compile("             \
+/*
+const compiled = 
+parse_and_compile("                 \
 const a = 2;                        \
 const b = 7;                        \
 function f(x, y) {                  \
@@ -1459,44 +1676,42 @@ function f(x, y) {                  \
     return x - y * a + b - c + d;   \
 }                                   \
 f(30, 10);                          ");
-run();
+*/
 
-initialize_machine(290);
-P = parse_and_compile("         \
+/*
+const compiled = 
+parse_and_compile("             \
 function factorial(n) {         \
     return n === 1 ? 1          \
         : n * factorial(n - 1); \
 }                               \
 factorial(4);                   ");
-//print_program(P);
-run();
+*/
 
-
-initialize_machine(156);
-P = parse_and_compile("         \
+/*
+const compiled = 
+parse_and_compile("             \
 const about_pi = 3;             \
 function square(x) {            \
     return x * x;               \
 }                               \
 4 * about_pi * square(6371);    ");
-//print_program(P);
-run();
+*/
 
-
-initialize_machine(206);
-P = parse_and_compile("           \
+/*
+const compiled = 
+parse_and_compile("               \
 function power(x, y) {            \
     return y === 0                \
         ? 1                       \
         : x * power(x, y - 1);    \
 }                                 \
-power(17, 1);                     ");
-//print_program(P);
-run();
+power(17, 3);                     ");
+*/
 
-
-initialize_machine(442);
-P = parse_and_compile("                                     \
+/*
+const compiled = 
+parse_and_compile("                                         \
 function recurse(x, y, operation, initvalue) {              \
     return y === 0                                          \
         ? initvalue                                         \
@@ -1512,12 +1727,11 @@ recurse(2, 3, g, 0);                                        \
                                                             \
 function h(x, z) { return x / z; }                          \
 recurse(2, 3, h, 128);                                      ");
-//print_program(P);
-run();
+*/
 
-
-initialize_machine(696);
-P = parse_and_compile("                         \
+/*
+const compiled = 
+parse_and_compile("                             \
 function abs(x) {                               \
     return x >= 0 ? x : 0 - x;                  \
 }                                               \
@@ -1544,28 +1758,40 @@ function sqrt(x) {                              \
 }                                               \
                                                 \
 sqrt(5);                                        ");
-//print_program(P);
-run();
+*/
 
-
-initialize_machine(140);
-P = parse_and_compile(" \
+/*
+const compiled = 
+parse_and_compile("     \
 function f(x) {         \
     x + 1;              \
 }                       \
 f(3);                   ");
-run();
+*/
+
+/*
+const compiled = 
+parse_and_compile("                                \
+const r_1 = { A: 11, B: { F: 22, G: 88 } };        \
+r_1 . B . G;                                       \
+const r_2 = { B: 55, C: 66, D: 77 };               \
+const r_3 = { A: 33, B: 44 };                      \
+r_1 . A + r_2 . B + r_3 . C;                       ");
+*/
 
 
-initialize_machine(176);
-P = parse_and_compile(" \
-function x(a) {         \
-  const b = 2*a;        \
-  function y() {        \
-      return b + 1;     \
-  }                     \
-  return y;             \
-}                       \
-x(2)();                 ");
-run();
-show_heap("");
+const compiled = 
+parse_and_compile("  \
+try {                \
+    (1 + 2) / 1;     \
+} catch(e) {         \
+    true;            \
+}                   ");
+
+
+P = list_ref(compiled, 0);
+RECORD_INDEX_TABLE = list_ref(compiled, 1);
+DIV_BY_ZERO_ERROR_ADDRESS = list_ref(compiled, 2);
+print_program(P);
+display(RECORD_INDEX_TABLE);
+display(DIV_BY_ZERO_ERROR_ADDRESS);

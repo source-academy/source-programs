@@ -1,15 +1,15 @@
 /*
 Included here:
 * compiler S1- to sVML
-* sVM implementation with Cheney garbage collection
+* sVM implementation without memory management
 * examples
 */
 
 /* 
 
-Compiler for language Source §1- to sVML
+Compiler for language Source §1-
 
-following Lecture Week 5 of CS4215
+using virtual machine SVML1, Lecture Week 5 of CS4215
 
 Instructions: press "Run" to evaluate an example expression
               (scroll down and un-comment one example)
@@ -71,6 +71,32 @@ function constant_declaration_name(stmt) {
    return head(tail(head(tail(stmt))));
 }
 function constant_declaration_value(stmt) {
+   return head(tail(tail(stmt)));
+}
+
+// variable declarations are tagged with "variable_declaration"
+// and have "name" and "value" properties
+
+function is_variable_declaration(stmt) {
+   return is_tagged_list(stmt, "variable_declaration");
+}
+function variable_declaration_name(stmt) {
+   return head(tail(head(tail(stmt))));
+}
+function variable_declaration_value(stmt) {
+   return head(tail(tail(stmt)));
+}
+
+// assignments are tagged with "assignment"
+// and have "name" and "value" properties
+
+function is_assignment(stmt) {
+   return is_tagged_list(stmt, "assignment");
+}
+function assignment_name(stmt) {
+   return head(tail(head(tail(stmt))));
+}
+function assignment_value(stmt) {
    return head(tail(tail(stmt)));
 }
 
@@ -295,7 +321,7 @@ function print_program(P) {
                 stringify(P[i + 1]);
             i = i + 2;
         } else {}
-        display(undefined, s);
+        display("", s);
     }
 }
 
@@ -588,6 +614,16 @@ function parse_and_compile(string) {
         add_nullary_instruction(LDCU);
         return max_stack_size;
     }
+
+    function compile_variable_declaration(expr, index_table) {
+        // ???
+        return 0;
+    }
+    
+    function compile_assignment(expr, index_table) {
+        // ???
+        return 0;
+    }
     
     function compile(expr, index_table, insert_flag) {
         let max_stack_size = 0;
@@ -627,6 +663,9 @@ function parse_and_compile(string) {
         } else if (is_constant_declaration(expr)) {
             max_stack_size =
             compile_constant_declaration(expr, index_table);
+        } else if (is_assignment(expr)) {
+            max_stack_size =
+            compile_assignment(expr, index_table);
         } else if (is_return_statement(expr)) {
             max_stack_size = compile(return_statement_expression(expr), 
                                      index_table, false);
@@ -642,6 +681,7 @@ function parse_and_compile(string) {
                        (is_self_evaluating(expr) ||
                         is_undefined_expression(expr) ||
                         is_application(expr) ||
+                        is_name(expr) ||
                         is_primitive_application(expr))
                       ) {
                 add_nullary_instruction(RTN);
@@ -678,7 +718,7 @@ function parse_and_compile(string) {
     return machine_code;
 }
 
-// VIRTUAL MACHINE WITH CHENEY GARBAGE COLLECTOR
+// VIRTUAL MACHINE
 
 // "registers" are the global variables of our machine. 
 // These contain primitive values (numbers or boolean 
@@ -688,7 +728,11 @@ function parse_and_compile(string) {
 // the op-codes of instructions and their arguments
 let P = [];
 // PC is program counter: index of the next instruction
-let PC = -Infinity;
+let PC = 0;
+// HEAP is array containing all dynamically allocated data structures
+const HEAP = [];
+// next free slot in heap
+let FREE = 0;
 // OS is address of current environment in HEAP; initially a dummy value
 let ENV = -Infinity;
 // OS is address of current operand stack in HEAP; initially a dummy value
@@ -696,20 +740,7 @@ let OS = -Infinity;
 // temporary value, used by PUSH and POP; initially a dummy value
 let RES = -Infinity;   
 
-// RTS: runtime stack
-let RTS = [];
-let TOP_RTS = -1;
-
-// boolean that says whether machine is running
-let RUNNING = NaN;
-
-// exit state: NORMAL, DIV_ERROR, OUT_OF_MEMORY_ERROR, etc
-let STATE = NaN;
-
-// //////////////////////////////
 // some general-purpose registers
-// //////////////////////////////
-
 let A = 0;
 let B = 0;
 let C = 0;
@@ -718,14 +749,9 @@ let E = 0;
 let F = 0;
 let G = 0;
 let H = 0;
-let I = 0;
-let J = 0;
-let K = 0;
-let L = 0;
-let N = 0;
 
 function show_executing(s) {
-    display(undefined, "--- RUN ---" + s);
+    display("", "--- RUN ---" + s);
     display( PC, "PC :");
     display( get_name(P[PC]), "instr:");
 }
@@ -733,7 +759,7 @@ function show_executing(s) {
 // for debugging: show all registers
 function show_registers(s) {
     show_executing(s);
-    display(undefined, "--- REGISTERS ---");
+    display("", "--- REGISTERS ---");
     display(RES, "RES:");
     display(  A, "A  :");
     display(  B, "B  :");
@@ -743,174 +769,34 @@ function show_registers(s) {
     display(  F, "F  :");
     display(  G, "G  :");
     display(  H, "H  :");
-    display(  I, "I  :");
-    display(  J, "J  :");
-    display(  K, "K  :");
-    display(  L, "L  :");
-    display(  N, "N  :");
     display( OS, "OS :");
     display(ENV, "ENV:");
     display(RTS, "RTS:");
     display(TOP_RTS, "TOP_RTS:");
 }
 
-// HEAP is array containing all dynamically allocated data structures
-let HEAP = NaN;
-// next free slot in heap
-let FREE = -Infinity;
-// scan pointer in Cheney
-let SCAN = -Infinity;
-// the size of the heap is fixed
-let HEAP_SIZE = -Infinity;
-// smallest heap address
-let HEAPBOTTOM = -Infinity;
+// register that says if machine is running                   
+let RUNNING = true;
+
+const NORMAL = 0;
+const DIV_ERROR = 1;
+const OUT_OF_MEMORY_ERROR = 2; // not used yet: memory currently unbounded
+
+let STATE = NORMAL;
 
 // general node layout
 const TAG_SLOT = 0;
 const SIZE_SLOT = 1;
 const FIRST_CHILD_SLOT = 2;
 const LAST_CHILD_SLOT = 3;
-	
-// ///////////////////////////////////
-// Cheney's Copying Garbage Collection
-// ///////////////////////////////////
-
-// initialize spaces for Cheney's algorithm
-
-let SPACESIZE = -Infinity;
-let TOSPACE = -Infinity;
-let FROMSPACE = -Infinity;
-let TOPOFSPACE = -Infinity; 
-
-function initialize_machine(heapsize) {
-    display(heapsize, "\nRunning VM with heap size:");
-    HEAP = [];
-    HEAP_SIZE = heapsize;
-    HEAPBOTTOM = 0;
-    SPACESIZE = HEAP_SIZE / 2;
-    TOSPACE = HEAPBOTTOM;
-    FROMSPACE = TOSPACE + SPACESIZE;
-    TOPOFSPACE = TOSPACE + SPACESIZE - 1; 
-    FREE = TOSPACE;
-    TEMP_ROOT = -1;
-    RUNNING = true;
-    STATE = NORMAL;
-    PC = 0;
-}
-
-// We introduce TEMP_ROOT register to handle instructions 
-// that allocate nodes on the heap and then may flip.
-// The address of those nodes are assigned to TEMP_ROOT.
-// TEMP_ROOT is treated as a root in garbage collection,
-// and thus gets updated to point to the correct copy in
-// the to-space.
-let TEMP_ROOT = -Infinity;
 
 // NEW expects tag in A and size in B
-// changes A, B, C, J, K
 function NEW() {
-    J = A;
-    K = B;
-    if (FREE + K > TOPOFSPACE) {
-       display(FREE, "Flip! FREE:");
-	   FLIP();
-    } else {}
-	if (FREE + K > TOPOFSPACE) {
-       STATE = OUT_OF_MEMORY_ERROR;
-       RUNNING = false;
-	} else {}
-    HEAP[FREE + TAG_SLOT] = J;
-    HEAP[FREE + SIZE_SLOT] = K;
+    HEAP[FREE + TAG_SLOT] = A;
+    HEAP[FREE + SIZE_SLOT] = B;
     RES = FREE;
-    FREE = FREE + K;
+    FREE = FREE + B;
 }
-
-// use tag slot as forwarding address;
-// the trick: since tags are negative, they
-// can never be confused with heap addresses
-const FORWARDINGADDRESS = 0;
-
-// changes B, C, I
-function FLIP() {
-    A = FROMSPACE;
-    FROMSPACE = TOSPACE; 
-    TOSPACE = A;
-    TOPOFSPACE = TOSPACE + SPACESIZE - 1;
-    FREE = TOSPACE;
-    SCAN = TOSPACE;
-    
-    A = OS;
-    COPY();
-    OS = RES;
-    
-    A = ENV;
-    COPY();
-    ENV = RES;
-    
-    // TEMP_ROOT is temporary root of garbage
-    // collection, used in EXTEND and CALL
-    if (TEMP_ROOT >= 0) {
-        A = TEMP_ROOT;
-        COPY();
-        TEMP_ROOT = RES;
-    } else {}
-    
-    for (I = 0; I <= TOP_RTS; I = I + 1) {
-        A = RTS[I];
-        COPY();
-        RTS[I] = RES;
-    }
-    while (SCAN < FREE) {
-        for (I = HEAP[SCAN + FIRST_CHILD_SLOT];
-             I <= HEAP[SCAN + LAST_CHILD_SLOT];
-             I = I + 1) {
-            A = HEAP[SCAN + I];
-            COPY();
-            HEAP[SCAN + I] = RES;
-        }
-        SCAN = SCAN + HEAP[SCAN + SIZE_SLOT];   
-    }
-}
-
-// expects node to be copied in A
-// changes B, C
-function COPY() {
-    if (A === undefined) {
-        RES = undefined;
-    } else {
-    ALREADY_COPIED();
-    if (RES) {
-        RES = HEAP[A + FORWARDINGADDRESS];
-    } else {
-        B = FREE;
-        MOVE();
-        FREE = FREE + HEAP[A + SIZE_SLOT];
-        HEAP[A + FORWARDINGADDRESS] = B;
-        RES = B;
-    }
-    }
-}
-
-// expects node in A
-function ALREADY_COPIED() {
-    RES = HEAP[A + FORWARDINGADDRESS] >= TOSPACE
-	  	  && 
-		  HEAP[A + FORWARDINGADDRESS] <= FREE;
-}
-
-// expects source in A and destination in B
-// changes C
-function MOVE() {
-	for (C = 0; C < HEAP[A + SIZE_SLOT]; C = C + 1) {
-		HEAP[B + C] = HEAP[A + C];
-	}
-}
-
-// machine states                 
-
-const NORMAL = 0;
-const DIV_ERROR = 1;
-const OUT_OF_MEMORY_ERROR = 2; 
 
 // number nodes layout
 //
@@ -924,16 +810,14 @@ const NUMBER_TAG = -100;
 const NUMBER_SIZE = 5;
 const NUMBER_VALUE_SLOT = 4;
 
-// expects number in A
-// changes A, B, C, D, E, J, K
 function NEW_NUMBER() {
-    E = A;
+    C = A;
     A = NUMBER_TAG;
     B = NUMBER_SIZE;
     NEW();
     HEAP[RES + FIRST_CHILD_SLOT] = 6;
     HEAP[RES + LAST_CHILD_SLOT] = 5; // no children
-    HEAP[RES + NUMBER_VALUE_SLOT] = E;
+    HEAP[RES + NUMBER_VALUE_SLOT] = C;
 }
 
 // bool nodes layout
@@ -948,16 +832,14 @@ const BOOL_TAG = -101;
 const BOOL_SIZE = 5;
 const BOOL_VALUE_SLOT = 4;
 
-// expects boolean in A
-// changes A, B, C, D, E, J, K
 function NEW_BOOL() {
-    E = A;
+    C = A;
     A = BOOL_TAG;
     B = BOOL_SIZE;
     NEW();
     HEAP[RES + FIRST_CHILD_SLOT] = 6;
     HEAP[RES + LAST_CHILD_SLOT] = 5; // no children
-    HEAP[RES + BOOL_VALUE_SLOT] = E;
+    HEAP[RES + BOOL_VALUE_SLOT] = C;
 }
 
 // undefined nodes layout
@@ -970,7 +852,6 @@ function NEW_BOOL() {
 const UNDEFINED_TAG = -106;
 const UNDEFINED_SIZE = 4;
 
-// changes A, B, C, D, J, K
 function NEW_UNDEFINED() {
     A = UNDEFINED_TAG;
     B = UNDEFINED_SIZE;
@@ -992,11 +873,10 @@ function NEW_UNDEFINED() {
 const OS_TAG = -105;
 
 // expects max size in A
-// changes A, B, C, D, E, J, K
 function NEW_OS() {
-    E = A;
+    C = A;
     A = OS_TAG;
-    B = E + 4;
+    B = C + 4;
     NEW();
 	HEAP[RES + FIRST_CHILD_SLOT] = 4;
 	// operand stack initially empty
@@ -1005,9 +885,7 @@ function NEW_OS() {
 
 // PUSH and POP are convenient subroutines that operate on
 // the operand stack OS
-
-// expects its argument in A
-// changes A, B
+// PUSH expects its argument in A
 function PUSH_OS() {
     B = HEAP[OS + LAST_CHILD_SLOT]; // address of current top of OS
     B = B + 1; 
@@ -1016,7 +894,7 @@ function PUSH_OS() {
 }
 
 // POP puts the top-most value into RES
-// changes B
+// uses B
 function POP_OS() {
     B = HEAP[OS + LAST_CHILD_SLOT]; // address of current top of OS
     HEAP[OS + LAST_CHILD_SLOT] = B - 1; // update address of current top of OS
@@ -1041,21 +919,21 @@ const CLOSURE_ADDRESS_SLOT = 5;
 const CLOSURE_ENV_SLOT = 6;
 const CLOSURE_ENV_EXTENSION_COUNT_SLOT = 7;
 
-// expects stack size in A, P address in B, environment extension count in C
-// changes A, B, C, D, E, F, J, K
+// expects stack size in A, address in B, environment extension count in C
 function NEW_CLOSURE() {
-    D = A;
-    E = B;
-    F = C;
+    E = A;
+    F = B;
     A = CLOSURE_TAG;
     B = CLOSURE_SIZE;
     NEW();
+    A = E;
+    B = F;
 	HEAP[RES + FIRST_CHILD_SLOT] = CLOSURE_ENV_SLOT;
 	HEAP[RES + LAST_CHILD_SLOT] = CLOSURE_ENV_SLOT;
-	HEAP[RES + CLOSURE_OS_SIZE_SLOT] = D;
-	HEAP[RES + CLOSURE_ADDRESS_SLOT] = E;
+	HEAP[RES + CLOSURE_OS_SIZE_SLOT] = A;
+	HEAP[RES + CLOSURE_ADDRESS_SLOT] = B;
     HEAP[RES + CLOSURE_ENV_SLOT] = ENV;
-    HEAP[RES + CLOSURE_ENV_EXTENSION_COUNT_SLOT] = F;
+    HEAP[RES + CLOSURE_ENV_EXTENSION_COUNT_SLOT] = C;
 }
 
 // expects closure in A, environment in B
@@ -1080,7 +958,6 @@ const RTS_FRAME_ENV_SLOT = 5;
 const RTS_FRAME_OS_SLOT = 6;
 
 // expects current PC, ENV, OS in their registers
-// changes A, B, C, D, J, K
 function NEW_RTS_FRAME() {
     A = RTS_FRAME_TAG;
     B = RTS_FRAME_SIZE;
@@ -1091,6 +968,10 @@ function NEW_RTS_FRAME() {
 	HEAP[RES + RTS_FRAME_ENV_SLOT] = ENV;
     HEAP[RES + RTS_FRAME_OS_SLOT] = OS;
 }
+
+
+const RTS = [];
+let TOP_RTS = -1;
 
 // expects stack frame in A
 function PUSH_RTS() {
@@ -1103,6 +984,8 @@ function POP_RTS() {
     RES = RTS[TOP_RTS];
     TOP_RTS = TOP_RTS - 1;
 }
+
+
 
 // environment nodes layout
 //
@@ -1117,31 +1000,26 @@ function POP_RTS() {
 const ENV_TAG = -102;
 
 // expects number of env entries in A
-// changes A, B, C, D, J, K
+// changes B
 function NEW_ENVIRONMENT() {
-    D = A;
+    C = A;
     A = ENV_TAG;
-    B = D + 4;
+    B = C + 4;
     NEW();
     HEAP[RES + FIRST_CHILD_SLOT] = 4;
-    HEAP[RES + LAST_CHILD_SLOT] = 3 + D;
+    HEAP[RES + LAST_CHILD_SLOT] = 3 + C;
 }
 
 // expects env in A, by-how-many in B
-// changes A, B, C, D
-// Using TEMP_ROOT to make sure the
-// origin on copying is updated when 
-// garbage collection happens in NEW_ENVIRONMENT
 function EXTEND() {
-    TEMP_ROOT = A;
+    D = A;
     A = HEAP[A + SIZE_SLOT] - 4 + B;
     NEW_ENVIRONMENT();
-    for (B = HEAP[TEMP_ROOT + FIRST_CHILD_SLOT]; 
-         B <= HEAP[TEMP_ROOT + LAST_CHILD_SLOT];
+    for (B = HEAP[D + FIRST_CHILD_SLOT]; 
+         B <= HEAP[D + LAST_CHILD_SLOT];
          B = B + 1) {
-        HEAP[RES + B] = HEAP[TEMP_ROOT + B];
+        HEAP[RES + B] = HEAP[D + B];
     }
-    TEMP_ROOT = -1;
 }
 
 // debugging: show current heap
@@ -1161,9 +1039,9 @@ function node_kind(x) {
 function show_heap(s) {
     const len = array_length(HEAP);
     let i = 0;
-    display(undefined, "--- HEAP --- " + s);
+    display("", "--- HEAP --- " + s);
     while (i < len) {
-        display(undefined, stringify(i) + ": " + stringify(HEAP[i]) +
+        display("", stringify(i) + ": " + stringify(HEAP[i]) +
                     (is_number(HEAP[i]) && is_node_tag(HEAP[i]) 
                      ? " ("+node_kind(HEAP[i])+")" 
                      : ""));
@@ -1172,10 +1050,11 @@ function show_heap(s) {
 }
 
 function show_heap_value(address) {
-    display(undefined, "result: heap node of type = " + 
+    display("", "result: heap node of type = " + 
                 node_kind(HEAP[address]) +
                 ", value = " + 
                 stringify(HEAP[address + NUMBER_VALUE_SLOT]));
+    
 }
 
 // SVMLa implementation
@@ -1203,7 +1082,7 @@ const M = [];
 M[START] = () =>   { A = 1; // first OS only needs to hold one closure
                      NEW_OS();
                      OS = RES;
-                     A = 0; // first environment is empty
+                     A = 0;
                      NEW_ENVIRONMENT();
                      ENV = RES;
                      PC = PC + 1;
@@ -1327,10 +1206,8 @@ M[DIV] = () =>     { POP_OS();
                      PUSH_OS();
                      PC = PC + 1;
                      E = E === 0;
-                     if (E) { 
-                         STATE = DIV_ERROR; 
-                         RUNNING = false;
-                     } else {}
+                     if (E) { STATE = DIV_ERROR; } else {}
+                     if (E) { RUNNING = false; } else {}
                    };
                    
 M[POP] = () =>     { POP_OS();
@@ -1376,34 +1253,24 @@ M[CALL] = () =>    { G = P[PC + 1];  // lets keep number of arguments in G
                      H = HEAP[A + LAST_CHILD_SLOT]; 
                      // H is now offset of last child slot
                      B = HEAP[F + CLOSURE_ENV_EXTENSION_COUNT_SLOT];
-                     // B is now the environment extension count      
-                     L = HEAP[F + CLOSURE_ADDRESS_SLOT];
-                     N = HEAP[F + CLOSURE_OS_SIZE_SLOT]; // closure stack size
-
+                     // B is now the environment extension count
                      EXTEND(); // after this, RES is new env
-                     
-                     // Heap address of new environment can 
-                     // be changed by NEW_RS_FRAME and NEW_OS below.
-                     // Assigning TEMP_ROOT to address makes sure we
-                     // restore the updated value before competing CALL.
-                     TEMP_ROOT = RES;
-                     
-                     H = RES + H + G; 
+                     E = RES;
+                     H = E + H + G; 
                      // H is now address where last argument goes in new env
                      for (C = H; C > H - G; C = C - 1) {
                          POP_OS(); // now RES has the address of the next arg
                          HEAP[C] = RES; // copy argument into new env
                      }
-                     POP_OS(); // closure is on top of OS; pop; no more needed
-                     NEW_RTS_FRAME(); // saves PC + 2, ENV, OS 
+                     POP_OS(); // closure is on top of OS; pop it as not needed
+                     NEW_RTS_FRAME(); // saves PC+2, ENV, OS
                      A = RES;
                      PUSH_RTS();
-                     A = N;
-                     NEW_OS();    
+                     PC = HEAP[F + CLOSURE_ADDRESS_SLOT];
+                     A = HEAP[F + CLOSURE_OS_SIZE_SLOT]; // closure stack size
+                     NEW_OS();    // uses B and C
                      OS = RES;
-                     PC = L;
-                     ENV = TEMP_ROOT;
-                     TEMP_ROOT = -1;
+                     ENV = E;
                    };
                    
 M[RTN] = () =>     { POP_RTS();
@@ -1421,6 +1288,8 @@ M[DONE] = () =>    { RUNNING = false;
                    
 function run() {
     while (RUNNING) { 
+        //show_registers("run loop");
+        //show_heap("run loop");
         if (M[P[PC]] === undefined) {
             error(P[PC], "unknown op-code:");
         } else {
@@ -1430,26 +1299,112 @@ function run() {
     if (STATE === DIV_ERROR) {
         POP_OS();
         error(RES, "execution aborted:");
-    } else if (STATE ===  OUT_OF_MEMORY_ERROR) {
-        error(RES, "memory exhausted despite garbage collection");
     } else {
         POP_OS();
         show_heap_value(RES); 
     }
 }
 
-// VM test cases for Cheney garbage collection
 
-initialize_machine(130);
+// EXAMPLES
+
+/*
+// simple hand-coded example, computing 21 - 4
+P =
+[ START,
+  LDCN, 21,
+  LDCN, 4,
+  MINUS,
+  DONE
+];
+run();
+*/
+
+/*
+// simple hand-coded example, computing 3 * (17 + 4)
+P =
+[ START,
+  LDCN, 3,
+  LDCN, 17,
+  LDCN, 4,
+  PLUS,
+  TIMES,
+  DONE
+];
+run();
+*/
+
+// compiler and VM test cases
+
+/*
+ P = parse_and_compile("true ? 11 : 22;");
+ display(P);
+run();
+*/
+
+/*
+P = parse_and_compile("false ? 11 : 22;");
+display(P);
+run();
+*/
+
+/*
+P = parse_and_compile("! (true || false);");
+print_program(P);
+run();
+*/
+
+/*
+ P = parse_and_compile("1 + 1 === 2;");
+ print_program(P);
+ run();
+*/
+
+/*
+P = parse_and_compile("1 + 2 * 3 * 4 - 5;");
+run(); 
+*/
+
+/*
+P = parse_and_compile("1 + 1 / 0;");
+run();
+*/
+
+/*
+P = parse_and_compile("1000 + 2000 / 3000;");
+print_program(P);
+run();
+*/
+
+/*
+P = parse_and_compile("1; 2; 3;");
+print_program(P);
+run();
+*/
+
+/*
+P = parse_and_compile("const x = 1; x + 2;");
+print_program(P);
+run();
+*/
+
+/*
+P = parse_and_compile("undefined;");
+print_program(P);
+run();
+*/
+
+/*
 P = parse_and_compile("     \
 function f(x) {             \
     return x + 1;           \
 }                           \
 f(2);                       ");
+print_program(P);
 run();
+*/
 
-
-initialize_machine(198); // exactly 200 needed
+/*
 P = parse_and_compile("             \
 const a = 2;                        \
 const b = 7;                        \
@@ -1459,9 +1414,11 @@ function f(x, y) {                  \
     return x - y * a + b - c + d;   \
 }                                   \
 f(30, 10);                          ");
+print_program(P);
 run();
+*/
 
-initialize_machine(290);
+/*
 P = parse_and_compile("         \
 function factorial(n) {         \
     return n === 1 ? 1          \
@@ -1470,9 +1427,9 @@ function factorial(n) {         \
 factorial(4);                   ");
 //print_program(P);
 run();
+*/
 
-
-initialize_machine(156);
+/*
 P = parse_and_compile("         \
 const about_pi = 3;             \
 function square(x) {            \
@@ -1481,21 +1438,21 @@ function square(x) {            \
 4 * about_pi * square(6371);    ");
 //print_program(P);
 run();
+*/
 
-
-initialize_machine(206);
+/*
 P = parse_and_compile("           \
 function power(x, y) {            \
     return y === 0                \
         ? 1                       \
         : x * power(x, y - 1);    \
 }                                 \
-power(17, 1);                     ");
+power(17, 3);                     ");
 //print_program(P);
 run();
+*/
 
-
-initialize_machine(442);
+/*
 P = parse_and_compile("                                     \
 function recurse(x, y, operation, initvalue) {              \
     return y === 0                                          \
@@ -1514,9 +1471,9 @@ function h(x, z) { return x / z; }                          \
 recurse(2, 3, h, 128);                                      ");
 //print_program(P);
 run();
+*/
 
-
-initialize_machine(696);
+/*
 P = parse_and_compile("                         \
 function abs(x) {                               \
     return x >= 0 ? x : 0 - x;                  \
@@ -1546,26 +1503,5 @@ function sqrt(x) {                              \
 sqrt(5);                                        ");
 //print_program(P);
 run();
+*/
 
-
-initialize_machine(140);
-P = parse_and_compile(" \
-function f(x) {         \
-    x + 1;              \
-}                       \
-f(3);                   ");
-run();
-
-
-initialize_machine(176);
-P = parse_and_compile(" \
-function x(a) {         \
-  const b = 2*a;        \
-  function y() {        \
-      return b + 1;     \
-  }                     \
-  return y;             \
-}                       \
-x(2)();                 ");
-run();
-show_heap("");
