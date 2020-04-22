@@ -826,33 +826,4 @@ function read_eval_print_loop(history) {
     }
 }
 
-const test1 = "function at(xs, n) {\
-   return n === 0\
-       ?  head(xs)\
-       :  at(tail(xs), n-1);\
-}\
-function intsfrom(n) {\
-   return pair(n, intsfrom(n+1));\
-}\
-function zipWith(f, xs, ys) {\
-   return xs === null\
-       ?  null\
-       :  ys === null\
-       ?  null\
-       :  pair(f(head(xs), head(ys)), zipWith(f, tail(xs), tail(ys)));\
-}\
-const facs = pair(1, zipWith((x, y) => x * y, intsfrom(1), facs));\
-function fac(n) {\
-   return at(facs, n);\
-}\
-fac(6);";
-//parse_and_eval(test1);
 
-const list_func = "function list (x,y) {\
-                    return pair (x,pair (y,null));}";
-const map_func = "function map (f,xs) {\
-                    return xs === null ? xs\
-                    : pair (f(head(xs)), map (f,tail (xs)));\
-                    }";
-const test2 = map_func + "const a = pair(1,a); const b = map (x => x * x, a);head(tail(b));";
-parse_and_eval(test2);
