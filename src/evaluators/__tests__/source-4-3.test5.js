@@ -1,4 +1,4 @@
-parse_and_run(" \
+const result = parse_and_run(" \
 function multiple_dwelling() { \
 const baker = amb(1, 2, 3, 4, 5); \
 const cooper = amb(1, 2, 3, 4, 5); \
@@ -21,3 +21,11 @@ list('smith', smith)); \
 } \
 multiple_dwelling(); \
 ");
+
+function print_one_line_list(li) {
+    let result = "";
+    for_each((s) => { result = result + head(s) + stringify(head(tail(s))) + ","; }, li);
+    return result;
+}
+print_one_line_list(result);
+// 'baker1,cooper4,fletcher2,miller3,smith5,'
