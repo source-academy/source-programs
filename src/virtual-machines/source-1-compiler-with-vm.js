@@ -1,4 +1,7 @@
-// Compiler + VM
+// Source 1 Compiler + VM
+// ****************************************************
+// ************* SOURCE 1 VIRTUAL MACHINE *************
+// ****************************************************
 
 function assoc(key, records) {
 	return is_null(records)
@@ -36,7 +39,7 @@ function branch(label) {
 	return list("branch", label);
 }
 
-// @param: Source refers to the raw expression itself.
+// source param refers to the raw expression itself.
 function assign(register_name, source) {
     return list("assign", register_name, source);
 }
@@ -44,6 +47,7 @@ function assign(register_name, source) {
 function perform(source){
 	return list("perform", source);
 }
+
 function go_to(label) {
 	return list("go_to", label);
 }
@@ -1579,46 +1583,49 @@ function parse_and_compile(string) {
     return compile(parse(string), 'val', "next");
 }
 
-// ++++++++++++++++++++++++++++++++++++
-// DISPLAY
-// ++++++++++++++++++++++++++++++++++++
-function single_statement_to_string(s,counter){
-    function print_assign(inst){
+// Functions for displaying results
+function single_statement_to_string(s,counter) {
+    function print_assign(inst) {
         const target = head(tail(inst));
         const source = head(tail(tail(inst)));
-        if ( is_operation_exp(source)){
+        if ( is_operation_exp(source)) {
             return "assign('" + target + "', " + print_op(source) + ")";
         } else {
             return "assign('" + target + "', " + print_pair(head(source)) + ")";
         }
     }
-    function print_perform(inst){
+
+    function print_perform(inst) {
         const source = head(tail(inst));
         return "perform(" + print_op(source) +")" ;
     }
-    function print_test(inst){
+
+    function print_test(inst) {
         const source = head(tail(inst));
         return "test(" + print_op(source) +")" ;
     }
-    function print_branch(inst){
+
+    function print_branch(inst) {
         const target = head(tail(inst));
         return "branch("+ print_pair(target) + ")";
     }
-    function print_goto(inst){
+
+    function print_goto(inst) {
         const target = head(tail(inst));
         return "go_to("+ print_pair(target) + ")";
     }
-    function print_save(inst){
+
+    function print_save(inst) {
         const source = head(tail(inst));
         return "save('"+ source + "')";
     }
-    function print_restore(inst){
+
+    function print_restore(inst) {
         const target = head(tail(inst));
         return "restore('"+ target + "')";
     }
-    
 
-    function print_op(op_list){
+    function print_op(op_list) {
         const op = operation_exp_op(op_list);
         const operands = operation_exp_operands(op_list);
         let val = "list(op('" + op + "')";
@@ -1626,9 +1633,10 @@ function single_statement_to_string(s,counter){
         val = val + ")";
         return val;
     }
-    function print_list_of_names(l){
+
+    function print_list_of_names(l) {
         const first_name = head(l);
-        if (is_null(tail(l))){
+        if (is_null(tail(l))) {
             return " [ "+first_name+" ]";
         } else {
             let val = " [" + first_name;
@@ -1637,7 +1645,8 @@ function single_statement_to_string(s,counter){
             return val;
         }
     }
-    function print_pair(p){
+
+    function print_pair(p) {
         return is_register_exp(p)
             ? print_reg(p)
             : is_constant_exp(p)
@@ -1646,30 +1655,34 @@ function single_statement_to_string(s,counter){
             ? print_label(p)
             : print_error(p);
     }
-    function print_reg(reg){
+
+    function print_reg(reg) {
         return "reg('" + register_exp_reg(reg) + "')";
     }
-    function print_const(c){
-        if (is_tagged_list(constant_exp_value(c),"name")){
+
+    function print_const(c) {
+        if (is_tagged_list(constant_exp_value(c),"name")) {
             return "constant(name: " + name_of_name(constant_exp_value(c)) + ")";
         }
-        else if (is_null(constant_exp_value(c))){
+        else if (is_null(constant_exp_value(c))) {
             return "constant(null)";
         }
-        else if(is_list(constant_exp_value(c))){
+        else if(is_list(constant_exp_value(c))) {
             return "constant(" + print_list_of_names(constant_exp_value(c)) + ")";
         }
-        else if (is_string(constant_exp_value(c))){
+        else if (is_string(constant_exp_value(c))) {
             return "constant('" + constant_exp_value(c) + "')";
         } else {
             return "constant(" + stringify(constant_exp_value(c)) + ")";
         }
 
     }
-    function print_label(l){
+
+    function print_label(l) {
             return "label('" + label_exp_label(l) + "')";
     }
-    function print_error(p){
+
+    function print_error(p) {
         display(p);
         return "ERROR";
     }
@@ -1698,8 +1711,8 @@ function single_statement_to_string(s,counter){
     }
 }
 
-function print_instructions_string(instruction_sequence,counter){
-    if (is_null(instruction_sequence)){
+function print_instructions_string(instruction_sequence,counter) {
+    if (is_null(instruction_sequence)) {
         //display("===END===");
         return "===END===";
     } else {
@@ -1711,14 +1724,15 @@ function print_instructions_string(instruction_sequence,counter){
             : printed_statement + "\n" + print_instructions_string(tail(instruction_sequence),counter);
     }
 }
-function print_list_regs(l){
+
+function print_list_regs(l) {
     if (is_null(l)) {
         let val = "[ " + "\'NIL\'" + " ]";
         return val;
     } else {
-    
         const first_name = head(l);
-        if (is_null(tail(l))){
+
+        if (is_null(tail(l))) {
             return "[ '"+first_name+"' ]";
         } else {
             let val = "[" + first_name;
@@ -1729,7 +1743,7 @@ function print_list_regs(l){
     }
 }
 
-function pretty_print_instructions(instruction_sequence){
+function pretty_print_instructions(instruction_sequence) {
     display("==Registers Needed==============");
     display(print_list_regs(registers_needed(instruction_sequence)));
     display("==Registers modified============");
@@ -1740,7 +1754,6 @@ function pretty_print_instructions(instruction_sequence){
     display("",a);
     //display(head(statements(instruction_sequence)));
     //return printstatements(statements(instruction_sequence));
-
 }
 
 // Only modify user_input in get_compiled()
