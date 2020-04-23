@@ -1756,7 +1756,10 @@ function pretty_print_instructions(instruction_sequence) {
     //return printstatements(statements(instruction_sequence));
 }
 
-// Only modify user_input in get_compiled()
+/**
+ * Remove the comments to execute the compiler and VM.
+ * Only modify the variable user_input in get_compiled() function with Source expressions to be compiled."
+ */
 
 /*
 function get_compiled() {
