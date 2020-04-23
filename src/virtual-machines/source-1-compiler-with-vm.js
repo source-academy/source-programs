@@ -582,7 +582,6 @@ function assign_value_exp(assign_instruction) {
 
 function advance_pc(pc) {
 	set_contents(pc, tail(get_contents(pc))); 
-
 }
 
 function make_test(inst, machine, labels, operations, flag, pc) {
@@ -767,12 +766,9 @@ function lookup_prim(symbol, operations) {
 		: head(tail(val));
 }
 
-
-// ++++++++++++++++++++++++ ONLY MODIFY CODE AFTER THIS LINE ++++++++++++
-
-// ********************************************************
-// * COMPILER WORK IN PROGRESS
-// ********************************************************
+// ***********************************************************
+// ******************** SOURCE 1 COMPILER ********************
+// ***********************************************************
 
 // SYNTAX OF SOURCE §1 
 
