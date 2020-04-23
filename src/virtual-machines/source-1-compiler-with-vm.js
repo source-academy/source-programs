@@ -807,9 +807,11 @@ function is_undefined_expression(stmt) {
 function is_constant_declaration(stmt) {
 	return is_tagged_list(stmt, "constant_declaration");
 }
+
 function constant_declaration_name(stmt) {
 	return head(tail(head(tail(stmt))));
 }
+
 function constant_declaration_value(stmt) {
 	return head(tail(tail(stmt)));
 }
@@ -820,9 +822,11 @@ function constant_declaration_value(stmt) {
 function is_variable_declaration(stmt) {
 	return is_tagged_list(stmt, "variable_declaration");
 }
+
 function variable_declaration_name(stmt) {
 	return head(tail(head(tail(stmt))));
 }
+
 function variable_declaration_value(stmt) {
 	return head(tail(tail(stmt)));
 }
@@ -833,6 +837,7 @@ function variable_declaration_value(stmt) {
 function is_application(expr) {
 	return is_tagged_list(expr, "application");
 }
+
 // we distinguish primitive applications by their
 // operator name
 
@@ -842,21 +847,27 @@ function is_primitive_application(expr) {
 					list("!", "+", "-", "*", "/", "===", 
 						"!==", "<", ">", "<=", ">=")));
 }
+
 function primitive_operator_name(expr) {
 	return head(tail(head(tail(expr))));
 }
+
 function operator(expr) {
 	return head(tail(expr));
 }
+
 function operands(expr) {
 	return head(tail(tail(expr)));
 }
+
 function no_operands(ops) {
 	return is_null(ops);
 }
+
 function first_operand(ops) {
 	return head(ops);
 }
+
 function rest_operands(ops) {
 	return tail(ops);
 }
@@ -908,16 +919,20 @@ function to_string(expr) {
 function is_function_definition(stmt) {
 	return is_tagged_list(stmt, "function_definition");
 }
+
 function function_definition_parameters(stmt) {
 	return head(tail(stmt));
 }
+
 function function_definition_body(stmt) {
 	return head(tail(tail(stmt)));
 }
+
 //blocks
 function is_block(stmt) {
 	return is_tagged_list(stmt, "block");
 }
+
 function block_body(stmt) {   
 	return head(tail(stmt));
 }
@@ -928,24 +943,31 @@ function block_body(stmt) {
 function is_sequence(stmt) {
 	return is_tagged_list(stmt, "sequence");
 }
+
 function make_sequence(stmts) {
 	return list("sequence", stmts);
 }
+
 function sequence_statements(stmt) {   
 	return head(tail(stmt));
 }
+
 function is_empty_sequence(stmts) {
 	return is_null(stmts);
 }
+
 function is_last_statement(stmts) {
 	return is_null(tail(stmts));
 }
+
 function first_statement(stmts) {
 	return head(stmts);
 }
+
 function rest_statements(stmts) {
 	return tail(stmts);
 }
+
 
 // functions return the value that results from
 // evaluating their expression
@@ -957,7 +979,6 @@ function return_statement_expression(stmt) {
 	return head(tail(stmt));
 }
 
-
 // assignments
 // evaluating their expression
 
@@ -968,11 +989,12 @@ function is_assignment(stmt) {
 function assignment_variable(stmt) {
 	return name_of_name(head(tail(stmt)));
 }
+
 function assignment_expression(stmt) {
 	return head(tail(tail(stmt)));
 }
 
-// ++++++++++++++++++++++++++++++++++++
+// Instruction specific functions
 
 // An instruction sequence as a list of its three parts.
 // list(assign(target, op("lookup_variable_value"), constant(exp), reg('env')))));
@@ -1004,7 +1026,6 @@ function end_with_linkage(linkage, instruction_sequence) {
 // Combining instruction sequences
 // ++++++++++++++++++++++++++++++++++++
 
-
 //some helper functions//
 function is_symbol(s) {
 	return is_string(s);
@@ -1019,7 +1040,7 @@ function list_union(l1,l2){
 		: list_union(tail(l1),l2);
 }
 
-//gives a list of elements present in l1 but not present in l2
+//Returns a list of elements present in l1 but not present in l2
 function list_difference(l1,l2){
 	return is_null(l1)
 		? l1
@@ -1156,9 +1177,6 @@ function parse_and_compile(string) {
         return name + stringify(new_label_number());
     }
 
-
-
-    
     // Removed the additional target for end_with_linkage param
     function compile_self_evaluating(exp, target, linkage) {
         return end_with_linkage(
@@ -1191,7 +1209,7 @@ function parse_and_compile(string) {
     }
 
 
-    function compile_assignment( exp, target, linkage ){
+    function compile_assignment( exp, target, linkage ) {
         const variable = assignment_variable(exp);
         const get_value_code =  compile(assignment_expression(exp), 'val','next');
 
@@ -1214,7 +1232,7 @@ function parse_and_compile(string) {
     }
 
 
-    function compile_constant_definition( exp, target, linkage ){
+    function compile_constant_definition( exp, target, linkage ) {
         const variable = constant_declaration_name(exp);
         const get_value_code =  compile(constant_declaration_value(exp), 'val','next');
 
@@ -1235,7 +1253,7 @@ function parse_and_compile(string) {
         );
     }
 
-    function compile_variable_definition( exp, target, linkage ){
+    function compile_variable_definition( exp, target, linkage ) {
         const variable = variable_declaration_name(exp);
         const get_value_code =  compile(variable_declaration_value(exp), 'val','next');
 
@@ -1256,7 +1274,7 @@ function parse_and_compile(string) {
         );
     }
 
-    function compile_if(exp, target, linkage){
+    function compile_if(exp, target, linkage) {
         let t_branch = make_label("true_branch");
         let f_branch = make_label("false_branch");
         let after_if = make_label("after_if");
@@ -1290,9 +1308,6 @@ function parse_and_compile(string) {
 
     }
 
-
-
-
     function compile_function_expression(exp, target, linkage) {
         let proc_entry = make_label("entry");
         let after_fexp = make_label("after_lambda");
@@ -1315,7 +1330,7 @@ function parse_and_compile(string) {
         );
     }
 
-    function compile_lambda_body(exp, proc_entry){
+    function compile_lambda_body(exp, proc_entry) {
         let formals = function_definition_parameters(exp);
         formals = map(x => name_of_name(x), formals);
         const setup = make_instruction_sequence(
@@ -1340,7 +1355,8 @@ function parse_and_compile(string) {
                 compile_sequences(rest_statements(seq),target, linkage)
             );
     }
-    function compile_application(exp,target,linkage){
+
+    function compile_application(exp,target,linkage) {
         const proc_code = compile(operator(exp),'proc',"next");
         const operand_codes = map(operand=> compile(operand, 'val',"next"),operands(exp));
 
@@ -1357,7 +1373,7 @@ function parse_and_compile(string) {
         );
     }
 
-    function construct_arglist(operand_codes_unreversed){
+    function construct_arglist(operand_codes_unreversed) {
         const operand_codes = reverse(operand_codes_unreversed);
         if (is_null(operand_codes)){
             return make_instruction_sequence(
@@ -1379,6 +1395,7 @@ function parse_and_compile(string) {
                     )
                 )
             );
+
             return is_null(tail(operand_codes))
                 ? code_to_get_last_arg
                 : preserving(
@@ -1399,6 +1416,7 @@ function parse_and_compile(string) {
                 list(assign('argl', list(op("cons"), reg('val'), reg('argl'))))
             )
         );
+
         return is_null(tail(operand_codes))
                 ? code_for_next_arg
                 : preserving(
@@ -1407,13 +1425,16 @@ function parse_and_compile(string) {
                     code_to_get_rest_args(tail(operand_codes))
                 );
     }
-    function compile_block(exp,target,linkage){
+
+    function compile_block(exp,target,linkage) {
         const env_ext = make_instruction_sequence(
             list("env"),
             list("env"),
             list(assign('env',list(op('extend_environment_block'),reg('env'))))
         );
+
         const compiled_block_body =compile(block_body(exp),target,linkage);
+
         return append_instruction_sequence(
             list(
                 env_ext,
@@ -1421,6 +1442,7 @@ function parse_and_compile(string) {
             )
         );
     }
+
     function compile_procedure_call(target,linkage){
         const primitive_branch = make_label("primitive-branch");
         const compiled_branch = make_label("compiled_branch");
@@ -1523,6 +1545,7 @@ function parse_and_compile(string) {
             error("unknown error - - COMPILE");
         }
     }
+
     // compile: see relation ->> in CS4215 notes 3.5.2
     function compile(exp, target, linkage) {
         return is_self_evaluating(exp)
@@ -1551,16 +1574,10 @@ function parse_and_compile(string) {
             ? compile_application(exp, target, linkage)
             : error(exp, "Unknown expression type - - COMPILE");
     }
-    
-    
-    
+
     // Linkage cannot be 1. Must be "return" or "next".
     return compile(parse(string), 'val', "next");
-    //machine_code[next] = DONE; // Once you break out of the recursive function.
-    //return machine_code;
 }
-
-
 
 // ++++++++++++++++++++++++++++++++++++
 // DISPLAY
