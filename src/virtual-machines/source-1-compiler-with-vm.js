@@ -8,14 +8,6 @@ function assoc(key, records) {
 		: assoc(key, tail(records));
 }
 
-/*
-	 function is_tagged_list(exp, tag) {
-	 return is_pair(exp)
-	 ? equal(head(exp), tag)
-	 : false;
-	 }
- */
-
 function get_contents(register) {
 	return register("get");
 }
@@ -71,6 +63,7 @@ function restore(name) {
 function all_regs(){
     return list('val', 'proc', 'argl', 'continue', 'env' );
 }
+
 function binary_function(f) { // f is binary
 	return arg_list => 
 		length(arg_list) === 2
@@ -88,10 +81,9 @@ function unary_function(f) { // f is binary
 		: error(arg_list, 
 				"Incorrect number of arguments passed to unary function ");
 }
+
 //environment implemented as pairs. Head is the parent environment, tail is a list of children
-
-
-function make_top_environment_procedure(arglist){
+function make_top_environment_procedure(arglist) {
     if (length(arglist) === 0){
         return pair(null, list());
     } else {
@@ -99,7 +91,8 @@ function make_top_environment_procedure(arglist){
     }
     
 }
-function make_default_top_environment_procedure(arglist){
+
+function make_default_top_environment_procedure(arglist) {
     if (length(arglist) === 0){
         return pair(null, list(
             pair("+","+"),
@@ -123,12 +116,15 @@ function make_default_top_environment_procedure(arglist){
     }
     
 }
-function extend_environment_procedure(arglist){
-    function bind_one_formal_to_environment(name,value,bindings){
+
+function extend_environment_procedure(arglist) {
+
+    function bind_one_formal_to_environment(name,value,bindings) {
         return append(bindings,list(pair(name,value)));
     }
-    function bind_all_formals(formals_names, formals_values, bindings){
-        if (is_null(formals_names) || is_null(formals_values) ){
+
+    function bind_all_formals(formals_names, formals_values, bindings) {
+        if (is_null(formals_names) || is_null(formals_values) ) {
             return bindings;
         } 
         else {
@@ -138,7 +134,8 @@ function extend_environment_procedure(arglist){
             return bind_all_formals(tail(formals_names),tail(formals_values), new_bindings);
         }
     }
-    if (length(arglist) === 3){
+
+    if (length(arglist) === 3) {
         const formals = list_ref(arglist, 0);
         const param_values = list_ref(arglist, 1);
         const parent_env = list_ref(arglist, 2);
@@ -157,8 +154,8 @@ function extend_environment_block_procedure(arglist){
     }
 }
 
-function define_constant_procedure(arglist){
-    if (length(arglist) === 3){
+function define_constant_procedure(arglist) {
+    if (length(arglist) === 3) {
         const name = list_ref(arglist, 0);
         const value = list_ref(arglist, 1);
         const env = list_ref(arglist, 2);
@@ -170,17 +167,19 @@ function define_constant_procedure(arglist){
     }
 }
 
-function lookup_variable_value_procedure(arglist){
-    function findChild(target, children_list){
+function lookup_variable_value_procedure(arglist) {
+
+    function findChild(target, children_list) {
         return is_null(children_list)
          ? null
          : target === head(head(children_list))
          ? tail(head(children_list))
          : findChild(target, tail(children_list));
     }
-    function lookup_variable_value(env,name){
+
+    function lookup_variable_value(env,name) {
         const child = findChild(name, tail(env));
-        if (is_null(child) && is_null(head(env))){
+        if (is_null(child) && is_null(head(env))) {
             error(name,"cannot find name: ");
             return false;
         }
@@ -200,16 +199,18 @@ function lookup_variable_value_procedure(arglist){
         error("Incorrect number of arguments for lookup_variable_value procedure");
     }
 }
-function list_procedure(arglist){
-    if (length(arglist) === 1){
+
+function list_procedure(arglist) {
+    if (length(arglist) === 1) {
         const intial = list_ref(arglist, 0);
         return pair(intial,null);
     } else {
         error("Incorrect number of arguments for list procedure");
     }
 }
-function cons_procedure(arglist){
-    if (length(arglist) === 2){
+
+function cons_procedure(arglist) {
+    if (length(arglist) === 2) {
         const to_be_inserted = list_ref(arglist, 0);
         const previous_list = list_ref(arglist, 1);
         return pair(to_be_inserted,previous_list);
@@ -217,16 +218,18 @@ function cons_procedure(arglist){
         error("Incorrect number of arguments for cons procedure");
     }
 }
-function is_false_procedure(arglist){
-    if (length(arglist) === 1){
+
+function is_false_procedure(arglist) {
+    if (length(arglist) === 1) {
         const to_be_tested = list_ref(arglist, 0);
         return to_be_tested === false;
     } else {
         error("Incorrect number of arguments for is_false procedure");
     }
 }
-function make_compiled_procedure_procedure(arglist){
-    if (length(arglist) === 2){
+
+function make_compiled_procedure_procedure(arglist) {
+    if (length(arglist) === 2) {
         const label = list_ref(arglist, 0);
         const env = list_ref(arglist, 1);
         return pair(label,env);
@@ -235,8 +238,8 @@ function make_compiled_procedure_procedure(arglist){
     }
 }
 
-function compiled_procedure_env_procedure(arglist){
-    if (length(arglist) === 1){
+function compiled_procedure_env_procedure(arglist) {
+    if (length(arglist) === 1) {
         const closure = list_ref(arglist, 0);
         return tail(closure);
     } else {
@@ -244,8 +247,8 @@ function compiled_procedure_env_procedure(arglist){
     }
 }
 
-function compiled_procedure_entry_procedure(arglist){
-    if (length(arglist) === 1){
+function compiled_procedure_entry_procedure(arglist) {
+    if (length(arglist) === 1) {
         const closure = list_ref(arglist, 0);
         return head(closure);
     } else {
@@ -253,16 +256,17 @@ function compiled_procedure_entry_procedure(arglist){
     }
 }
 
-function is_primitive_procedure_procedure(arglist){
-    if (length(arglist) === 1){
+function is_primitive_procedure_procedure(arglist) {
+    if (length(arglist) === 1) {
         const closure = list_ref(arglist, 0);
         return is_string(closure);
     } else {
         error("Incorrect number of arguments for is_primitive_procedure procedure");
     }
 }
-function apply_primitive_procedure_procedure(arglist){
-    if (length(arglist) === 2){
+
+function apply_primitive_procedure_procedure(arglist) {
+    if (length(arglist) === 2) {
         const symbol = list_ref(arglist, 0);
         const args = list_ref(arglist, 1);
         if (length(args) === 2 ){
@@ -293,8 +297,7 @@ function apply_primitive_procedure_procedure(arglist){
             : symbol === "||"
             ? apply_in_underlying_javascript((a,b) => a||b, args)
             : error(symbol,"unkown symbol:");
-        }
-        else {
+        } else {
             return symbol === "-"
             ? apply_in_underlying_javascript(a => -a, args)
             : symbol === "!"
@@ -305,8 +308,6 @@ function apply_primitive_procedure_procedure(arglist){
             ? apply_in_underlying_javascript((a) => math_sin(a), args)
             : error(symbol,"unkown symbol:");
         }
-       
-
     } else {
         error("Incorrect number of arguments for is_primitive_procedure procedure");
     }
