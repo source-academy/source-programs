@@ -313,20 +313,6 @@ function apply_primitive_procedure_procedure(arglist) {
     }
 }
 
-function gcd_machine() {
-	return make_machine(list("a", "b", "t"),
-			list(list("rem", binary_function((a, b) => a % b)),
-				list("=", binary_function((a, b) => a === b))),
-			list("test-b",
-				test(list(op("="), reg("b"), constant(0))),
-				branch(label("gcd-done")),
-				assign("t", list(op("rem"), reg("a"), reg("b"))),
-				assign("a", list(reg("b"))),
-				assign("b", list(reg("t"))),
-				go_to(label("test-b")),
-				"gcd-done"));
-}        
-
 function make_machine(register_names, ops, controller_text) {
 	const machine = make_new_machine();
 
