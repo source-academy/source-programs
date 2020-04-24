@@ -1949,7 +1949,7 @@ const TAIL_VALUE_SLOT = 6;
 
 // expects head value in A, tail value in B
 function NEW_PAIR() {
-    C = A;
+    const C = A;
     D = B;
     A = PAIR_TAG;
     B = PAIR_SIZE; // add the book keeping slots
@@ -2250,6 +2250,18 @@ function node_kind(x) {
          : x ===       BLOCK_TAG ? "block"
          : " (unknown node kind)";
 }
+
+function show_node(address) {
+  const tag = HEAP[address];
+  const size = HEAP[address + SIZE_SLOT];
+  display("======================");
+  display(node_kind(tag), address);
+  for (let i = 1; i < size; i = i + 1) {
+    display(stringify(address + i) + ": " + stringify(HEAP[address + i]));
+  }
+  display("======================");
+}
+
 function show_heap(s) {
     const len = array_length(HEAP);
     let i = 0;
@@ -2665,8 +2677,8 @@ M[CALLVAR] = () =>  { G = P[PC + 1];  // lets keep number of arguments in G
                      // A is now the environment extension count
                      // NOTE: -1 to ignore the placeholder variable
                      NEW_ENVIRONMENT(); // after this, RES is new env
-                     E = RES;
-                     H = E + H + G;
+                     TEMP_ROOT = RES;
+                     H = TEMP_ROOT + H + G;
                      // H is now address where last argument goes in new env
                      for (C = H; C > H - G; C = C - 1) {
                          POP_OS(); // now RES has the address of the next arg
@@ -2682,7 +2694,8 @@ M[CALLVAR] = () =>  { G = P[PC + 1];  // lets keep number of arguments in G
                      // NOTE: -1 to ignore the placeholder variable
                      NEW_OS();    // uses B and C
                      OS = RES;
-                     ENV = E;
+                     ENV = TEMP_ROOT;
+                     TEMP_ROOT = -1;
                    };
 
 M[LDNULL] = () =>  { NEW_NULL();
@@ -2739,6 +2752,7 @@ function insert_primitive(p) {
             // we look into OS and load from the start to end instead of popping it
             for (E = 0; E < num_of_args; E = E + 1) {
                 A = HEAP[OS + HEAP[OS + FIRST_CHILD_SLOT] + E];
+                display(A, "address");
                 NEW_PAIR();
                 B = RES;
             }
@@ -2818,6 +2832,8 @@ function run() {
         error(RES, "memory exhausted despite garbage collection");
     } else {
         POP_OS();
+        visualize_heap("");
+        display(RES, "RES");
         return show_heap_value(RES);
     }
 }
