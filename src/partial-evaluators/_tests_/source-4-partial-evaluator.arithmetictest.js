@@ -10,3 +10,5 @@ function test(x, y, z, w) { \
 }"), list(), list());
 
 equal(exa1, exa2);
+\\true
+

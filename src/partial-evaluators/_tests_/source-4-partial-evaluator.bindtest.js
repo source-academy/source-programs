@@ -11,3 +11,4 @@ return 1;\
 
 equal(to_partialize, partialized);
 \\true
+

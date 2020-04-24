@@ -22,3 +22,5 @@ function test(x, y, z, w) { \
 "), list(), list());
 
 equal(to_partialize, partialized);
+\\true
+
