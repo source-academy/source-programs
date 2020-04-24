@@ -1148,7 +1148,6 @@ function ALLOCATE_OVERFLOW() {
   // since bump head and tail are at free block, new node is guaranteed to load properly
   A = J;
   NEW();
-  display("overflow allocation complete");
 }
 
 // Expects old RES in A
