@@ -4,18 +4,18 @@ function partial_evaluation(f, names, values) {
     let name = list_ref(function_name(f), 1);
     let binded_f = bind(f, names, values);
     
-    let final_simplified_conditionals = null;
-    while (!equal(final_simplified_conditionals, binded_f)) {
-        final_simplified_conditionals = binded_f;
+    let final_simplified = null;
+    while (!equal(final_simplified, binded_f)) {
+        final_simplified = binded_f;
         
         binded_f = repeatedDFSapplication(binded_f, function_parameters(binded_f));
         binded_f = merge_simplified_conditionals(binded_f);
     }
     
-    let pretty_printed = pretty_print(final_simplified_conditionals);
+    let pretty_printed = pretty_print(final_simplified);
     display(pretty_printed);
     
-    return final_simplified_conditionals;
+    return final_simplified;
 }
 
 //prints all simplified math expressions in the function
@@ -857,7 +857,7 @@ function is_before_addition(p1, p2, parameter_order) {
     }
 }
 
-//for * opeartion, return whether to swap ther variable order to sort it by parameter order
+//for * operation, return whether to swap ther variable order to sort it by parameter order
 function is_before_multiply(p1, p2, parameter_order) {
     let result = false;
     if (application_operation(p2) === "/") {
