@@ -1367,17 +1367,18 @@ function MARK() {
       I <= HEAP[SCAN + LAST_CHILD_SLOT];
       I = I + 1
     ) {
-      // child is invalid or not yet loaded
-      if (HEAP[SCAN + I] === undefined) { continue; } else {}
+        // child is invalid or not yet loaded
+        if (HEAP[SCAN + I] === undefined 
+            || HEAP[SCAN + I] === -Infinity) { continue; } else {}
 
-      A = HEAP[SCAN + I]; // address of child
-      GET_LINE();
-      A = HEAP[SCAN + I]; // address of child
+        A = HEAP[SCAN + I]; // address of child
+        GET_LINE();
+        A = HEAP[SCAN + I]; // address of child
 
-      // child is not marked 
-      if (HEAP[A + MARK_SLOT] !== MARKED) {
-        PUSH_RTS();
-      } else {}
+        // child is not marked 
+        if (HEAP[A + MARK_SLOT] !== MARKED) {
+            PUSH_RTS();
+        } else {}
     }
   }
   map(add => assert_node_marked(add, trace_root), live_nodes);
@@ -1534,15 +1535,15 @@ function GET_BLOCK() {
 // expects object address in A
 // returns line node address in RES
 function GET_LINE() {
-  C = math_floor(A / BLOCK_SIZE) * BLOCK_SIZE;                 // block address in C
-  // find offset from start of block
-  RES = HEAP[C + HEAP[C + FIRST_CHILD_SLOT] + LINE_ADDRESS_SLOT]; // start of addressable space in RES
-  A = math_floor((A - RES) / LINE_SIZE);                       // line offset number in A
-  RES = C + HEAP[C + FIRST_CHILD_SLOT] + A * LINE_BK_SIZE;            // line node address in RES
-  // debugging
-  if (RES < 0) {
-    error(RES, "negative line number");
-  } else {}
+    C = math_floor(A / BLOCK_SIZE) * BLOCK_SIZE;                 // block address in C
+    // find offset from start of block
+    RES = HEAP[C + HEAP[C + FIRST_CHILD_SLOT] + LINE_ADDRESS_SLOT]; // start of addressable space in RES
+    A = math_floor((A - RES) / LINE_SIZE);                       // line offset number in A
+    RES = C + HEAP[C + FIRST_CHILD_SLOT] + A * LINE_BK_SIZE;            // line node address in RES
+    // debugging
+    if (RES < 0) {
+        error(RES, "negative line number");
+    } else {}
 }
 
 // use tag slot as forwarding address;
@@ -2620,7 +2621,8 @@ M[LDV] = () =>     { E = HEAP[OS + SIZE_SLOT] - 4; // get the number of argument
                      PC = PC + 1;
                    };
 
-M[CALL] = () =>    { G = P[PC + 1];  // lets keep number of arguments in G
+M[CALL] = () =>    { const trace_root = list("CALL");
+                     G = P[PC + 1];  // lets keep number of arguments in G
                      // we peek down OS to get the closure
                      F = HEAP[OS + HEAP[OS + LAST_CHILD_SLOT] - G];
                      // prep for EXTEND
@@ -2628,9 +2630,12 @@ M[CALL] = () =>    { G = P[PC + 1];  // lets keep number of arguments in G
                      // H is now the first child slot of the environment
                      A = HEAP[F + CLOSURE_ENV_EXTENSION_COUNT_SLOT];
                      // A is now the environment extension count
+                     assert_correct_env(ENV, pair("before new env", trace_root));
                      NEW_ENVIRONMENT(); // after this, RES is new env
-                     E = RES;
-                     H = E + H + G;
+                     assert_correct_env(ENV, pair("after new env", trace_root));
+                     assert_correct_env(RES, pair("after new env", trace_root));
+                     TEMP_ROOT = RES;
+                     H = TEMP_ROOT + H + G;
                      // H is now address where last argument goes in new env
                      for (C = H; C > H - G; C = C - 1) {
                          POP_OS(); // now RES has the address of the next arg
@@ -2638,13 +2643,16 @@ M[CALL] = () =>    { G = P[PC + 1];  // lets keep number of arguments in G
                      }
                      POP_OS(); // closure is on top of OS; pop it as not needed
                      NEW_RTS_FRAME(); // saves PC+2, ENV, OS
+                     assert_correct_env(ENV, pair("after new rts", trace_root));
                      A = RES;
                      PUSH_RTS();
                      PC = HEAP[F + CLOSURE_ADDRESS_SLOT];
                      A = HEAP[F + CLOSURE_OS_SIZE_SLOT]; // closure stack size
                      NEW_OS();    // uses B and C
                      OS = RES;
-                     ENV = E;
+                     ENV = TEMP_ROOT;
+                     assert_correct_env(ENV, pair("end of call", trace_root));
+                     TEMP_ROOT = -1;
                    };
 
 M[CALLVAR] = () =>  { G = P[PC + 1];  // lets keep number of arguments in G
@@ -2797,8 +2805,10 @@ function run() {
         if (M[P[PC]] === undefined) {
             error(P[PC], "unknown op-code:");
         } else {
+            const pc = PC;
             M[P[PC]]();
-        assert_valid_node(OS, list("assert valid OS at PC: " + stringify(PC)));
+            assert_valid_node(OS, list("assert valid OS after PC: " + stringify(pc)));
+            assert_correct_env(ENV, list("assert valid ENV after PC: " + stringify(pc)));
         }
     }
     if (STATE === DIV_ERROR) {
@@ -2855,7 +2865,7 @@ run();
 // //tail(x);");
 // print_program(P);
 // run();
-parse_and_compile_and_run(20, 10, 2,
+parse_and_compile_and_run(20, 20, 10,
 "\
 const z = 100000000000;\
 function foo(x) {\
