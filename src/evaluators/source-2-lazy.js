@@ -1,27 +1,38 @@
 /*
-Evaluator for language with booleans, conditionals,
+Lazy evaluator for language with booleans, conditionals,
 sequences, functions, constants, variables and blocks
+
 This is an evaluator for a language that lets you declare
 functions, variables and constants, apply functions, and
 carry out simple arithmetic calculations, boolean operations.
+
 The covered Source §1 sublanguage is:
 stmt    ::= const name = expr ; 
          |  let name = expr ; 
-         |  function name(params) block
+         |  function name ( params ) block
          |  expr ; 
          |  stmt stmt
+         |  return expr ; 
          |  name = expr ; 
          |  block
 block   ::= { stmt }
-expr    ::= expr ? expr : expr
+params  ::=  | name ( , name )... 
+expr    ::= number
+         |  true | false 
+	 |  null
+	 |  string
+         |  name
          |  expr binop expr
          |  unop expr
-         |  name
-         |  number
-         |  expr(expr, expr, ...)
-binop   ::= + | - | * | / | % | < | > | <= | >= 
-         | === | !== |  && | ||
-unop    ::= !
+         |  expr ( exprs ) 
+         |  ( params ) => expr
+         |  ( params ) => block 
+         |  expr ? expr : expr
+         |  ( expression ) 
+binop   ::= + | - | * | / | % | === | !==
+         |  > | < | >= | <= 
+unop    ::= ! | - 
+exprs   ::=  | expression ( , expression )...
 */
 
 /* CONSTANTS: NUMBERS, STRINGS, TRUE, FALSE */
