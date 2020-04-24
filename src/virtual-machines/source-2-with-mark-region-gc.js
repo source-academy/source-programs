@@ -1782,6 +1782,7 @@ function NEW_UNDEFINED() {
 // ...
 
 const OS_TAG = -105;
+const OS_BK_SIZE = 5;
 
 // expects max size in A
 // changes A, B, C, D, E, J, K
@@ -1803,10 +1804,11 @@ function NEW_OS() {
 // expects its argument in A
 // changes A, B
 function PUSH_OS() {
-  B = HEAP[OS + LAST_CHILD_SLOT]; // address of current top of OS
-  B = B + 1;
-  HEAP[OS + LAST_CHILD_SLOT] = B; // update address of current top of OS
-  HEAP[OS + B] = A;
+    assert_valid_node(A, list("PUSH_OS"));
+    B = HEAP[OS + LAST_CHILD_SLOT]; // address of current top of OS
+    B = B + 1;
+    HEAP[OS + LAST_CHILD_SLOT] = B; // update address of current top of OS
+    HEAP[OS + B] = A;
 }
 
 // POP puts the top-most value into RES
@@ -2746,13 +2748,12 @@ function insert_primitive(p) {
             RES = HEAP[RES + TAIL_VALUE_SLOT];
         } else if (injected_prim_func_string(p) === "list") {
             // list is a variadic function
-            const num_of_args = HEAP[OS + SIZE_SLOT] - 4;
+            const num_of_args = HEAP[OS + SIZE_SLOT] - OS_BK_SIZE;
             NEW_NULL(); // null at the end of list
             B = RES;
             // we look into OS and load from the start to end instead of popping it
             for (E = 0; E < num_of_args; E = E + 1) {
                 A = HEAP[OS + HEAP[OS + FIRST_CHILD_SLOT] + E];
-                display(A, "address");
                 NEW_PAIR();
                 B = RES;
             }
@@ -2764,7 +2765,7 @@ function insert_primitive(p) {
             RES = G;
         } else {
             if (is_variadic_function(injected_prim_func_string(p))) {
-                const num_of_args = HEAP[OS + SIZE_SLOT] - 4;
+                const num_of_args = HEAP[OS + SIZE_SLOT] - OS_BK_SIZE;
                 let args = null;
                 for (C = 0; C < num_of_args; C = C + 1) {
                     POP_OS();
@@ -2832,8 +2833,6 @@ function run() {
         error(RES, "memory exhausted despite garbage collection");
     } else {
         POP_OS();
-        visualize_heap("");
-        display(RES, "RES");
         return show_heap_value(RES);
     }
 }
