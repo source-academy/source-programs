@@ -9,6 +9,6 @@ function test(x, y, z, w) { \
     return 3 * y + 3 * w - x * w;\
 }"), list(), list());
 
-equal(exa1, exa2);
+equal(to_partialize, partialized);
 \\true
 
