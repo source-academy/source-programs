@@ -1255,7 +1255,9 @@ function PUSH_OS() {
     B = B + 1;
     HEAP[OS + LAST_CHILD_SLOT] = B; // update address of current top of OS
     HEAP[OS + B] = A;
-    if (B >= HEAP[OS + LAST_CHILD_SLOT]) {
+    if (B >= HEAP[OS + SIZE_SLOT]) {
+        show_node(OS);
+        display(B, "new top");
         error('stack overflow');
     } else {}
 }
@@ -1939,6 +1941,17 @@ function run() {
         POP_OS();
         return show_heap_value(RES);
     }
+}
+
+function show_node(address) {
+  const tag = HEAP[address];
+  const size = HEAP[address + SIZE_SLOT];
+  display("======================");
+  display(node_kind(tag), address);
+  for (let i = 1; i < size + 1; i = i + 1) {
+    display(stringify(address + i) + ": " + stringify(HEAP[address + i]));
+  }
+  display("======================");
 }
 
 parse_and_compile_and_run("                                                       \

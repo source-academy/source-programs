@@ -1818,7 +1818,7 @@ function PUSH_OS() {
     B = B + 1;
     HEAP[OS + LAST_CHILD_SLOT] = B; // update address of current top of OS
     HEAP[OS + B] = A;
-    // assert_os_overflow(OS, trace_root);
+    assert_os_overflow(OS, trace_root);
 }
 
 // POP puts the top-most value into RES
@@ -2888,7 +2888,7 @@ function remove_duplicates(lst) {                                             \
         ? null                                                          \
         : accumulate((x, y) => pair(x, remove_all(x, y)), lst, lst);        \
 }                                                                             \
-remove_duplicates(list(1, 2, 3, 4, 2, 1, 2, 5)); ");
+remove_duplicates(list(1, 2, 2, 1)); ");
 
 // parse_and_compile_and_run(20, 20, 4, "                                                       \
 // function permutations(lst) {                                                  \
