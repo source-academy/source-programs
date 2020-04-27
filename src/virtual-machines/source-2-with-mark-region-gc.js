@@ -1073,6 +1073,7 @@ function parse_and_compile(string) {
 let P = [];
 // PC is program counter: index of the next instruction
 let PC = -Infinity;
+let _PC = PC; // PC for debugging
 // OS is address of current environment in HEAP; initially a dummy value
 let ENV = -Infinity;
 // OS is address of current operand stack in HEAP; initially a dummy value
@@ -1817,7 +1818,7 @@ function PUSH_OS() {
     B = B + 1;
     HEAP[OS + LAST_CHILD_SLOT] = B; // update address of current top of OS
     HEAP[OS + B] = A;
-    assert_os_overflow(OS, trace_root);
+    // assert_os_overflow(OS, trace_root);
 }
 
 // POP puts the top-most value into RES
@@ -1891,16 +1892,16 @@ const RTS_FRAME_OS_SLOT = 7;
 // expects current PC, ENV, OS in their registers
 // changes A, B, C, D, J, K
 function NEW_RTS_FRAME() {
-  A = RTS_FRAME_TAG;
-  B = RTS_FRAME_SIZE;
-  NEW();
-  HEAP[RES + FIRST_CHILD_SLOT] = RTS_FRAME_ENV_SLOT;
-  HEAP[RES + LAST_CHILD_SLOT] = RTS_FRAME_OS_SLOT;
-  HEAP[RES + RTS_FRAME_PC_SLOT] = PC + 2; // next instruction!
-  HEAP[RES + RTS_FRAME_ENV_SLOT] = ENV;
-  HEAP[RES + RTS_FRAME_OS_SLOT] = OS;
-  A = RES;
-  RESTORE_BUMP_PTRS();
+    A = RTS_FRAME_TAG;
+    B = RTS_FRAME_SIZE;
+    NEW();
+    HEAP[RES + FIRST_CHILD_SLOT] = RTS_FRAME_ENV_SLOT;
+    HEAP[RES + LAST_CHILD_SLOT] = RTS_FRAME_OS_SLOT;
+    HEAP[RES + RTS_FRAME_PC_SLOT] = PC + 2; // next instruction!
+    HEAP[RES + RTS_FRAME_ENV_SLOT] = ENV;
+    HEAP[RES + RTS_FRAME_OS_SLOT] = OS;
+    A = RES;
+    RESTORE_BUMP_PTRS();
 }
 
 // expects stack frame in A
@@ -2020,7 +2021,7 @@ function NEW_ENVIRONMENT() {
     assert_same(D, no_of_entries, list("assert no overriding register"));
     HEAP[RES + FIRST_CHILD_SLOT] = 5;
     HEAP[RES + LAST_CHILD_SLOT] = 5 + no_of_entries; // since parent node is part of child
-    HEAP[RES + PARENT_ENVIRONMENT_SLOT] = ENV;
+    HEAP[RES + PARENT_ENVIRONMENT_SLOT] = E;
     A = RES;
     const correct_ptr = RES;
     RESTORE_BUMP_PTRS();
@@ -2039,6 +2040,7 @@ function assert_true(bool, msg, stack) {
     if (bool) {
         // yay 
     } else {
+        print_program(P);
         visualize_heap("");
         show_registers("");
         display(stack);
@@ -2145,15 +2147,15 @@ function ref_get_block(address, stack) {
 }
 
 function ref_get_line(address, stack) {
-  const new_stack = pair("getting line address of: " + stringify(address),
-                         stack);
-  assert_valid_address(address, new_stack);
-  const block_address = ref_get_block(address, new_stack);
-  const start = block_address + BLOCK_BK_SIZE + NUM_OF_LINES_PER_BLOCK * LINE_BK_SIZE;
-  const line_no = (address - start) / LINE_SIZE;
-  const line_address = math_floor(line_no) * LINE_BK_SIZE + block_address + BLOCK_BK_SIZE;
-//   display("line address result", line_address);
-  return line_address;
+    const new_stack = pair("getting line address of: " + stringify(address),
+                            stack);
+    assert_valid_address(address, new_stack);
+    const block_address = ref_get_block(address, new_stack);
+    const start = block_address + BLOCK_BK_SIZE + NUM_OF_LINES_PER_BLOCK * LINE_BK_SIZE;
+    const line_no = (address - start) / LINE_SIZE;
+    const line_address = math_floor(line_no) * LINE_BK_SIZE + block_address + BLOCK_BK_SIZE;
+    //   display("line address result", line_address);
+    return line_address;
 }
 
 function copy_rts(top) {
@@ -2194,11 +2196,11 @@ function assert_marked(mark_offset, address, stack) {
 }
 
 function assert_node_marked(node_address, stack) {
-  const new_stack = pair("assert node: " + stringify(node_address) + " is marked", stack);
-  assert_marked(MARK_SLOT, node_address, new_stack);
-  assert_lines_marked(node_address, new_stack);
-  const block_address = ref_get_block(node_address, new_stack);
-  assert_marked(MARK_SLOT, block_address, new_stack);
+    const new_stack = pair("assert node: " + stringify(node_address) + " is marked", stack);
+    assert_marked(MARK_SLOT, node_address, new_stack);
+    assert_lines_marked(node_address, new_stack);
+    const block_address = ref_get_block(node_address, new_stack);
+    assert_marked(MARK_SLOT, block_address, new_stack);
 }
 
 /**
@@ -2219,36 +2221,43 @@ function assert_unfree(address, stack) {
     }
 }
 
+function show_pc(pc) {
+    display(undefined, "--- RUN ---");
+    display(pc, "_PC :");
+    display(get_name(P[pc]), "instr:");
+}
+
 function show_executing(s) {
-  display(undefined, "--- RUN ---" + s);
-  display(PC, "PC :");
-  display(get_name(P[PC]), "instr:");
+    display(undefined, "--- RUN ---" + s);
+    display(PC, "PC :");
+    display(get_name(P[PC]), "instr:");
 }
 
 // for debugging: show all registers
 function show_registers(s) {
-  show_executing(s);
-  display(undefined, "--- REGISTERS ---");
-  display(RES, "RES:");
-  display(A, "A  :");
-  display(B, "B  :");
-  display(C, "C  :");
-  display(D, "D  :");
-  display(E, "E  :");
-  display(F, "F  :");
-  display(G, "G  :");
-  display(H, "H  :");
-  display(I, "I  :");
-  display(J, "J  :");
-  display(K, "K  :");
-  display(L, "L  :");
-  display(N, "N  :");
-  display(BUMP_HEAD, "BUMP_HEAD  :");
-  display(BUMP_TAIL, "BUMP_TAIL  :");
-  display(OS, "OS :");
-  display(ENV, "ENV:");
-  display(RTS, "RTS:");
-  display(TOP_RTS, "TOP_RTS:");
+    show_pc(_PC);
+    show_executing("PC");
+    display(undefined, "--- REGISTERS ---");
+    display(RES, "RES:");
+    display(A, "A  :");
+    display(B, "B  :");
+    display(C, "C  :");
+    display(D, "D  :");
+    display(E, "E  :");
+    display(F, "F  :");
+    display(G, "G  :");
+    display(H, "H  :");
+    display(I, "I  :");
+    display(J, "J  :");
+    display(K, "K  :");
+    display(L, "L  :");
+    display(N, "N  :");
+    display(BUMP_HEAD, "BUMP_HEAD  :");
+    display(BUMP_TAIL, "BUMP_TAIL  :");
+    display(OS, "OS :");
+    display(ENV, "ENV:");
+    display(RTS, "RTS:");
+    display(TOP_RTS, "TOP_RTS:");
 }
 // debugging: show current heap
 function is_node_tag(x) {
@@ -2383,12 +2392,12 @@ function show_heap_value(address) {
         let display_text = "result: heap node of type = " +
                            node_kind(HEAP[address]) + ", value = " +
                            show_pair_value(address);
-        display(undefined, display_text);
+        return display_text;
     } else {
-        display(undefined, "result: heap node of type = " +
+        return "result: heap node of type = " +
                 node_kind(HEAP[address]) +
                 ", value = " +
-                stringify(HEAP[address + NUMBER_VALUE_SLOT]));
+                stringify(HEAP[address + NUMBER_VALUE_SLOT]);
     }
 }
 
@@ -2452,6 +2461,7 @@ M[START] = () =>   { A = 1; // first OS only needs to hold one closure
                      NEW_OS();
                      OS = RES;
                      A = 0;
+                     E = -Infinity;
                      NEW_ENVIRONMENT();
                      ENV = RES;
                      PC = PC + 1;
@@ -2489,7 +2499,7 @@ M[PLUS] = () =>    { POP_OS();
                      // Might be better to leave it at compile time as a concatenation function
                      
                      // if operands are both strings
-                    if (HEAP[RES + TAG_SLOT] === STRING_TAG) {
+                     if (HEAP[RES + TAG_SLOT] === STRING_TAG) {
                          A = HEAP[RES + STRING_VALUE_SLOT];
                          POP_OS();
                          A = HEAP[RES + STRING_VALUE_SLOT] + A;
@@ -2660,6 +2670,7 @@ M[CALL] = () =>    { const trace_root = list("CALL");
                      // H is now the first child slot of the environment
                      A = HEAP[F + CLOSURE_ENV_EXTENSION_COUNT_SLOT];
                      // A is now the environment extension count
+                     E = HEAP[F + CLOSURE_ENV_SLOT];
                      assert_correct_env(ENV, pair("before new env", trace_root));
                      NEW_ENVIRONMENT(); // after this, RES is new env
                      assert_correct_env(ENV, pair("after new env", trace_root));
@@ -2694,6 +2705,7 @@ M[CALLVAR] = () =>  { G = P[PC + 1];  // lets keep number of arguments in G
                      A = HEAP[F + CLOSURE_ENV_EXTENSION_COUNT_SLOT] + G - 1;
                      // A is now the environment extension count
                      // NOTE: -1 to ignore the placeholder variable
+                     E = HEAP[F + CLOSURE_ENV_SLOT];
                      NEW_ENVIRONMENT(); // after this, RES is new env
                      TEMP_ROOT = RES;
                      H = TEMP_ROOT + H + G;
@@ -2836,10 +2848,10 @@ function run() {
         if (M[P[PC]] === undefined) {
             error(P[PC], "unknown op-code:");
         } else {
-            const pc = PC;
+            _PC = PC;
             M[P[PC]]();
-            assert_valid_node(OS, list("assert valid OS after PC: " + stringify(pc)));
-            assert_correct_env(ENV, list("assert valid ENV after PC: " + stringify(pc)));
+            assert_valid_node(OS, list("assert valid OS after PC: " + stringify(_PC)));
+            assert_correct_env(ENV, list("assert valid ENV after PC: " + stringify(_PC)));
         }
     }
     if (STATE === DIV_ERROR) {
@@ -2869,225 +2881,30 @@ function parse_and_compile_and_run(linesize, linenumber, blocknumber, string) {
 // //tail(x);");
 // print_program(P);
 // run();
-parse_and_compile_and_run(20, 21, 3,
-"\
-const z = 100000000000;\
-function foo(x) {\
-    return x + z;\
-}\
-foo(200000);\
-list(1,2,3,4);\
-");
 
-/*
-P = parse_and_compile("false ? 11 : 22;");
-display(P);
-run();
-*/
+parse_and_compile_and_run(40, 30, 5, "                        \
+function remove_duplicates(lst) {                                             \
+    return is_null(lst)                                                \
+        ? null                                                          \
+        : accumulate((x, y) => pair(x, remove_all(x, y)), lst, lst);        \
+}                                                                             \
+remove_duplicates(list(1, 2, 3, 4, 2, 1, 2, 5)); ");
 
-/*
-P = parse_and_compile("! (true || false);");
-print_program(P);
-run();
-*/
-
-/*
- P = parse_and_compile("1 + 1 === 2;");
- print_program(P);
- run();
-*/
-
-/*
-P = parse_and_compile("1 + 2 * 3 * 4 - 5;");
-run();
-*/
-
-/*
-P = parse_and_compile("1 + 1 / 0;");
-run();
-*/
-
-/*
-P = parse_and_compile("1000 + 2000 / 3000;");
-print_program(P);
-run();
-*/
-
-/*
-P = parse_and_compile("1; 2; 3;");
-print_program(P);
-run();
-*/
-
-/*
-P = parse_and_compile("const x = 1; x + 2;");
-print_program(P);
-run();
-*/
-
-/*
-P = parse_and_compile("undefined;");
-print_program(P);
-run();
-*/
-
-/*
-P = parse_and_compile("     \
-function f(x) {             \
-    return x + 1;           \
-}                           \
-f(2);                       ");
-print_program(P);
-run();
-*/
-
-/*
-P = parse_and_compile("             \
-const a = 2;                        \
-const b = 7;                        \
-function f(x, y) {                  \
-    const c = 100;                  \
-    const d = 500;                  \
-    return x - y * a + b - c + d;   \
-}                                   \
-f(30, 10);                          ");
-print_program(P);
-run();
-*/
-
-/*
-P = parse_and_compile("         \
-function factorial(n) {         \
-    return n === 1 ? 1          \
-        : n * factorial(n - 1); \
-}                               \
-factorial(4);                   ");
-//print_program(P);
-run();
-*/
-
-/*
-P = parse_and_compile("         \
-const about_pi = 3;             \
-function square(x) {            \
-    return x * x;               \
-}                               \
-4 * about_pi * square(6371);    ");
-//print_program(P);
-run();
-*/
-
-/*
-P = parse_and_compile("           \
-function power(x, y) {            \
-    return y === 0                \
-        ? 1                       \
-        : x * power(x, y - 1);    \
-}                                 \
-power(17, 3);                     ");
-//print_program(P);
-run();
-*/
-
-/*
-P = parse_and_compile("                                     \
-function recurse(x, y, operation, initvalue) {              \
-    return y === 0                                          \
-        ? initvalue                                         \
-        : operation(x, recurse(x, y - 1,                    \
-                    operation, initvalue));                 \
-}                                                           \
-                                                            \
-function f(x, z) { return x * z; }                          \
-recurse(2, 3, f, 1);                                        \
-                                                            \
-function g(x, z) { return x + z; }                          \
-recurse(2, 3, g, 0);                                        \
-                                                            \
-function h(x, z) { return x / z; }                          \
-recurse(2, 3, h, 128);                                      ");
-//print_program(P);
-run();
-*/
-
-
-// P = parse_and_compile("                         \
-// function abs(x) {                               \
-//     return x >= 0 ? x : 0 - x;                  \
-// }                                               \
-// function square(x) {                            \
-//     return x * x;                               \
-// }                                               \
-// function average(x,y) {                         \
-//     return (x + y) / 2;                         \
-// }                                               \
-// function sqrt(x) {                              \
-//     function good_enough(guess, x) {            \
-//         return abs(square(guess) - x) < 0.001;  \
-//     }                                           \
-//     function improve(guess, x) {                \
-//         return average(guess, x / guess);       \
-//     }                                           \
-//     function sqrt_iter(guess, x) {              \
-//         return good_enough(guess, x)            \
-//                    ? guess                      \
-//                    : sqrt_iter(improve(         \
-//                                 guess, x), x);  \
-//     }                                           \
-//     return sqrt_iter(1.0, x);                   \
-// }                                               \
-//                                                 \
-// sqrt(5);                                        ");
-// //print_program(P);
-// run();
-
-
-/*
-P = parse_and_compile(" \
-function f(x) {         \
-    x + 1;              \
-}                       \
-f(3);                   ");
-run();
-*/
-
-// P = parse_and_compile("                        \
-// function remove_duplicates(lst) {                                             \
-//     if(is_empty_list(lst)) {                                                  \
-//         return null;                                                          \
-//     } else {                                                                  \
-//         return accumulate((x, y) => pair(x, remove_all(y)), lst, lst);        \
-//     }                                                                         \
-// }                                                                             \
-// remove_duplicates(pair(2, enum_list(0, 3))); ");
-// //print_program(P);
-// run();
-
-// P = parse_and_compile("                                                       \
+// parse_and_compile_and_run(20, 20, 4, "                                                       \
 // function permutations(lst) {                                                  \
-//     if(is_empty_list(lst)) {                                                  \
-//         return pair(null, null);                                              \
-//     } else {                                                                  \
-//         const f = e => map(x => pair(e, x), permutations(remove(e, lst)));    \
-//         return accumulate((x,y) => append(f(x), y), null, lst);               \
-//     }                                                                         \
+//     const f = e => map(x => pair(e, x), permutations(remove(e, lst)));    \
+//     return is_null(lst)                                                   \
+//         ? pair(null, null)                                              \
+//         : accumulate((x,y) => append(f(x), y), null, lst);               \
 // }                                                                             \
-// permutations(enum_list(0, 3)); ");
-// //print_program(P);
-// run();
+// permutations(enum_list(0, 2)); ");
 
-// P = parse_and_compile("                                                       \
-// function subset(lst) {                                                        \
-//     if(is_empty_list(lst)) {                                                  \
-//         return pair(null, null);                                              \
-//     } else {                                                                  \
-//         const first = head(lst);                                              \
-//         const rest = subset(tail(lst));                                       \
-//         const with_first = map(l => pair(first, l), rest);                    \
-//         return append(with_first, rest);                                      \
-//     }                                                                         \
-// }                                                                             \
+// parse_and_compile_and_run(20, 20, 10, "                                                       \
+// function subset(lst) {                                           \
+//     return is_null(lst)                             \
+//         ? pair(null, null) \
+//         : append(map(l => pair(head(lst), l), subset(tail(lst))), \
+//                  subset(tail(lst))); \
+// }                                                                \
 // subset(enum_list(0, 3)); ");
-// //print_program(P);
-// run();
 

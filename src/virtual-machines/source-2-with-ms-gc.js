@@ -1835,6 +1835,7 @@ M[START] = () =>   { A = 1; // first OS only needs to hold one closure
                      NEW_OS();
                      OS = RES;
                      A = 0;
+                     E = -Infinity;
                      NEW_ENVIRONMENT();
                      ENV = RES;
                      PC = PC + 1;

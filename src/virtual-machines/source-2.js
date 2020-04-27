@@ -1255,6 +1255,9 @@ function PUSH_OS() {
     B = B + 1;
     HEAP[OS + LAST_CHILD_SLOT] = B; // update address of current top of OS
     HEAP[OS + B] = A;
+    if (B >= HEAP[OS + LAST_CHILD_SLOT]) {
+        error('stack overflow');
+    } else {}
 }
 
 // POP puts the top-most value into RES
@@ -1545,6 +1548,7 @@ M[START] = () =>   { A = 1; // first OS only needs to hold one closure
                      NEW_OS();
                      OS = RES;
                      A = 0;
+                     E = -Infinity;
                      NEW_ENVIRONMENT();
                      ENV = RES;
                      PC = PC + 1;
@@ -1936,3 +1940,12 @@ function run() {
         return show_heap_value(RES);
     }
 }
+
+parse_and_compile_and_run("                                                       \
+function subset(lst) {                                           \
+    return is_null(lst)                             \
+        ? pair(null, null) \
+        : append(map(l => pair(head(lst), l), subset(tail(lst))), \
+                 subset(tail(lst))); \
+}                                                                \
+subset(enum_list(0, 3)); ");
