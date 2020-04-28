@@ -1,3 +1,40 @@
+/*
+A partial evaluator for language with booleans, conditionals,
+sequences, functions, constants, variables and blocks
+
+This is a partial evaluator for a language that lets you declare
+functions, variables and constants, apply functions, and
+carry out simple arithmetic calculations, boolean operations.
+
+The covered sublanguage of Source §4 is:
+program ::= stmt
+stmt    ::= const name = expression ; 
+         |  let name = expression ; 
+         |  function name ( params ) block
+         |  stmt stmt
+         |  return expression ; 
+         |  name = expr ; 
+         |  block 
+block   ::= { stmt } 
+params  ::=  | name ( , name )... 
+expr    ::= number 
+         |  true | false 
+         |  null 
+         |  string 
+         |  name 
+         |  expr binop expr
+         |  unop expr
+         |  expr ( exprs ) 
+         |  ( params ) => expr
+         |  ( params ) => block 
+         |  expr ? expr : expr
+         |  ( expression ) 
+binop   ::= + | - | * | / | % | === | !==
+         |  > | < | >= | <= 
+unop    ::= ! | - 
+exprs   ::=  | expression ( , expression )...
+*/
+
 //Given a program, list of global variables, and list of global values
 //Note: variables and values are corresponding respect to its order
 function partial_evaluation(f, names, values) {
