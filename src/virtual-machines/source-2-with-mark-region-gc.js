@@ -2873,25 +2873,3 @@ function parse_and_compile_and_run(linesize, linenumber, blocknumber, string) {
     const output = run();
     return output;
 }
-
-// EXAMPLES
-// compiler and VM test cases
-
-// P = parse_and_compile("const x = pair(500, pair(1, 2)); \
-// \
-// //head(x);\
-// //tail(x);");
-// print_program(P);
-// run();
-
-
-// parse_and_compile_and_run(20, 20, 5, "                                                       \
-// function permutations(lst) {                                                  \
-//     const f = e => map(x => pair(e, x), permutations(remove(e, lst)));    \
-//     return is_null(lst)                                                   \
-//         ? pair(null, null)                                              \
-//         : accumulate((x,y) => append(f(x), y), null, lst);               \
-// }                                                                             \
-// permutations(enum_list(0, 1)); ");
-
-
