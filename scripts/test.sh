@@ -1,6 +1,6 @@
 #! /usr/bin/env bash
 
-JS_SLANG="node node_modules/js-slang/dist/repl/repl.js"
+JS_SLANG="node --stack-size=2000 node_modules/js-slang/dist/repl/repl.js"
 
 # must use BSD awk
 AWK="awk"
