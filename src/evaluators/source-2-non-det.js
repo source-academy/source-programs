@@ -869,7 +869,7 @@ function parse_and_run(str) {
 // require(! (cooper === 1)); \
 // require(! (fletcher === 5)); \
 // require(! (fletcher === 1)); \
-// require(! (miller > cooper)); \
+// require(miller > cooper); \
 // require(! ((math_abs(smith - fletcher)) === 1)); \
 // require(! ((math_abs(fletcher - cooper)) === 1)); \
 // return list(list('baker', baker), \
