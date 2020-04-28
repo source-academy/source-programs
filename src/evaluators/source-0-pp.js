@@ -9,12 +9,12 @@ provides for sequences of expressions.
 
 The covered Source §1 sublanguage is:
 
-statement  ::= expression ; 
-            |  statement statement
+stmt       ::= expr ; 
+            |  stmt stmt
             |  block
-block      ::= { statement }
-expression ::= expression binop expression
-            |  unop expression
+block      ::= { stmt }
+expr       ::= expr binop expr
+            |  unop expr
             |  number
             |  true | false
 binop      ::= + | - | * | / | % | < | > | <= | >= | === | !==

@@ -1,5 +1,5 @@
 /*
-Evaluator for language with booleans, conditionals,
+Lazy evaluator for language with booleans, conditionals,
 sequences, functions, constants, variables and blocks
 
 This is an evaluator for a language that lets you declare
@@ -7,24 +7,32 @@ functions, variables and constants, apply functions, and
 carry out simple arithmetic calculations, boolean operations.
 
 The covered Source §1 sublanguage is:
-
 stmt    ::= const name = expr ; 
          |  let name = expr ; 
-         |  function name(params) block
+         |  function name ( params ) block
          |  expr ; 
          |  stmt stmt
+         |  return expr ; 
          |  name = expr ; 
          |  block
 block   ::= { stmt }
-expr    ::= expr ? expr : expr
+params  ::=  | name ( , name )... 
+expr    ::= number
+         |  true | false 
+	 |  null
+	 |  string
+         |  name
          |  expr binop expr
          |  unop expr
-         |  name
-         |  number
-         |  expr(expr, expr, ...)
-binop   ::= + | - | * | / | % | < | > | <= | >= 
-         | === | !== |  && | ||
-unop    ::= ! | -
+         |  expr ( exprs ) 
+         |  ( params ) => expr
+         |  ( params ) => block 
+         |  expr ? expr : expr
+         |  ( expression ) 
+binop   ::= + | - | * | / | % | === | !==
+         |  > | < | >= | <= 
+unop    ::= ! | - 
+exprs   ::=  | expression ( , expression )...
 */
 
 /* CONSTANTS: NUMBERS, STRINGS, TRUE, FALSE */
@@ -36,7 +44,8 @@ unop    ::= ! | -
 function is_self_evaluating(stmt) {
     return is_number(stmt) ||
            is_string(stmt) || 
-           is_boolean(stmt);
+           is_boolean(stmt) ||
+           is_null(stmt);
 }
    
 // all other statements and expressions are
@@ -137,7 +146,7 @@ function is_true(x) {
 // branch, depending on whether the predicate evaluates to
 // true or not
 function eval_conditional_expression(stmt, env) {
-    return is_true(evaluate(cond_expr_pred(stmt),
+    return is_true(actual_value(cond_expr_pred(stmt),
                             env))
            ? evaluate(cond_expr_cons(stmt), env)
            : evaluate(cond_expr_alt(stmt), env);
@@ -282,6 +291,57 @@ function primitive_implementation(fun) {
    return list_ref(fun, 1);
 }
 
+function actual_value(exp, env) {
+    return force_it(evaluate(exp, env));
+}
+
+function delay_it(exp, env) {
+    return list("thunk", exp, env);
+}
+
+function is_thunk(obj) {
+    return is_tagged_list(obj, "thunk");
+}
+
+function thunk_exp(thunk) {
+    return head(tail(thunk));
+}
+
+function thunk_env(thunk) {
+    return head(tail(tail(thunk)));
+}
+
+function is_evaluated_thunk(obj) {
+    return is_tagged_list(obj, "evaluated_thunk");
+}
+
+function thunk_value(obj) {
+    return head(tail(obj));
+}
+
+function force_it(obj) {
+    if(is_thunk(obj)) {
+        
+        const result = actual_value(thunk_exp(obj), thunk_env(obj));
+        
+        set_head(obj, "evaluated_thunk");
+        set_head(tail(obj), result);
+        set_tail(tail(obj), null);
+        
+        return result;
+        
+    } else if(is_evaluated_thunk(obj)) {
+        
+        return thunk_value(obj);
+        
+    } else {
+        return obj;
+    }
+    
+}
+
+
+
 /* APPLY */
 
 // apply_in_underlying_javascript allows us
@@ -293,7 +353,29 @@ function apply_primitive_function(fun, argument_list) {
                 primitive_implementation(fun),
                 argument_list);     
 }
-    
+
+function list_of_arg_values(exps, env) {
+    return no_operands(exps)
+        ? null
+        : pair(actual_value(first_operand(exps), env),
+          list_of_arg_values(rest_operands(exps), env));
+}
+
+function list_of_delayed_args(exps, env) {
+    return no_operands(exps)
+        ? null
+        : pair(delay_it(first_operand(exps), env),
+          list_of_delayed_args(rest_operands(exps), env));
+}
+
+function is_pair_constructor (fun){
+    return head(tail(operator(fun))) === "pair";
+}
+function construct_lazy_pair (args,env){
+    const head = delay_it (first_operand(args),env);
+    const tail = delay_it (first_operand(rest_operands(args)),env);
+    return pair (head,tail); 
+}
 // function application needs to distinguish between
 // primitive functions (which are evaluated using the
 // underlying JavaScript), and compound functions.
@@ -303,10 +385,9 @@ function apply_primitive_function(fun, argument_list) {
 // object's environment by a binding of the function
 // parameters to the arguments and of local names to
 // the special value no_value_yet
-
-function apply(fun, args) {
-   if (is_primitive_function(fun)) {
-      return apply_primitive_function(fun, args);
+function apply(fun, args, env) {
+    if (is_primitive_function(fun)) {
+      return apply_primitive_function(fun, list_of_arg_values(args,env));
    } else if (is_compound_function(fun)) {
       const body = function_body(fun);
       const locals = local_names(body);
@@ -314,7 +395,8 @@ function apply(fun, args) {
                                locals);
       const temp_values = map(x => no_value_yet,
                               locals);
-      const values = append(args, temp_values);			   
+      const delayed_args = list_of_delayed_args(args, env);
+      const values = append(delayed_args, temp_values);			   
       const result =
          evaluate(body,
                   extend_environment(
@@ -620,8 +702,9 @@ function evaluate(stmt, env) {
         : is_return_statement(stmt)
           ? eval_return_statement(stmt, env)
         : is_application(stmt)
-          ? apply(evaluate(operator(stmt), env),
-                  list_of_values(operands(stmt), env))
+          ? is_pair_constructor(stmt) ? construct_lazy_pair(operands(stmt),env) 
+           : apply(actual_value(operator(stmt), env),
+                  operands(stmt), env)
         : error(stmt, "Unknown statement type in evaluate: ");
 }
 
@@ -635,7 +718,7 @@ function eval_toplevel(stmt) {
    // wrap program in block to create
    // program environment
    const program_block = make_block(stmt);
-   const value = evaluate(program_block, 
+   const value = actual_value(program_block, 
                           the_global_environment);
    if (is_return_value(value)) {
        error("return not allowed " +
@@ -649,17 +732,6 @@ function eval_toplevel(stmt) {
 
 const the_empty_environment = null;
 
-// the minus operation is overloaded to
-// support both binary minus and unary minus
-
-function minus(x, y) {
-    if (is_number(x) && is_number(y)) {
-      return x - y;
-    } else {
-      return -x;
-    }
-}
-
 // the global environment has bindings for all
 // primitive functions, including the operators
 
@@ -667,7 +739,7 @@ const primitive_functions = list(
        list("display",       display         ),
        list("error",         error           ),
        list("+",             (x,y) => x + y  ),
-       list("-",             (x,y) => minus(x, y)  ),
+       list("-",             (x,y) => x - y  ),
        list("*",             (x,y) => x * y  ),
        list("/",             (x,y) => x / y  ),
        list("%",             (x,y) => x % y  ),
@@ -677,7 +749,9 @@ const primitive_functions = list(
        list("<=",            (x,y) => x <=  y),
        list(">",             (x,y) => x >   y),
        list(">=",            (x,y) => x >=  y),
-       list("!",              x    =>   !   x)
+       list("!",              x    =>   !   x),
+       list("head",           x    => head(x)),
+       list ("tail",          x    => tail(x))
        );
 
 // the global environment also has bindings for all
@@ -720,6 +794,21 @@ function parse_and_eval(str) {
     return eval_toplevel(parse(str));
 }
 
+/*
+examples:
+parse_and_eval("1;");
+parse_and_eval("1 + 1;");
+parse_and_eval("1 + 3 * 4;");
+parse_and_eval("(1 + 3) * 4;");
+parse_and_eval("1.4 / 2.3 + 70.4 * 18.3;");
+parse_and_eval("true;");
+parse_and_eval("! (1 === 1);");
+parse_and_eval("(! (1 === 1)) ? 1 : 2;");
+parse_and_eval("'hello' + ' ' + 'world';");
+*/
+//parse_and_eval("function factorial(n) { return n === 1 ? 1 : n * factorial(n - 1);} factorial(4);");
+
+
 
 /* THE READ-EVAL-PRINT LOOP */
 
@@ -748,23 +837,4 @@ function read_eval_print_loop(history) {
     }
 }
 
-/*
-examples:
-parse_and_eval("1;");
-parse_and_eval("1 + 1;");
-parse_and_eval("1 + 3 * 4;");
-parse_and_eval("(1 + 3) * 4;");
-parse_and_eval("1.4 / 2.3 + 70.4 * 18.3;");
-parse_and_eval("true;");
-parse_and_eval("! (1 === 1);");
-parse_and_eval("(! (1 === 1)) ? 1 : 2;");
-parse_and_eval("'hello' + ' ' + 'world';");
-parse_and_eval("6 * -1;");
-parse_and_eval("-12 - 8;");
-*/
 
-parse_and_eval("function factorial(n) { return n === 1 ? 1 : n * factorial(n - 1);} factorial(4);");
-
-/*
-read_eval_print_loop("");
-*/

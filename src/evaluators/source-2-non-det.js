@@ -1,36 +1,41 @@
 /*
-Evaluator for language with booleans, conditionals,
+Non-deterministic evaluator for language with booleans, conditionals,
 sequences, functions, constants, variables and blocks
+
 This is an evaluator for a language that lets you declare
 functions, variables and constants, apply functions, and
 carry out simple arithmetic calculations, boolean operations.
+
 The covered sublanguage of Source §2 is:
 
-program ::= statement 
-statement ::= const name = expression ; 
-    | function name ( parameters ) 
-    | return expression ; 
-    | block 
-    | expression ; 
-parameters ::=  | name ( , name ) 
-block ::= { program } 
-expression ::= number 
-    | true | false 
-    | null 
-    | string 
-    | name 
-    | expression binary-operator expression 
-    | unary-operator expression 
-    | expression ( expressions ) 
-    | ( name | ( parameters ) ) => expression 
-    | ( name | ( parameters ) ) => block 
-    | expression ? expression : expression 
-    | ( expression ) 
-binary-operator ::= + | - | * | / | % | === | !==
-    | > | < | >= | <= 
-unary-operator ::= ! | - 
-expressions ::=  | expression ( , expression ) 
+program ::= stmt
+stmt    ::= const name = expression ; 
+         |  let name = expression ; 
+         |  function name ( params ) block
+         |  stmt stmt
+         |  return expression ; 
+         |  name = expr ; 
+         |  block 
+block   ::= { stmt } 
+params  ::=  | name ( , name )... 
+expr    ::= number 
+         |  true | false 
+         |  null 
+         |  string 
+         |  name 
+         |  expr binop expr
+         |  unop expr
+         |  expr ( exprs ) 
+         |  ( params ) => expr
+         |  ( params ) => block 
+         |  expr ? expr : expr
+         |  ( expression ) 
+binop   ::= + | - | * | / | % | === | !==
+         |  > | < | >= | <= 
+unop    ::= ! | - 
+exprs   ::=  | expression ( , expression )...
 */
+
 function is_true(x) {
     return x === true;
 }
