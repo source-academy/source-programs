@@ -948,7 +948,7 @@ function parse_and_compile(string) {
             }
         }
         add_nullary_instruction(OP);
-        return 1;
+        return length(ops_types);
     }
 
     function compile(expr, index_table, insert_flag) {
@@ -1260,7 +1260,7 @@ function NEW() {
   RES = BUMP_HEAD;
   assert_unfree(RES, trace_root);
   BUMP_HEAD = BUMP_HEAD + K;
-  LIVE_NODES = ref_mark(trace_root);
+//   LIVE_NODES = ref_mark(trace_root);
   
 }
 
@@ -1315,25 +1315,25 @@ function unmark_all() {
 
 // Changes A, B, C, I, SCAN
 function MARK() {
-  const trace_root = list("START TRACE: MARK()");
-  const rts_copy = copy_rts(TOP_RTS);
-  // keep old TOP_RTS to prevent deleting stacks
-  B = TOP_RTS;
-  // init roots for dfs
-  for (I = 0; I <= B; I = I + 1) {
-    A = RTS[I]; // add all rts stacks
-    PUSH_RTS();
-  }
-  A = OS;
-  PUSH_RTS(); // add current os
-  A = ENV;
-  PUSH_RTS(); // add current env
-  if (TEMP_ROOT !== -1) {
-    A = TEMP_ROOT;
-    PUSH_RTS();
-  } else {}
+    const trace_root = list("START TRACE: MARK()");
+    const rts_copy = copy_rts(TOP_RTS);
+    // keep old TOP_RTS to prevent deleting stacks
+    B = TOP_RTS;
+    // init roots for dfs
+    for (I = 0; I <= B; I = I + 1) {
+        A = RTS[I]; // add all rts stacks
+        PUSH_RTS();
+    }
+    A = OS;
+    PUSH_RTS(); // add current os
+    A = ENV;
+    PUSH_RTS(); // add current env
+    if (TEMP_ROOT !== -1) {
+        A = TEMP_ROOT;
+        PUSH_RTS();
+    } else {}
 
-  const live_nodes = ref_mark(trace_root);
+    // const live_nodes = ref_mark(trace_root);
 
     while (B < TOP_RTS) {
         POP_RTS();
@@ -1388,7 +1388,7 @@ function MARK() {
             } else {}
         }
     }
-    map(add => assert_node_marked(add, trace_root), live_nodes);
+    // map(add => assert_node_marked(add, trace_root), live_nodes);
     assert_rts(rts_copy, pair("line 1149, ", trace_root));
 }
 
@@ -1397,7 +1397,7 @@ function FREE_REGION() {
     const trace_root = list("TRACE START: FREE_REGION()");
     // granular collection
     // free blocks
-    const live_nodes = ref_mark(trace_root);
+    // const live_nodes = ref_mark(trace_root);
 
     for (I = 0; I < NUMBER_OF_BLOCKS; I = I + 1) {
         if (HEAP[I * BLOCK_SIZE + MARK_SLOT] === UNMARKED) {
@@ -1426,7 +1426,7 @@ function FREE_REGION() {
         // unmark whole block
         HEAP[I * BLOCK_SIZE + MARK_SLOT] = UNMARKED;
     }
-    map(a => assert_unfree(a, trace_root), live_nodes);
+    // map(a => assert_unfree(a, trace_root), live_nodes);
 
     // finds a hole of at least k size and allocate new bump head and tail
     ALLOCATE_TO_RECYCLABLE();
@@ -2040,7 +2040,7 @@ function assert_true(bool, msg, stack) {
     if (bool) {
         // yay 
     } else {
-        print_program(P);
+        // print_program(P);
         visualize_heap("");
         show_registers("");
         display(stack);
@@ -2114,16 +2114,21 @@ function assert_valid_node(node_address, stack) {
         const branch_stack = pair("node not leaf", new_stack);
         const firstchild = HEAP[node_address + FIRST_CHILD_SLOT];
         const lastchild = HEAP[node_address + LAST_CHILD_SLOT];
-        for (let i = firstchild; i < lastchild; i = i + 1) {
+        for (let i = firstchild; i <= lastchild; i = i + 1) {
             assert_valid_address(HEAP[node_address + i], branch_stack);
         }
     }
 }
 
+/**
+ * Ensures all env nodes have the env tag and all parents are also env nodes
+ * @param {number} env_address address of ENV node
+ * @param {list} stack stack trace
+ */
 function assert_correct_env(env_address, stack) {
     if (env_address === -Infinity) {return undefined;}
     else {}
-    const new_stack = pair("assert ENV", stack);
+    const new_stack = pair("assert correct ENV: " + stringify(env_address), stack);
     assert_false(env_address === undefined, "ENV is undefined", new_stack);
     assert_true(HEAP[env_address + TAG_SLOT] === ENV_TAG, "not a env node", new_stack);
     assert_correct_env(HEAP[env_address + PARENT_ENVIRONMENT_SLOT], new_stack);
@@ -2671,10 +2676,7 @@ M[CALL] = () =>    { const trace_root = list("CALL");
                      A = HEAP[F + CLOSURE_ENV_EXTENSION_COUNT_SLOT];
                      // A is now the environment extension count
                      E = HEAP[F + CLOSURE_ENV_SLOT];
-                     assert_correct_env(ENV, pair("before new env", trace_root));
                      NEW_ENVIRONMENT(); // after this, RES is new env
-                     assert_correct_env(ENV, pair("after new env", trace_root));
-                     assert_correct_env(RES, pair("after new env", trace_root));
                      TEMP_ROOT = RES;
                      H = TEMP_ROOT + H + G;
                      // H is now address where last argument goes in new env
@@ -2682,9 +2684,9 @@ M[CALL] = () =>    { const trace_root = list("CALL");
                          POP_OS(); // now RES has the address of the next arg
                          HEAP[C] = RES; // copy argument into new env
                      }
+                     assert_correct_env(TEMP_ROOT, pair("after extending env", trace_root));
                      POP_OS(); // closure is on top of OS; pop it as not needed
                      NEW_RTS_FRAME(); // saves PC+2, ENV, OS
-                     assert_correct_env(ENV, pair("after new rts", trace_root));
                      A = RES;
                      PUSH_RTS();
                      PC = HEAP[F + CLOSURE_ADDRESS_SLOT];
@@ -2882,29 +2884,14 @@ function parse_and_compile_and_run(linesize, linenumber, blocknumber, string) {
 // print_program(P);
 // run();
 
-parse_and_compile_and_run(40, 30, 5, "                        \
-function remove_duplicates(lst) {                                             \
-    return is_null(lst)                                                \
-        ? null                                                          \
-        : accumulate((x, y) => pair(x, remove_all(x, y)), lst, lst);        \
-}                                                                             \
-remove_duplicates(list(1, 2, 2, 1)); ");
 
-// parse_and_compile_and_run(20, 20, 4, "                                                       \
+// parse_and_compile_and_run(20, 20, 5, "                                                       \
 // function permutations(lst) {                                                  \
 //     const f = e => map(x => pair(e, x), permutations(remove(e, lst)));    \
 //     return is_null(lst)                                                   \
 //         ? pair(null, null)                                              \
 //         : accumulate((x,y) => append(f(x), y), null, lst);               \
 // }                                                                             \
-// permutations(enum_list(0, 2)); ");
+// permutations(enum_list(0, 1)); ");
 
-// parse_and_compile_and_run(20, 20, 10, "                                                       \
-// function subset(lst) {                                           \
-//     return is_null(lst)                             \
-//         ? pair(null, null) \
-//         : append(map(l => pair(head(lst), l), subset(tail(lst))), \
-//                  subset(tail(lst))); \
-// }                                                                \
-// subset(enum_list(0, 3)); ");
 

@@ -7,4 +7,4 @@ function foo(x) {\
 foo(200000);\
 list(1,2,3,4);\
 ");
-// result: heap node of type = pair, value = [1,[2,[3,[4,null]]]] undefined
+// 'result: heap node of type = pair, value = [1,[2,[3,[4,null]]]]'

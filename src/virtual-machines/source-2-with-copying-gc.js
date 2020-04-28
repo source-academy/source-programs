@@ -948,7 +948,7 @@ function parse_and_compile(string) {
             }
         }
         add_nullary_instruction(OP);
-        return 1;
+        return length(ops_types);
     }
 
     function compile(expr, index_table, insert_flag) {

@@ -948,7 +948,7 @@ function parse_and_compile(string) {
             }
         }
         add_nullary_instruction(OP);
-        return 1;
+        return length(ops_types);
     }
 
     function compile(expr, index_table, insert_flag) {
@@ -1953,12 +1953,3 @@ function show_node(address) {
   }
   display("======================");
 }
-
-parse_and_compile_and_run("                                                       \
-function subset(lst) {                                           \
-    return is_null(lst)                             \
-        ? pair(null, null) \
-        : append(map(l => pair(head(lst), l), subset(tail(lst))), \
-                 subset(tail(lst))); \
-}                                                                \
-subset(enum_list(0, 3)); ");
