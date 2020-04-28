@@ -1,6 +1,9 @@
 #! /usr/bin/env bash
 
-JS_SLANG="node node_modules/js-slang/dist/repl/repl.js"
+JS_SLANG="node --stack-size=2000 node_modules/js-slang/dist/repl/repl.js"
+
+# must use BSD awk
+AWK="awk"
 
 SOURCEFILES=src/*/*.js
 SOURCE_TEST="src/test/framework/main.js"
@@ -53,13 +56,13 @@ test_source_framework() {
     do 
         passed=$(($passed+1))
         echo "${green}PASS $2 $test_name"
-    done < <(echo ${RESULTS} | grep -o '\w* PASSED' | awk -F 'PASSED' '{ print $1 }')
+    done < <(echo ${RESULTS} | grep -o '\w* PASSED' | $AWK -F 'PASSED' '{ print $1 }')
     
     # retrieve names and error messages for tests that failed
     while read test_info 
     do 
         failed=$(($failed+1))
-        echo $test_info | awk -F 'FAILED:' '{ print $1 ":" $2 }' | awk -F '"' '{ print $1 $2 }' | 
+        echo $test_info | $AWK -F 'FAILED:' '{ print $1 ":" $2 }' | $AWK -F '"' '{ print $1 $2 }' | 
             while read test_name test_error 
             do echo "${red}FAIL $2 $test_name $test_error"; 
             done
@@ -78,13 +81,13 @@ main() {
 	    do
         if [ -f "$i" ]; then
             # check if first line of test file contains 'chapter=' and retrieve its value. Set to the default chapter if it does not
-            chapter=$(awk -F 'chapter=' 'FNR==1{ if ($0~"chapter=") { print $2 } else { print '$DEFAULT_CHAPTER' } }' $i | awk -F ' ' '{ print $1 }')
+            chapter=$($AWK -F 'chapter=' 'FNR==1{ if ($0~"chapter=") { print $2 } else { print '$DEFAULT_CHAPTER' } }' $i | $AWK -F ' ' '{ print $1 }')
         
             # check if first line of test file contains 'variant=' and retrieve its value. Set to the default variant if it does not
-            variant=$(awk -F 'variant=' 'FNR==1{ if ($0~"variant=") { print $2 } else { print '$DEFAULT_VARIANT' } }' $i | awk -F ' ' '{ print $1 }')
+            variant=$($AWK -F 'variant=' 'FNR==1{ if ($0~"variant=") { print $2 } else { print '$DEFAULT_VARIANT' } }' $i | $AWK -F ' ' '{ print $1 }')
             
             # check if first line of test file contains 'framework'
-            use_source_test=$(awk 'FNR==1{ if ($0~"framework") print "yes" }' $i)
+            use_source_test=$($AWK 'FNR==1{ if ($0~"framework") print "yes" }' $i)
             if [[ $use_source_test == "yes" ]]
             then chapter=4 ; test_source_framework $s $i $chapter $variant
             else test_source $s $i $chapter $variant

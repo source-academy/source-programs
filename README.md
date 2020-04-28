@@ -9,10 +9,11 @@ All programs in this repository are runnable in the [Source Academy playground](
 The evaluators in this section all follow the general style of SICP JS Chapter 4.
 
 - [`src/evaluators/source-0.js`](https://github.com/source-academy/source-programs/blob/master/src/evaluators/source-0.js): evaluator for Source §0 (calculator language)
-- [`src/evaluators/source-0pp.js`](https://github.com/source-academy/source-programs/blob/master/src/evaluators/source-0pp.js): evaluator for Source §0++ (calculator language plus conditionals, blocks and sequences)
-- [`src/evaluators/source-4-1.js`](https://github.com/source-academy/source-programs/blob/master/src/evaluators/source-4-1.js): evaluator for Source §1, described in SICP JS 4.1
+- [`src/evaluators/source-0-pp.js`](https://github.com/source-academy/source-programs/blob/master/src/evaluators/source-0-pp.js): evaluator for Source §0++ (calculator language plus conditionals, blocks and sequences)
+- [`src/evaluators/source-2.js`](https://github.com/source-academy/source-programs/blob/master/src/evaluators/source-2.js): evaluator for Source §2, described in SICP JS 4.1
+- [`src/evaluators/source-2-lazy.js`](https://github.com/source-academy/source-programs/blob/master/src/evaluators/source-2-lazy.js): lazy evaluator for Source §2, described in SICP JS 4.2
+- [`src/evaluators/source-2-non-det.js`](https://github.com/source-academy/source-programs/blob/master/src/evaluators/source-2-non-det.js): evaluator for Source §2 with non-determinism, described in SICP JS 4.3
 - [`src/evaluators/typed-source.js`](https://github.com/source-academy/source-programs/blob/master/src/evaluators/typed-source.js): evaluator for Typed Source (typed version of a Source §1 sublanguage)
-- [`src/evaluators/source-4-3.js`](https://github.com/source-academy/source-programs/blob/master/src/evaluators/source-4-3.js): meta-circular evaluator for Source §4.3 (non-deterministic programming)
 
 ## Steppers
 
@@ -67,6 +68,8 @@ The virtual machines in this section are SECD-style and follow a description in 
 - [`src/test/framework/main.js`](https://github.com/source-academy/source-programs/blob/master/src/test/framework/): test framework for Source programs, written in Source §4
 
 # Testing
+
+[requires bash (any version) and awk (BSD awk 20070501); does not work with gawk]
 
 For testing your Source programs, you need `node` and `yarn`.
 

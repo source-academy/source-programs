@@ -1,27 +1,39 @@
 /*
 Evaluator for language with booleans, conditionals,
 sequences, functions, constants, variables and blocks
+
 This is an evaluator for a language that lets you declare
 functions, variables and constants, apply functions, and
 carry out simple arithmetic calculations, boolean operations.
+
 The covered Source §1 sublanguage is:
+
 stmt    ::= const name = expr ; 
          |  let name = expr ; 
-         |  function name(params) block
+         |  function name ( params ) block
          |  expr ; 
          |  stmt stmt
+         |  return expr ; 
          |  name = expr ; 
          |  block
 block   ::= { stmt }
-expr    ::= expr ? expr : expr
+params  ::=  | name ( , name )... 
+expr    ::= number
+         |  true | false 
+	 |  null
+	 |  string
+         |  name
          |  expr binop expr
          |  unop expr
-         |  name
-         |  number
-         |  expr(expr, expr, ...)
-binop   ::= + | - | * | / | % | < | > | <= | >= 
-         | === | !== |  && | ||
-unop    ::= ! | -
+         |  expr ( exprs ) 
+         |  ( params ) => expr
+         |  ( params ) => block 
+         |  expr ? expr : expr
+         |  ( expression ) 
+binop   ::= + | - | * | / | % | === | !==
+         |  > | < | >= | <= 
+unop    ::= ! | - 
+exprs   ::=  | expression ( , expression )...
 */
 
 /* CONSTANTS: NUMBERS, STRINGS, TRUE, FALSE */
@@ -439,43 +451,6 @@ function eval_block(stmt, env) {
                             locals);
     return evaluate(body,
                 extend_environment(locals, temp_values, env));
-                
-}
-
-/* OBJECT EXPRESSIONS */
-
-// object expressions are tagged with "object_expression"
-
-function is_object_expression(stmt) {
-    return is_tagged_list(stmt, "object_expression");
-}
-
-function object_expression_bindings(stmt) {
-    return head(tail(stmt));
-}
-
-function eval_object_expression(stmt, env) {
-    return null;
-}
-
-/* OBJECT ACCESS */
-
-// object access are tagged with "object_acess"
-
-function is_object_access(stmt) {
-    return is_tagged_list(stmt, "object_access");
-}
-
-function object_access_object(stmt) {
-    return head(tail(stmt));
-}
-
-function object_access_property(stmt) {
-    return head(tail(tail(stmt)));
-}
-
-function eval_object_access(stmt, env) {
-    return null;
 }
 
 /* ENVIRONMENTS */
@@ -656,10 +631,6 @@ function evaluate(stmt, env) {
         : is_application(stmt)
           ? apply(evaluate(operator(stmt), env),
                   list_of_values(operands(stmt), env))
-        : is_object_expression(stmt)
-          ? eval_object_expression(stmt, env)
-        : is_object_access(stmt)
-          ? eval_object_access(stmt, env)          
         : error(stmt, "Unknown statement type in evaluate: ");
 }
 
