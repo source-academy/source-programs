@@ -10,7 +10,7 @@ require(! (baker === 5)); \
 require(! (cooper === 1)); \
 require(! (fletcher === 5)); \
 require(! (fletcher === 1)); \
-require(! (miller > cooper)); \
+require( miller > cooper ); \
 require(! ((math_abs(smith - fletcher)) === 1)); \
 require(! ((math_abs(fletcher - cooper)) === 1)); \
 return list(list('baker', baker), \
@@ -28,4 +28,4 @@ function print_one_line_list(li) {
     return result;
 }
 print_one_line_list(result);
-// 'baker1,cooper4,fletcher2,miller3,smith5,'
+// 'baker3,cooper2,fletcher4,miller5,smith1,'
