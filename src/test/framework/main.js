@@ -12,6 +12,7 @@ let start_time = 0;
 let elapsed_time = 0;
 
 let current_test_status = TEST_PASS;
+let current_test_failure = null;
 
 /**
  * Checks if the given condition evaluates to true 
@@ -29,6 +30,10 @@ function assert(condition, message) {
 		num_assert_fail = num_assert_fail + 1;
 		current_test_status = TEST_FAIL;
 		display(res);
+		if (current_test_failure === null) {
+			// only keep track of the first failure of any test
+			current_test_failure = res;
+		} else {}
 	} else {
 		num_assert_pass = num_assert_pass + 1;
 	}
@@ -51,7 +56,7 @@ function report_error(message) {
  * @param result
 */
 function assert_equal(expected, result) {
-	const error_message = "assert_equal failed: " + stringify(result) + " (result) not equal to " + stringify(expected) + " (expected)";
+	const error_message = stringify(result) + " (result) not equal to " + stringify(expected) + " (expected)";
 	assert(equal(expected, result), error_message);
 }
 
@@ -137,7 +142,8 @@ function _test_result(test_name) {
 		display(test_name + " PASSED");
 		num_pass = num_pass + 1;
 	}  else {
-		display(test_name + " FAILED");
+		display(test_name + " FAILED: " + current_test_failure);
+		current_test_failure = null;
 	}
 
 	current_test_status = TEST_PASS; // reset test status

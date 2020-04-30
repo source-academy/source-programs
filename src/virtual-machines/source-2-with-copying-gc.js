@@ -59,13 +59,13 @@ function is_undefined_expression(stmt) {
 // and have "name" and "value" properties
 
 function is_constant_declaration(stmt) {
-   return is_tagged_list(stmt, "constant_declaration");
+    return is_tagged_list(stmt, "constant_declaration");
 }
 function constant_declaration_name(stmt) {
-   return head(tail(head(tail(stmt))));
+    return head(tail(head(tail(stmt))));
 }
 function constant_declaration_value(stmt) {
-   return head(tail(tail(stmt)));
+    return head(tail(tail(stmt)));
 }
 
 // applications are tagged with "application"
@@ -1062,7 +1062,8 @@ function parse_and_compile(string) {
 }
 
 // for testing purpose
-function parse_and_compile_and_run(string) {
+function parse_and_compile_and_run(heapsize, string) {
+    initialize_machine(heapsize);
     P = parse_and_compile(string);
     const output = run();
     return output;
@@ -1078,11 +1079,11 @@ function parse_and_compile_and_run(string) {
 // the op-codes of instructions and their arguments
 let P = [];
 // PC is program counter: index of the next instruction
-let PC = 0;
+let PC = -Infinity;
 // HEAP is array containing all dynamically allocated data structures
-const HEAP = [];
+let HEAP = NaN;
 // next free slot in heap
-let FREE = 0;
+let FREE = -Infinity;
 // OS is address of current environment in HEAP; initially a dummy value
 let ENV = -Infinity;
 // OS is address of current operand stack in HEAP; initially a dummy value
@@ -1095,8 +1096,10 @@ let RTS = [];
 let TOP_RTS = -1;
 
 // boolean that says whether machine is running
-let RUNNING = true;
+let RUNNING = NaN;
 
+// exit state: NORMAL, DIV_ERROR, OUT_OF_MEMORY_ERROR, etc
+let STATE = NaN;
 // some general-purpose registers
 let A = 0;
 let B = 0;
@@ -1142,11 +1145,16 @@ function show_registers(s) {
     display(TOP_RTS, "TOP_RTS:");
 }
 
+// scan pointer in Cheney
+let SCAN = -Infinity;
+// the size of the heap is fixed
+let HEAP_SIZE = -Infinity;
+// smallest heap address
+let HEAPBOTTOM = -Infinity;
+
 const NORMAL = 0;
 const DIV_ERROR = 1;
-const OUT_OF_MEMORY_ERROR = 2; // not used yet: memory currently unbounded
-
-let STATE = NORMAL;
+const OUT_OF_MEMORY_ERROR = 2;
 
 // general node layout
 const TAG_SLOT = 0;
@@ -1154,12 +1162,143 @@ const SIZE_SLOT = 1;
 const FIRST_CHILD_SLOT = 2;
 const LAST_CHILD_SLOT = 3;
 
+// ///////////////////////////////////
+// Cheney's Copying Garbage Collection
+// ///////////////////////////////////
+
+// initialize spaces for Cheney's algorithm
+
+let SPACESIZE = -Infinity;
+let TOSPACE = -Infinity;
+let FROMSPACE = -Infinity;
+let TOPOFSPACE = -Infinity;
+let GC_COUNT = 0;
+
+function initialize_machine(heapsize) {
+    // display(heapsize, "\nRunning VM with heap size:");
+    HEAP = [];
+    HEAP_SIZE = heapsize;
+    HEAPBOTTOM = 0;
+    SPACESIZE = HEAP_SIZE / 2;
+    TOSPACE = HEAPBOTTOM;
+    FROMSPACE = TOSPACE + SPACESIZE;
+    TOPOFSPACE = TOSPACE + SPACESIZE - 1;
+    FREE = TOSPACE;
+    TEMP_ROOT = -1;
+    RUNNING = true;
+    STATE = NORMAL;
+    PC = 0;
+}
+
+// We introduce TEMP_ROOT register to handle instructions
+// that allocate nodes on the heap and then may flip.
+// The address of those nodes are assigned to TEMP_ROOT.
+// TEMP_ROOT is treated as a root in garbage collection,
+// and thus gets updated to point to the correct copy in
+// the to-space.
+let TEMP_ROOT = -Infinity;
+
 // NEW expects tag in A and size in B
+// changes A, B, C, J, K
 function NEW() {
-    HEAP[FREE + TAG_SLOT] = A;
-    HEAP[FREE + SIZE_SLOT] = B;
+    J = A;
+    K = B;
+    if (FREE + K > TOPOFSPACE) {
+        GC_COUNT = GC_COUNT + 1;
+        FLIP();
+    } else {}
+    if (FREE + K > TOPOFSPACE) {
+        STATE = OUT_OF_MEMORY_ERROR;
+        RUNNING = false;
+    } else {}
+    HEAP[FREE + TAG_SLOT] = J;
+    HEAP[FREE + SIZE_SLOT] = K;
     RES = FREE;
-    FREE = FREE + B;
+    FREE = FREE + K;
+}
+
+// use tag slot as forwarding address;
+// the trick: since tags are negative, they
+// can never be confused with heap addresses
+const FORWARDINGADDRESS = 0;
+
+// changes B, C, I
+function FLIP() {
+    A = FROMSPACE;
+    FROMSPACE = TOSPACE;
+    TOSPACE = A;
+    TOPOFSPACE = TOSPACE + SPACESIZE - 1;
+    FREE = TOSPACE;
+    SCAN = TOSPACE;
+
+    A = OS;
+    COPY();
+    OS = RES;
+
+    A = ENV;
+    COPY();
+    ENV = RES;
+
+    // TEMP_ROOT is temporary root of garbage
+    // collection, used in EXTEND and CALL
+    if (TEMP_ROOT >= 0) {
+        A = TEMP_ROOT;
+        COPY();
+        TEMP_ROOT = RES;
+    } else {}
+
+    for (I = 0; I <= TOP_RTS; I = I + 1) {
+        A = RTS[I];
+        COPY();
+        RTS[I] = RES;
+    }
+    while (SCAN < FREE) {
+        for (I = HEAP[SCAN + FIRST_CHILD_SLOT];
+             I <= HEAP[SCAN + LAST_CHILD_SLOT];
+             I = I + 1) {
+            A = HEAP[SCAN + I];
+            COPY();
+            HEAP[SCAN + I] = RES;
+        }
+        SCAN = SCAN + HEAP[SCAN + SIZE_SLOT];
+    }
+}
+
+// expects node to be copied in A
+// changes B, C
+function COPY() {
+    if (A === undefined) {
+        RES = undefined;
+    } else if (A === -Infinity) {
+        // take care of top environment parent slot
+        RES = -Infinity;
+    } else {
+        ALREADY_COPIED();
+        if (RES) {
+            RES = HEAP[A + FORWARDINGADDRESS];
+        } else {
+            B = FREE;
+            MOVE();
+            FREE = FREE + HEAP[A + SIZE_SLOT];
+            HEAP[A + FORWARDINGADDRESS] = B;
+            RES = B;
+        }
+    }
+}
+
+// expects node in A
+function ALREADY_COPIED() {
+    RES = HEAP[A + FORWARDINGADDRESS] >= TOSPACE
+      &&
+      HEAP[A + FORWARDINGADDRESS] <= FREE;
+}
+
+// expects source in A and destination in B
+// changes C
+function MOVE() {
+    for (C = 0; C < HEAP[A + SIZE_SLOT]; C = C + 1) {
+        HEAP[B + C] = HEAP[A + C];
+    }
 }
 
 // number nodes layout
@@ -1175,13 +1314,13 @@ const NUMBER_SIZE = 5;
 const NUMBER_VALUE_SLOT = 4;
 
 function NEW_NUMBER() {
-    C = A;
+    E = A;
     A = NUMBER_TAG;
     B = NUMBER_SIZE;
     NEW();
     HEAP[RES + FIRST_CHILD_SLOT] = 6;
     HEAP[RES + LAST_CHILD_SLOT] = 5; // no children
-    HEAP[RES + NUMBER_VALUE_SLOT] = C;
+    HEAP[RES + NUMBER_VALUE_SLOT] = E;
 }
 
 // bool nodes layout
@@ -1269,7 +1408,7 @@ function POP_OS() {
 //
 // 0: tag  = -109
 // 1: size = 5  // naive implementation
-// 2: first child = 4
+// 2: first child = 5
 // 3: last child  = 4
 // 4: string value
 
@@ -1283,7 +1422,7 @@ function NEW_STRING() {
     A = STRING_TAG;
     B = STRING_SIZE;
     NEW();
-    HEAP[RES + FIRST_CHILD_SLOT] = 4;
+    HEAP[RES + FIRST_CHILD_SLOT] = 5;
     HEAP[RES + LAST_CHILD_SLOT] = 4;
     HEAP[RES + STRING_VALUE_SLOT] = C;
 }
@@ -1475,8 +1614,8 @@ function show_heap(s) {
 function show_heap_value(address) {
     if (node_kind(HEAP[address])=== "pair") {
         return "result: heap node of type = " +
-                           node_kind(HEAP[address]) + ", value = " +
-                           show_pair_value(address);
+               node_kind(HEAP[address]) + ", value = " +
+               show_pair_value(address);
     } else {
         return "result: heap node of type = " +
                 node_kind(HEAP[address]) +
@@ -1582,7 +1721,7 @@ M[PLUS] = () =>    { POP_OS();
                      // Might be better to leave it at compile time as a concatenation function
                      
                      // if operands are both strings
-                     if (HEAP[RES + TAG_SLOT] === STRING_TAG) {
+                    if (HEAP[RES + TAG_SLOT] === STRING_TAG) {
                          A = HEAP[RES + STRING_VALUE_SLOT];
                          POP_OS();
                          A = HEAP[RES + STRING_VALUE_SLOT] + A;
@@ -1699,7 +1838,7 @@ M[ASSIGN] = () =>  { POP_OS();
                      HEAP[ENV + HEAP[ENV + FIRST_CHILD_SLOT] + 1
                               + P[PC + 1]] = RES;
                     // +1 to account for parent env addr
-                     PC = PC + 2;
+                    PC = PC + 2;
                    };
 
 M[JOF] = () =>     { POP_OS();
@@ -1728,9 +1867,9 @@ M[LD] = () =>      { E = ENV;
                      }
                      // now E is the environment the name lives in
                      A = HEAP[E + HEAP[E + FIRST_CHILD_SLOT] + 1
-                                  + P[PC + 1]];
+                                + P[PC + 1]];
                      // +1 to account for parent env addr
-
+                        
                      PUSH_OS();
                      PC = PC + 3;
                    };
@@ -1931,8 +2070,10 @@ function run() {
     if (STATE === DIV_ERROR) {
         POP_OS();
         error(RES, "execution aborted:");
+    } else if (STATE ===  OUT_OF_MEMORY_ERROR) {
+        error(undefined, "memory exhausted despite garbage collection");
     } else {
         POP_OS();
-        return show_heap_value(RES);
+        return show_heap_value(RES) + "; GC count: " + stringify(GC_COUNT);
     }
 }

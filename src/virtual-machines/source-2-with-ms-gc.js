@@ -59,13 +59,13 @@ function is_undefined_expression(stmt) {
 // and have "name" and "value" properties
 
 function is_constant_declaration(stmt) {
-   return is_tagged_list(stmt, "constant_declaration");
+    return is_tagged_list(stmt, "constant_declaration");
 }
 function constant_declaration_name(stmt) {
-   return head(tail(head(tail(stmt))));
+    return head(tail(head(tail(stmt))));
 }
 function constant_declaration_value(stmt) {
-   return head(tail(tail(stmt)));
+    return head(tail(tail(stmt)));
 }
 
 // applications are tagged with "application"
@@ -1062,7 +1062,8 @@ function parse_and_compile(string) {
 }
 
 // for testing purpose
-function parse_and_compile_and_run(string) {
+function parse_and_compile_and_run(heapsize, string) {
+    initialize_machine(heapsize);
     P = parse_and_compile(string);
     const output = run();
     return output;
@@ -1078,25 +1079,26 @@ function parse_and_compile_and_run(string) {
 // the op-codes of instructions and their arguments
 let P = [];
 // PC is program counter: index of the next instruction
-let PC = 0;
+let PC = -Infinity;
 // HEAP is array containing all dynamically allocated data structures
-const HEAP = [];
-// next free slot in heap
-let FREE = 0;
+let HEAP = NaN;
 // OS is address of current environment in HEAP; initially a dummy value
 let ENV = -Infinity;
 // OS is address of current operand stack in HEAP; initially a dummy value
 let OS = -Infinity;
 // temporary value, used by PUSH and POP; initially a dummy value
 let RES = -Infinity;
+// tem
 
 // RTS: runtime stack
 let RTS = [];
 let TOP_RTS = -1;
 
 // boolean that says whether machine is running
-let RUNNING = true;
+let RUNNING = NaN;
 
+// exit state: NORMAL, DIV_ERROR, OUT_OF_MEMORY_ERROR, etc
+let STATE = NaN;
 // some general-purpose registers
 let A = 0;
 let B = 0;
@@ -1142,11 +1144,22 @@ function show_registers(s) {
     display(TOP_RTS, "TOP_RTS:");
 }
 
+// allocation pointer
+let FREE_PTR = -Infinity;
+// scan pointer in Mark and Sweep
+let SCAN = -Infinity;
+// the size of the heap is fixed
+let HEAP_SIZE = -Infinity;
+// smallest heap address
+let HEAPBOTTOM = -Infinity;
+// head free node
+let HEAD_FREE_NODE = -Infinity;
+// last free node
+let LAST_FREE_NODE = -Infinity;
+
 const NORMAL = 0;
 const DIV_ERROR = 1;
-const OUT_OF_MEMORY_ERROR = 2; // not used yet: memory currently unbounded
-
-let STATE = NORMAL;
+const OUT_OF_MEMORY_ERROR = 2;
 
 // general node layout
 const TAG_SLOT = 0;
@@ -1154,12 +1167,283 @@ const SIZE_SLOT = 1;
 const FIRST_CHILD_SLOT = 2;
 const LAST_CHILD_SLOT = 3;
 
+// /////////////////////////////////
+// Mark and Sweep Garbage Collection
+// /////////////////////////////////
+
+// initialize spaces for Mark and Sweep algorithm
+
+let SPACESIZE = -Infinity;
+let TOPOFSPACE = -Infinity;
+let GC_COUNT = 0;
+
+function initialize_machine(heapsize) {
+    // display(heapsize, "\nRunning VM with heap size:");
+    HEAP = [];
+    HEAP_SIZE = heapsize;
+    HEAPBOTTOM = 0;
+    SPACESIZE = HEAP_SIZE;
+    TOPOFSPACE = SPACESIZE;
+    initialize_free_list();
+    FREE_PTR = RES;
+    HEAD_FREE_NODE = FREE_PTR;
+    LAST_FREE_NODE = FREE_PTR;
+    TEMP_ROOT = -1;
+    RUNNING = true;
+    STATE = NORMAL;
+    PC = 0;
+}
+
+function initialize_free_list() {
+    A = HEAPBOTTOM;
+    B = HEAP_SIZE;
+    NEW_FREENODE();
+    // explicit assignment of undefined values
+    HEAP[RES + PREV_FREE_NODE_SLOT] = undefined;
+    HEAP[RES + NEXT_FREE_NODE_SLOT] = undefined;
+}
+
+// We introduce TEMP_ROOT register to handle instructions 
+// that allocate nodes on the heap and then may flip.
+// The address of those nodes are assigned to TEMP_ROOT.
+// TEMP_ROOT is treated as a root in garbage collection,
+// and thus gets updated to point to the correct copy in
+// the to-space.
+let TEMP_ROOT = -Infinity;
+
+// indicated if the heap has been garbage collected
+let COLLECTED = true;
+
 // NEW expects tag in A and size in B
+// changes A, B, C, J, K
 function NEW() {
-    HEAP[FREE + TAG_SLOT] = A;
-    HEAP[FREE + SIZE_SLOT] = B;
-    RES = FREE;
-    FREE = FREE + B;
+    J = A;
+    K = B;
+    FREE_PTR = HEAD_FREE_NODE;
+    FIND_NEXT_FREENODE();
+
+    // if no free node that could accommodate the new node
+    // trigger garbage collection
+    if (FREE_PTR === undefined) {
+        COLLECTED = false;
+        MARK();
+        SWEEP(); // updates FREE_PTR
+        GC_COUNT = GC_COUNT + 1;
+        FIND_NEXT_FREENODE();
+        COLLECTED = true;
+    } else {}
+    // if still no available node found, out of memory
+    if (FREE_PTR === undefined) {
+        // exit from the program
+        STATE = OUT_OF_MEMORY_ERROR;
+        RUNNING = false;
+        error(FREE_PTR, "memory exhausted despite garbage collection");
+    } else {}
+
+    // by now FREE_PTR should be the free node
+
+    if (HEAP[FREE_PTR + SIZE_SLOT] > K + UNDEFINED_SIZE) {
+        HEAP[FREE_PTR + K] = HEAP[FREE_PTR];
+        HEAP[FREE_PTR + K + SIZE_SLOT] = HEAP[FREE_PTR + SIZE_SLOT] - K;
+        HEAP[FREE_PTR + K + PREV_FREE_NODE_SLOT] = HEAP[FREE_PTR + PREV_FREE_NODE_SLOT];
+        HEAP[FREE_PTR + K + NEXT_FREE_NODE_SLOT] = HEAP[FREE_PTR + NEXT_FREE_NODE_SLOT];
+
+        // adjust the pointers in the prev and next free node
+        // if they are not the head free node or tail free node
+        if (FREE_PTR === HEAD_FREE_NODE) {
+            HEAD_FREE_NODE = HEAD_FREE_NODE + K;
+        } else {
+            HEAP[HEAP[FREE_PTR + PREV_FREE_NODE_SLOT] + NEXT_FREE_NODE_SLOT] 
+                = HEAP[HEAP[FREE_PTR + PREV_FREE_NODE_SLOT] + NEXT_FREE_NODE_SLOT] + K;
+        }
+        if (FREE_PTR === LAST_FREE_NODE) {
+            LAST_FREE_NODE = LAST_FREE_NODE + K;
+        } else {
+            HEAP[HEAP[FREE_PTR + NEXT_FREE_NODE_SLOT] + PREV_FREE_NODE_SLOT] 
+                = HEAP[HEAP[FREE_PTR + NEXT_FREE_NODE_SLOT] + PREV_FREE_NODE_SLOT] + K;
+        }
+    } else {
+        // else discard the space, creating size < 4 fragmentation
+        // and remove the current node from the doubly linked list
+        if (FREE_PTR === HEAD_FREE_NODE) {
+            HEAD_FREE_NODE = HEAP[FREE_PTR + NEXT_FREE_NODE_SLOT];
+            if (HEAD_FREE_NODE !== undefined) {
+                // free list is not exhausted
+                HEAP[HEAD_FREE_NODE + PREV_FREE_NODE_SLOT] = undefined;
+            } else {}
+        } else {
+            HEAP[HEAP[FREE_PTR + PREV_FREE_NODE_SLOT] + NEXT_FREE_NODE_SLOT] =
+            HEAP[FREE_PTR + NEXT_FREE_NODE_SLOT];
+            if (FREE_PTR !== LAST_FREE_NODE) {
+                HEAP[HEAP[FREE_PTR + NEXT_FREE_NODE_SLOT] + PREV_FREE_NODE_SLOT] =
+                    HEAP[FREE_PTR + PREV_FREE_NODE_SLOT];
+            } else {
+                LAST_FREE_NODE = HEAP[FREE_PTR + PREV_FREE_NODE_SLOT];
+            }
+        }
+    }
+
+    HEAP[FREE_PTR + TAG_SLOT] = J;
+    HEAP[FREE_PTR + SIZE_SLOT] = K;
+
+    RES = FREE_PTR;
+}
+
+// expects size of new node in K
+function FIND_NEXT_FREENODE() {
+    while (FREE_PTR !== undefined 
+        && K > HEAP[FREE_PTR + SIZE_SLOT]
+        && FREE_PTR < TOPOFSPACE) {
+        if (FREE_PTR === undefined) {
+            break;
+        } else {}
+        FREE_PTR = HEAP[FREE_PTR + NEXT_FREE_NODE_SLOT];
+    }
+}
+
+// use tag slot as the mark slot as tag slot is not used in mark and sweep
+// since node tag has a range of -110 to -100, we could simply mark the node
+// by getting the tag out of this range
+// here we do +99, meaning tag_slot value: -1xx => -xx - 1
+// unmarking must be done (as intended) for the node to be usable in execution
+const MARK_SLOT = 0;
+
+// Changes A, B, C, I, SCAN
+function MARK() {
+    // keep old TOP_RTS to prevent deleting stacks
+    B = TOP_RTS;
+    // init roots for dfs
+    for (I = 0; I <= B; I = I + 1) {
+        A = RTS[I]; // add all rts stacks
+        PUSH_RTS();
+    }
+    A = OS;
+    PUSH_RTS(); // add current os
+    A = ENV;
+    PUSH_RTS(); // add current env
+    if (TEMP_ROOT >= 0) {
+        A = TEMP_ROOT;
+        PUSH_RTS();
+    } else {}
+
+    while (B < TOP_RTS) {
+      POP_RTS();
+      SCAN = RES;
+      // mark node if it is not marked
+      A = SCAN;
+      IS_MARKED();
+      if (!RES) {
+        HEAP[SCAN + MARK_SLOT] = HEAP[SCAN + MARK_SLOT] + 99;
+      } else {}
+
+      // mark children if any
+      for (
+        I = HEAP[SCAN + FIRST_CHILD_SLOT];
+        I <= HEAP[SCAN + LAST_CHILD_SLOT];
+        I = I + 1
+      ) {
+        // child is invalid or not yet loaded or parent env of top env (-Infinity)
+        if (HEAP[SCAN + I] === undefined 
+            || HEAP[SCAN + I] === -Infinity) { continue; } else {}
+
+        A = HEAP[SCAN + I]; // address of child
+        IS_MARKED();
+        if (!RES) {
+            PUSH_RTS();
+        } else {}
+      }
+    }
+}
+
+// expects node in A
+function IS_MARKED() {
+    RES = HEAP[A + MARK_SLOT] > -100 && HEAP[A + MARK_SLOT] <= 0;
+}
+
+function SWEEP() {
+    SCAN = HEAPBOTTOM;
+    
+    // scan the entire heap space
+    while (SCAN < TOPOFSPACE) {
+        // the heap space is assumed to be clean (no dirty slots lying around)
+        if (HEAP[SCAN] === undefined) {
+            SCAN = SCAN + 1;
+            continue;
+        } else {}
+        
+        A = SCAN;
+        if (HEAP[A + TAG_SLOT] === FREE_TAG) {
+            SCAN = SCAN + HEAP[A + SIZE_SLOT];
+            continue;
+        } else {}
+        IS_MARKED();
+        if (!RES) {
+            // free unmarked node
+            FREE();
+            B = RES;
+            
+            // expand the last free node 
+            // if it is immediately before the current node
+            // to achieve a more contiguous free spaceb
+            if (LAST_FREE_NODE !== undefined
+                && A === LAST_FREE_NODE 
+                    + HEAP[LAST_FREE_NODE + SIZE_SLOT]
+                && A !== HEAD_FREE_NODE) {
+                HEAP[LAST_FREE_NODE + SIZE_SLOT] = 
+                    HEAP[LAST_FREE_NODE + SIZE_SLOT] + B;
+            } else {
+                // else create new free node
+                NEW_FREENODE();
+                // if the free list is exhausted
+                if (HEAD_FREE_NODE === undefined) {
+                    HEAD_FREE_NODE = RES;
+                    LAST_FREE_NODE = RES;
+                } else {
+                    // else, append the free list
+                    HEAP[RES + PREV_FREE_NODE_SLOT] = LAST_FREE_NODE;
+                    HEAP[RES + NEXT_FREE_NODE_SLOT] = undefined;
+                    HEAP[LAST_FREE_NODE + NEXT_FREE_NODE_SLOT] = RES;
+                }
+                LAST_FREE_NODE = RES;
+            }
+        } else {
+            // unmark
+            HEAP[A + MARK_SLOT] = HEAP[A + MARK_SLOT] - 99;
+            B = HEAP[A + SIZE_SLOT];
+        }
+        SCAN = SCAN + B;
+    }
+    FREE_PTR = HEAD_FREE_NODE;
+}
+
+// expects node to free in A
+// returns size of node collected
+// changes B, I
+function FREE() {
+    B = HEAP[A + SIZE_SLOT];
+    for (I = A; I < A + B; I = I + 1) {
+        HEAP[I] = undefined;
+    }
+    RES = B;
+}
+
+// free node layout (pseudo-node existing in free heap space)
+// it has a doubly linked list node structure
+//
+// 0: tag  = -110
+// 1: size = depends on the actual size of free space (at least 4)
+// 2: last free node (undefined for head node)
+// 3: next free node (undefined for tail node)
+
+const FREE_TAG = -110;
+const PREV_FREE_NODE_SLOT = 2;
+const NEXT_FREE_NODE_SLOT = 3;
+
+// expects start address in A, size in B
+function NEW_FREENODE() {
+    HEAP[A + TAG_SLOT] = FREE_TAG;
+    HEAP[A + SIZE_SLOT] = B;
+    RES = A;
 }
 
 // number nodes layout
@@ -1175,13 +1459,13 @@ const NUMBER_SIZE = 5;
 const NUMBER_VALUE_SLOT = 4;
 
 function NEW_NUMBER() {
-    C = A;
+    E = A;
     A = NUMBER_TAG;
     B = NUMBER_SIZE;
     NEW();
     HEAP[RES + FIRST_CHILD_SLOT] = 6;
     HEAP[RES + LAST_CHILD_SLOT] = 5; // no children
-    HEAP[RES + NUMBER_VALUE_SLOT] = C;
+    HEAP[RES + NUMBER_VALUE_SLOT] = E;
 }
 
 // bool nodes layout
@@ -1251,6 +1535,9 @@ function NEW_OS() {
 // the operand stack OS
 // PUSH expects its argument in A
 function PUSH_OS() {
+    if (OS === 5) {
+        // show_heap("");
+    } else {}
     B = HEAP[OS + LAST_CHILD_SLOT]; // address of current top of OS
     B = B + 1;
     HEAP[OS + LAST_CHILD_SLOT] = B; // update address of current top of OS
@@ -1269,7 +1556,7 @@ function POP_OS() {
 //
 // 0: tag  = -109
 // 1: size = 5  // naive implementation
-// 2: first child = 4
+// 2: first child = 5
 // 3: last child  = 4
 // 4: string value
 
@@ -1283,7 +1570,7 @@ function NEW_STRING() {
     A = STRING_TAG;
     B = STRING_SIZE;
     NEW();
-    HEAP[RES + FIRST_CHILD_SLOT] = 4;
+    HEAP[RES + FIRST_CHILD_SLOT] = 5;
     HEAP[RES + LAST_CHILD_SLOT] = 4;
     HEAP[RES + STRING_VALUE_SLOT] = C;
 }
@@ -1411,6 +1698,7 @@ function PUSH_RTS() {
 // places stack frame into RES
 function POP_RTS() {
     RES = RTS[TOP_RTS];
+    RTS[TOP_RTS] = undefined;
     TOP_RTS = TOP_RTS - 1;
 }
 
@@ -1429,6 +1717,7 @@ function POP_RTS() {
 
 const ENV_TAG = -102;
 const PARENT_ENVIRONMENT_SLOT = 4;
+let OLD_ENV = -Infinity;
 
 // expects number of env entries in A, env to extend in E
 // changes B
@@ -1444,7 +1733,7 @@ function NEW_ENVIRONMENT() {
 
 // debugging: show current heap
 function is_node_tag(x) {
-    return x !== undefined && x <= -100 && x >= -110;
+    return x !== undefined && x <= -99 && x >= -110;
 }
 function node_kind(x) {
     return x ===      NUMBER_TAG ? "number"
@@ -1457,6 +1746,7 @@ function node_kind(x) {
          : x ===   UNDEFINED_TAG ? "undefined"
          : x ===        PAIR_TAG ? "pair"
          : x ===        NULL_TAG ? "null"
+         : x ===        FREE_TAG ? "free"
          : " (unknown node kind)";
 }
 function show_heap(s) {
@@ -1475,8 +1765,8 @@ function show_heap(s) {
 function show_heap_value(address) {
     if (node_kind(HEAP[address])=== "pair") {
         return "result: heap node of type = " +
-                           node_kind(HEAP[address]) + ", value = " +
-                           show_pair_value(address);
+               node_kind(HEAP[address]) + ", value = " +
+               show_pair_value(address);
     } else {
         return "result: heap node of type = " +
                 node_kind(HEAP[address]) +
@@ -1582,7 +1872,7 @@ M[PLUS] = () =>    { POP_OS();
                      // Might be better to leave it at compile time as a concatenation function
                      
                      // if operands are both strings
-                     if (HEAP[RES + TAG_SLOT] === STRING_TAG) {
+                    if (HEAP[RES + TAG_SLOT] === STRING_TAG) {
                          A = HEAP[RES + STRING_VALUE_SLOT];
                          POP_OS();
                          A = HEAP[RES + STRING_VALUE_SLOT] + A;
@@ -1699,7 +1989,7 @@ M[ASSIGN] = () =>  { POP_OS();
                      HEAP[ENV + HEAP[ENV + FIRST_CHILD_SLOT] + 1
                               + P[PC + 1]] = RES;
                     // +1 to account for parent env addr
-                     PC = PC + 2;
+                    PC = PC + 2;
                    };
 
 M[JOF] = () =>     { POP_OS();
@@ -1727,10 +2017,11 @@ M[LD] = () =>      { E = ENV;
                          C = C - 1;
                      }
                      // now E is the environment the name lives in
+                    //  show_heap("");
                      A = HEAP[E + HEAP[E + FIRST_CHILD_SLOT] + 1
-                                  + P[PC + 1]];
+                                + P[PC + 1]];
                      // +1 to account for parent env addr
-
+                        
                      PUSH_OS();
                      PC = PC + 3;
                    };
@@ -1756,6 +2047,13 @@ M[CALL] = () =>    { G = P[PC + 1];  // lets keep number of arguments in G
                      // E is now the environmnet to extend
                      NEW_ENVIRONMENT(); // after this, RES is new env
                      E = RES;
+
+                     // Heap address of new environment can 
+                     // be changed by NEW_RS_FRAME and NEW_OS below.
+                     // Assigning TEMP_ROOT to address makes sure we
+                     // restore the updated value before competing CALL.
+                     TEMP_ROOT = E;
+
                      H = E + H + G;
                      // H is now address where last argument goes in new env
                      for (C = H; C > H - G; C = C - 1) {
@@ -1770,7 +2068,8 @@ M[CALL] = () =>    { G = P[PC + 1];  // lets keep number of arguments in G
                      A = HEAP[F + CLOSURE_OS_SIZE_SLOT]; // closure stack size
                      NEW_OS();    // uses B and C
                      OS = RES;
-                     ENV = E;
+                     ENV = TEMP_ROOT;
+                     TEMP_ROOT = -1;
                    };
 
 M[CALLVAR] = () =>  { G = P[PC + 1];  // lets keep number of arguments in G
@@ -1785,6 +2084,13 @@ M[CALLVAR] = () =>  { G = P[PC + 1];  // lets keep number of arguments in G
                      E = HEAP[F + CLOSURE_ENV_SLOT];
                      // E is now the environmnet to extend
                      NEW_ENVIRONMENT(); // after this, RES is new env
+
+                     // Heap address of new environment can 
+                     // be changed by NEW_RS_FRAME and NEW_OS below.
+                     // Assigning TEMP_ROOT to address makes sure we
+                     // restore the updated value before competing CALL.
+                     TEMP_ROOT = E;
+
                      E = RES;
                      H = E + H + G;
                      // H is now address where last argument goes in new env
@@ -1803,6 +2109,7 @@ M[CALLVAR] = () =>  { G = P[PC + 1];  // lets keep number of arguments in G
                      NEW_OS();    // uses B and C
                      OS = RES;
                      ENV = E;
+                     TEMP_ROOT = -1;
                    };
 
 M[LDNULL] = () =>  { NEW_NULL();
@@ -1880,7 +2187,7 @@ function insert_primitive(p) {
             } else {
                 // gets arguments based on list of types
                 const args =
-                  map(x => {
+                    map(x => {
                         if (x === "num") {
                             POP_OS();  // get number node and extract value
                             return HEAP[RES + NUMBER_VALUE_SLOT];
@@ -1931,8 +2238,10 @@ function run() {
     if (STATE === DIV_ERROR) {
         POP_OS();
         error(RES, "execution aborted:");
+    } else if (STATE ===  OUT_OF_MEMORY_ERROR) {
+        error(RES, "memory exhausted despite garbage collection");
     } else {
         POP_OS();
-        return show_heap_value(RES);
+        return show_heap_value(RES) + "; GC count: " + stringify(GC_COUNT);
     }
 }

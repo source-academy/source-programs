@@ -1,36 +1,41 @@
 /*
-Evaluator for language with booleans, conditionals,
+Non-deterministic evaluator for language with booleans, conditionals,
 sequences, functions, constants, variables and blocks
+
 This is an evaluator for a language that lets you declare
 functions, variables and constants, apply functions, and
 carry out simple arithmetic calculations, boolean operations.
+
 The covered sublanguage of Source §2 is:
 
-program ::= statement 
-statement ::= const name = expression ; 
-    | function name ( parameters ) 
-    | return expression ; 
-    | block 
-    | expression ; 
-parameters ::=  | name ( , name ) 
-block ::= { program } 
-expression ::= number 
-    | true | false 
-    | null 
-    | string 
-    | name 
-    | expression binary-operator expression 
-    | unary-operator expression 
-    | expression ( expressions ) 
-    | ( name | ( parameters ) ) => expression 
-    | ( name | ( parameters ) ) => block 
-    | expression ? expression : expression 
-    | ( expression ) 
-binary-operator ::= + | - | * | / | % | === | !==
-    | > | < | >= | <= 
-unary-operator ::= ! | - 
-expressions ::=  | expression ( , expression ) 
+program ::= stmt
+stmt    ::= const name = expression ; 
+         |  let name = expression ; 
+         |  function name ( params ) block
+         |  stmt stmt
+         |  return expression ; 
+         |  name = expr ; 
+         |  block 
+block   ::= { stmt } 
+params  ::=  | name ( , name )... 
+expr    ::= number 
+         |  true | false 
+         |  null 
+         |  string 
+         |  name 
+         |  expr binop expr
+         |  unop expr
+         |  expr ( exprs ) 
+         |  ( params ) => expr
+         |  ( params ) => block 
+         |  expr ? expr : expr
+         |  ( expression ) 
+binop   ::= + | - | * | / | % | === | !==
+         |  > | < | >= | <= 
+unop    ::= ! | - 
+exprs   ::=  | expression ( , expression )...
 */
+
 function is_true(x) {
     return x === true;
 }
@@ -588,7 +593,7 @@ function analyze_sequence(stmts) {
             a(env,
                 (a_value, fail2) => {
                     if (is_return_value(a_value)) {
-                        return succeed(return_value_content(a_value), fail2);
+                        return succeed(a_value, fail2);
                     } else {
                         return b(env, succeed, fail2);
                     }
@@ -613,8 +618,7 @@ function analyze_sequence(stmts) {
 function analyze_block(stmts) {
     const body = block_body(stmts);
     const locals = local_names(body);
-    const temp_values = map(x => no_value_yet,
-        locals);
+    const temp_values = map(x => no_value_yet, locals);
     return (env, succeed, fail) => analyze(body)(extend_environment(locals, temp_values, env), succeed, fail);
 }
 
@@ -732,7 +736,6 @@ function execute_application(fun, args, succeed, fail) {
                 function_environment(fun)),
             (return_value, fail2) => {
                 if (is_return_value(return_value)) {
-
                     return succeed(return_value_content(return_value),fail2);
                 } else {
                     return succeed(undefined,fail2);
@@ -844,32 +847,36 @@ function parse_and_run(str) {
 //     'factorial(4);');
 
 // parse_and_run('function x() {\n' +
-//     '    const a = 1;\n' +
+//     '    let a = 1;\n' +
 //     '    return a;\n' +
 //     '    a = 2;\n' +
 //     '}\n' +
 //     'x();');
 
-parse_and_run(" \
-function multiple_dwelling() { \
-const baker = amb(1, 2, 3, 4, 5); \
-const cooper = amb(1, 2, 3, 4, 5); \
-const fletcher = amb(1, 2, 3, 4, 5); \
-const miller = amb(1, 2, 3, 4, 5); \
-const smith = amb(1, 2, 3, 4, 5); \
-require(distinct(list(baker, cooper, fletcher, miller, smith))); \
-require(! (baker === 5)); \
-require(! (cooper === 1)); \
-require(! (fletcher === 5)); \
-require(! (fletcher === 1)); \
-require(! (miller > cooper)); \
-require(! ((math_abs(smith - fletcher)) === 1)); \
-require(! ((math_abs(fletcher - cooper)) === 1)); \
-return list(list('baker', baker), \
-list('cooper', cooper), \
-list('fletcher', fletcher), \
-list('miller', miller), \
-list('smith', smith)); \
-} \
-multiple_dwelling(); \
-");
+// parse_and_run("function foo() {\
+//     return 5;\
+// }\
+// foo();");
+// parse_and_run(" \
+// function multiple_dwelling() { \
+// const baker = amb(1, 2, 3, 4, 5); \
+// const cooper = amb(1, 2, 3, 4, 5); \
+// const fletcher = amb(1, 2, 3, 4, 5); \
+// const miller = amb(1, 2, 3, 4, 5); \
+// const smith = amb(1, 2, 3, 4, 5); \
+// require(distinct(list(baker, cooper, fletcher, miller, smith))); \
+// require(! (baker === 5)); \
+// require(! (cooper === 1)); \
+// require(! (fletcher === 5)); \
+// require(! (fletcher === 1)); \
+// require(miller > cooper); \
+// require(! ((math_abs(smith - fletcher)) === 1)); \
+// require(! ((math_abs(fletcher - cooper)) === 1)); \
+// return list(list('baker', baker), \
+// list('cooper', cooper), \
+// list('fletcher', fletcher), \
+// list('miller', miller), \
+// list('smith', smith)); \
+// } \
+// multiple_dwelling(); \
+// ");
