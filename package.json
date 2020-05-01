@@ -7,12 +7,12 @@
     "url": "https://github.com/source-academy/"
   },
   "scripts": {
-      "build": "tsc",
-      "test": "./scripts/test.sh"
+    "build": "tsc",
+    "test": "./scripts/test.sh"
   },
   "dependencies": {
-      "js-slang": "^0.4.20",
-      "lodash": "^4.17.13"
+    "js-slang": "^0.4.33",
+    "lodash": "^4.17.13"
   },
   "repository": {
     "type": "git",
@@ -23,4 +23,3 @@
   },
   "homepage": "https://github.com/source-academy/source-programs"
 }
-
