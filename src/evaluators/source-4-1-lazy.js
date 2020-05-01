@@ -889,7 +889,7 @@ parse_and_eval("function infinite_list(n)\
                 a;"
               );
 
-//result: 4
+//result: 5
 
 */
 
