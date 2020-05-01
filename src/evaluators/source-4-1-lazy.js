@@ -233,15 +233,15 @@ function eval_sequence(stmts, env) {
     if (is_empty_sequence(stmts)) {
         return undefined;
     } else if (is_last_statement(stmts)) {
-            return evaluate(first_statement(stmts),env);
+            return evaluate(first_statement(stmts), env);
     } else {
         const first_stmt_value = 
-            evaluate(first_statement(stmts),env);
+            evaluate(first_statement(stmts), env);
         if (is_return_value(first_stmt_value)) {
             return first_stmt_value;
         } else {
             return eval_sequence(
-                rest_statements(stmts),env);
+                rest_statements(stmts), env);
         }
     }
 }
@@ -389,10 +389,10 @@ function eval_tail_statement(stmt, env){
     return force_it(tail(evaluate(head(head(tail(tail(stmt)))), env)));
 }
 
-function eval_pair_statement (args,env){
+function eval_pair_statement (args, env){
     const head = delay_it (first_operand(args), env);
-    const tail = delay_it (first_operand(rest_operands(args)),env);
-    return pair (head,tail); 
+    const tail = delay_it (first_operand(rest_operands(args)), env);
+    return pair (head, tail); 
 }
 
 
@@ -407,7 +407,7 @@ function eval_pair_statement (args,env){
 // the special value no_value_yet
 function apply(fun, args, env) {
     if (is_primitive_function(fun)) {
-      return apply_primitive_function(fun, list_of_arg_values(args,env));
+      return apply_primitive_function(fun, list_of_arg_values(args, env));
    } else if (is_compound_function(fun)) {
       const body = function_body(fun);
       const locals = local_names(body);
@@ -491,7 +491,7 @@ function make_return_value(content) {
     return list("return_value", content);
 }
 function is_return_value(value) {
-    return is_tagged_list(value,"return_value");
+    return is_tagged_list(value, "return_value");
 }
 function return_value_content(value) {
     return head(tail(value));
@@ -557,8 +557,8 @@ function first_frame(env) {
 function enclosing_environment(env) {
    return tail(env);
 }
-function enclose_by(frame,env) {
-   return pair(frame,env);
+function enclose_by(frame, env) {
+   return pair(frame, env);
 }
 function is_empty_environment(env) {
    return is_null(env);
