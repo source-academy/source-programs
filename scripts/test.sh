@@ -92,7 +92,7 @@ main() {
             execution_method=$(cat $i | head -n1 | grep -o 'executionMethod=.*' | cut -d '=' -f 2 | cut -d ' ' -f 1)
             if [ "$execution_method" = "interpreter" ]
             then execution_method='-i'
-            else execution_method=''
+            else execution_method=$DEFAULT_EXECUTION_METHOD
             fi
             
             # check if first line of test file contains 'framework'
