@@ -1166,3 +1166,9 @@ function partial_evaluator(str) {
 // partial_evaluator("function f(x){return x===1?1:g(x-1);}\
 // function g(x){return h(x);}\
 // function h(x){return f(x);} ");
+
+// partial_evaluator("function f(x){return f(x);}const a=2;");
+
+// partial_evaluator("function f(x){return f(x);}f(2);");
+
+
