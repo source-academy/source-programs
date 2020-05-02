@@ -6,14 +6,10 @@ function framerate(src,dest)
     let today= runtime();
     let z=1000.0/(today-ini);
     display(z);
-    // else
-    // {
-    //     x=x;
-    // }
     ini=today;
     x=x+1;
     
     
 }
 
-apply_filter(framerate);
+// apply_filter(framerate);
