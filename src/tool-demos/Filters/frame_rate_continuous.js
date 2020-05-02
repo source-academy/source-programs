@@ -1,10 +1,10 @@
 let x=0;
 let ini= runtime();
 
-function ping(src,dest)
+function framerate_cont(src,dest)
 {
     let today= runtime();
-    let z=(today-ini);
+    let z=1000.0/(today-ini);
     display(z);
     ini=today;
     x=x+1;
@@ -12,4 +12,4 @@ function ping(src,dest)
     
 }
 
-// apply_filter(ping);
+// apply_filter(framerate_cont);

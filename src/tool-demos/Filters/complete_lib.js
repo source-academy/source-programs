@@ -447,12 +447,15 @@ function invert(src, dest)
     {
         for(let y=0; y<HEIGHT; y = y + 1)
         {
-            dest[x][y] = [255 - red_of(src[x][y]),
-                          255 - green_of(src[x][y]),
-                          255 - blue_of(src[x][y])];
+            let red_value = 255 - src[x][y][0];
+            let green_value = 255 - src[x][y][1];
+            let blue_value = 255 - src[x][y][2];
+            dest[x][y] = [red_value, green_value, blue_value];
         }
     }
 }
+
+// apply_filter(invert);
 
 // upside-down (GPU optimised)
 
@@ -505,11 +508,39 @@ function sine_distortion(src, dest)
 
 // apply_filter(sine_distortion);
 
+// cos distortion
+function cos_distortion(src, dest)
+{
+    let wave_length = 5 * (2 * math_PI);
+    let distortion = 10;
+
+    let WIDTH = get_video_width();
+    let HEIGHT = get_video_height();
+
+    let mid_x = WIDTH/2;
+    let mid_y = HEIGHT/2;
+    for(let x=0; x<WIDTH; x = x + 1)
+    {
+        for(let y=0; y<HEIGHT; y = y + 1)
+        {
+            let d_x = math_abs(mid_x - x);
+            let d_y = math_abs(mid_y - y);
+            let d = d_x + d_y; 
+            let s = math_round(distortion * math_cos( d / wave_length));
+            let x_raw =  x + s;
+            let y_raw = y +  s;
+            let x_src = math_max(0,math_min(WIDTH - 1, x_raw));
+            let y_src = math_max(0,math_min(HEIGHT - 1, y_raw));
+            dest[x][y] = src[x_src][y_src];
+        }
+    }
+}
+
+// apply_filter(cos_distortion);
+
+
 // blur 3x3 mask
 
-let sum1 = 0;
-let sum2 = 0;
-let sum3 = 0;
 function blur3x3(src, dest)
 {
     const WIDTH = get_video_width();
@@ -517,55 +548,79 @@ function blur3x3(src, dest)
     
     for(let y=0; y<HEIGHT; y = y + 1)
     {
-        dest[0][y] = [red_of(src[1][y]),
-                        green_of(src[1][y]),
-                        blue_of(src[1][y])];
-        dest[WIDTH][y] = [red_of(src[WIDTH-1][y]),
-                        green_of(src[WIDTH-1][y]),
-                        blue_of(src[WIDTH-1][y])];
+        
+        dest[0][y] = src[0][y];
+        dest[WIDTH-1][y] = src[WIDTH-1][y];
                       
     }
 
     for(let x=0; x<WIDTH; x = x + 1)
     {
-        dest[x][0] = [red_of(src[x][1]),
-                        green_of(src[x][1]),
-                        blue_of(src[x][1])];
-        dest[x][HEIGHT] = [red_of(src[x][HEIGHT - 1]),
-                        green_of(src[x][HEIGHT - 1]),
-                        blue_of(src[x][HEIGHT - 1])];
+        let r1=src[x][0][0];
+        let g1=src[x][0][1];
+        let b1=src[x][0][2];
+        
+        let new_height = HEIGHT-1;
+        
+        let r2=src[x][new_height][0];
+        let g2=src[x][new_height][1];
+        let b2=src[x][new_height][2];
+        
+        dest[x][0] = [r1,g1,b1];
+        dest[x][new_height] = [r2,b2,g2];
                       
     }
             
-    for(let x=1; x<WIDTH-1; x = x + 1)
+
+    const WIDTH1= WIDTH -2;
+    const HEIGHT1= HEIGHT-2;
+    for(let x=0; x<WIDTH1; x = x + 1)
     {
-        for (let y=1; y<HEIGHT-1; y = y + 1)
+        for (let y=0; y<HEIGHT1; y = y + 1)
         {
-            for(let i=-1; i < 2; i=i+1)
-            {
-            	for(let j=-1; j < 2; j=j+1)
-            	{
-            		sum1 = sum1 + red_of(src[x+i][y+i]);
-            		sum2 = sum2 + green_of(src[x+i][y+i]);
-            		sum3 = sum3 + blue_of(src[x+i][y+i]);
-            	}
-            }
+    
+            let r=src[x][y][0]+
+                  src[x][y+1][0]+
+                  src[x][y+2][0]+
+                  src[x+1][y][0]+
+                  src[x+1][y+1][0]+
+                  src[x+1][y+2][0]+
+                  src[x+2][y][0]+
+                  src[x+2][y+1][0]+
+                  src[x+2][y+2][0];
+                  let g=src[x][y][1]+
+                  src[x][y+1][1]+
+                  src[x][y+2][1]+
+                  src[x+1][y][1]+
+                  src[x+1][y+1][1]+
+                  src[x+1][y+2][1]+
+                  src[x+2][y][1]+
+                  src[x+2][y+1][1]+
+                  src[x+2][y+2][1];
+                  let b=src[x][y][2]+
+                  src[x][y+1][2]+
+                  src[x][y+2][2]+
+                  src[x+1][y][2]+
+                  src[x+1][y+1][2]+
+                  src[x+1][y+2][2]+
+                  src[x+2][y][2]+
+                  src[x+2][y+1][2]+
+                  src[x+2][y+2][2];
+ 
+            r = r/9;
+            b = b/9;
+            g = g/9;
 
-            sum1 = sum1 / 9;
-            sum2 = sum2 / 9;
-            sum3 = sum3 / 9;
-
-            dest[x][y] = [sum1, sum2, sum3];
+            dest[x][y] = [r,g,b];
         }
     }
 }
 
+// apply_filter(blur3x3);
+
 // blur 5x5 mask
 
 
-let sum1 = 0;
-let sum2 = 0;
-let sum3 = 0;
 function blur5x5(src, dest)
 {
     const WIDTH = get_video_width();
@@ -588,32 +643,48 @@ function blur5x5(src, dest)
         dest[x][HEIGHT-2] = src[x][HEIGHT-2];
                       
     }
-            
-    for(let x=2; x<WIDTH-2; x = x + 1)
+    const WIDTH4=WIDTH-4;
+    const HEIGHT4=HEIGHT-4;
+    for(let x=0; x<WIDTH4; x = x + 1)
     {
-        for (let y=2; y<HEIGHT-2; y = y + 1)
+        for (let y=0; y<HEIGHT4; y = y + 1)
         {
-            for(let i=-2; i < 3; i=i+1)
+            let sum1 = 0;
+            let sum2 = 0;
+            let sum3 = 0;
+            
+            for(let i=0; i < 5; i=i+1)
             {
               
-              for(let j=-2; j < 3; j=j+1)
+              for(let j=0; j < 5; j=j+1)
               {
-                sum1 = sum1 + red_of(src[x+i][y+j]);
-                sum2 = sum2 + green_of(src[x+i][y+j]);
-                sum3 = sum3 + blue_of(src[x+i][y+j]);
+                sum1 = sum1 + (src[x+i][y+j][0]);
+                sum2 = sum2 + (src[x+i][y+j][1]);
+                sum3 = sum3 + (src[x+i][y+j][2]);
               }
             }
-
-            sum1 = sum1 / 25;
-            sum2 = sum2 / 25;
-            sum3 = sum3 / 25;
+            sum1 = sum1 / 9;
+            sum2 = sum2 / 9;
+            sum3 = sum3 / 9;
+            // dest[x][y]=dest[x][y];
 
             dest[x][y] = [sum1, sum2, sum3];
         }
     }
 }
+// apply_filter(blur5x5);
 
 // green background
+
+// this code is just to give a glimpse of green room filters and green backgrounds
+// the limiting values have been chosen to fit the most commonly used case
+// however that doesn't satisfy all the needs
+
+// anyways, this code offers a good idea of how boundaries can be highlighted and colors added
+// in background
+// and adding, the suitable threshold values and conditions,
+// it can be optimised to meet any requirements
+
 function greenbg(src, dest)
 {
     const WIDTH = get_video_width();
@@ -637,6 +708,9 @@ function greenbg(src, dest)
     }
 }
 
+// apply_filter(greenbg);
+
+
 // motion detection
 const WIDTH = get_video_width();
 const HEIGHT = get_video_height();
@@ -645,6 +719,10 @@ let prev =[];
 for (let i=0; i<WIDTH; i = i+1)
 {
     prev[i] = [];
+    
+}
+for (let i=0; i<WIDTH; i = i+1)
+{
     for (let j=0; j<HEIGHT; j = j+1)
     {
         prev[i][j] = [0,0,0];
@@ -659,9 +737,8 @@ function motiondetector(src,dest)
         {
             for (let y=0; y<HEIGHT; y = y + 1)
             {
-                prev[x][y][0]=src[x][y][0];
-                prev[x][y][1]=src[x][y][1];
-                prev[x][y][2]=src[x][y][2];
+                prev[x][y]=src[x][y];
+                
             }
         }
         xx=xx+1;
@@ -690,56 +767,102 @@ function motiondetector(src,dest)
     {
         for(let y=0; y<HEIGHT; y = y + 1)
         {
-            prev[x][y][0]=src[x][y][0];
-            prev[x][y][1]=src[x][y][1];
-            prev[x][y][2]=src[x][y][2];
+            prev[x][y]=src[x][y];
+            
         }}
     }
     
 }
 
-// const size = 150;
+// apply_filter(motiondetector);
 
-// const L=[];
-// const R=[];
-// for(let r=0;r<size;r=r+1)
-// {
-//     L[r]=[];
-//     R[r]=[];
-//     for(let c=0;c<size;c=c+1)
-//     {
-//         L[r][c]=r*c;
-//         R[r][c]=r*c;
-//     }
-// }
-// const res=[];
-// for(let r=0;r<size;r=r+1)
-// {
-//     res[r]=[];
-// }
+// Continuous Frame Rate 
+
+let x=0;
+let ini= runtime();
+
+function framerate_cont(src,dest)
+{
+    let today= runtime();
+    let z=1000.0/(today-ini);
+    display(z);
+    ini=today;
+    x=x+1;
+    
+    
+}
+
+// apply_filter(framerate_cont);
+
+// Single Frame Rate 
+
+let x=0;
+let ini= runtime();
+
+function framerate_single(src,dest)
+{
+    let today= runtime();
+    let z=1000.0/(today-ini);
+    if(x===1)
+    {
+        display(z);
+    }
+    else
+    {
+        x=x;
+    }
+    ini=today;
+    x=x+1;    
+}
+
+// apply_filter(framerate_single);
+
+// Continuous Ping
+
+let x=0;
+let ini= runtime();
+
+function ping_cont(src,dest)
+{
+    let today= runtime();
+    let z=(today-ini);
+    display(z);
+    ini=today;
+    x=x+1;
+    
+    
+}
+
+// apply_filter(ping_cont);
+
+// Single Frame Rate 
+
+let x=0;
+let ini= runtime();
+
+function ping_single(src,dest)
+{
+    let today= runtime();
+    let z=(today-ini);
+    if(x===1)
+    {
+        display(z);
+    }
+    else
+    {
+        x=x;
+    }
+    ini=today;
+    x=x+1;
+    
+    
+}
+
+// apply_filter(ping_single);
+
 
 // const startTime = runtime();
-// for(let r=0;r<size;r=r+1)
-// {
-//     for(let c=0;c<size;c=c+1)
-//     {
-//         let sum=0;
-//         for(let i=0;i<size;i=i+1)
-//         {
-//             sum = sum + L[r][i] * R[i][c];
-//         }
-//         res[r][c]=sum;
-//     }
-// }
-
 // const endTime = runtime();
 // const timeTaken = endTime - startTime;
-
 // display(timeTaken, "Time taken : ");
-
-
-//apply_filter(invert);
-
-// make ping_rate
-
 

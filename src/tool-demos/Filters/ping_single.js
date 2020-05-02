@@ -1,7 +1,7 @@
 let x=0;
 let ini= runtime();
 
-function ping(src,dest)
+function ping_single(src,dest)
 {
     let today= runtime();
     let z=(today-ini);
@@ -19,4 +19,4 @@ function ping(src,dest)
     
 }
 
-// apply_filter(ping);
+// apply_filter(ping_single);

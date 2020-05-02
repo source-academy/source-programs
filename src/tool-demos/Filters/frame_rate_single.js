@@ -1,7 +1,7 @@
 let x=0;
 let ini= runtime();
 
-function framerate(src,dest)
+function framerate_single(src,dest)
 {
     let today= runtime();
     let z=1000.0/(today-ini);
@@ -16,3 +16,5 @@ function framerate(src,dest)
     ini=today;
     x=x+1;    
 }
+
+// apply_filter(framerate_single);

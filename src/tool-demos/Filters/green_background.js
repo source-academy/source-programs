@@ -1,3 +1,12 @@
+// this code is just to give a glimpse of green room filters and green backgrounds
+// the limiting values have been chosen to fit the most commonly used case
+// however that doesn't satisfy all the needs
+
+// anyways, this code offers a good idea of how boundaries can be highlighted and colors added
+// in background
+// and adding, the suitable threshold values and conditions,
+// it can be optimised to meet any requirements
+
 function greenbg(src, dest)
 {
     const WIDTH = get_video_width();
