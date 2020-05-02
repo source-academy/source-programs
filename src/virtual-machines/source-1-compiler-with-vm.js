@@ -99,6 +99,18 @@ function make_top_environment_procedure(arglist) {
 function make_default_top_environment_procedure(arglist) {
     if (length(arglist) === 0){
         return pair(null, list(
+            // Constants
+            pair("Infinity", Infinity),
+            pair("math_LN2", math_LN2),
+            pair("math_LN10", math_LN10),
+            pair("math_LOG2E", math_LOG2E),
+            pair("math_LOG10E", math_LOG10E),
+            pair("math_PI", math_PI),
+            pair("math_SQRT1_2", math_SQRT1_2),
+            pair("math_SQRT2", math_SQRT2),
+            pair("NaN", NaN),
+            pair("undefined", undefined),
+            // Arithmetic and Logical Operators
             pair("+","+"),
             pair("-","-"),
             pair("*","*"),
@@ -112,8 +124,52 @@ function make_default_top_environment_procedure(arglist) {
             pair("<=","<="),
             pair("&&","&&"),
             pair("||","||"),
+            // Built in Functions
+            pair("display","display"),
+            pair("error","error"),
+            pair("is_boolean","is_boolean"),
+            pair("is_function","is_function"),
+            pair("is_number","is_number"),
+            pair("is_string","is_string"),
+            pair("is_undefined","is_undefined"),
             pair("math_abs","math_abs"),
-            pair("math_sin","math_sin")
+            pair("math_acos","math_acos"),
+            pair("math_acosh","math_acosh"),
+            pair("math_asin","math_asin"),
+            pair("math_asinh","math_asinh"),
+            pair("math_atan","math_atan"),
+            pair("math_atan2","math_atan2"),
+            pair("math_atanh","math_atanh"),
+            pair("math_cbrt","math_cbrt"),
+            pair("math_ceil","math_ceil"),
+            pair("math_clz32","math_clz32"),
+            pair("math_cos","math_cos"),
+            pair("math_cosh","math_cosh"),
+            pair("math_exp","math_exp"),
+            pair("math_expm1","math_expm1"),
+            pair("math_floor","math_floor"),
+            pair("math_fround","math_fround"),
+            pair("math_hypot","math_hypot"),
+            pair("math_log","math_log"),
+            pair("math_log1p","math_log1p"),
+            pair("math_log2","math_log2"),
+            pair("math_log10","math_log10"),
+            pair("math_max","math_max"),
+            pair("math_min","math_min"),
+            pair("math_pow","math_pow"),
+            pair("math_random","math_random"),
+            pair("math_round","math_round"),
+            pair("math_sign","math_sign"),
+            pair("math_sin","math_sin"),
+            pair("math_sinh","math_sinh"),
+            pair("math_sqrt","math_sqrt"),
+            pair("math_tan","math_tan"),
+            pair("math_tanh","math_tanh"),
+            pair("math_trunc","math_trunc"),
+            pair("parse_int","parse_int"),
+            pair("prompt","prompt"),
+            pair("runtime","runtime"),
+            pair("stringify","stringify")
         ));
     } else {
         error("Incorrect number of arguments for make_top_environment procedure");
@@ -273,7 +329,19 @@ function apply_primitive_procedure_procedure(arglist) {
     if (length(arglist) === 2) {
         const symbol = list_ref(arglist, 0);
         const args = list_ref(arglist, 1);
-        if (length(args) === 2 ){
+        if (args === 'null') {
+            return symbol === "math_max"
+            ? in_built_math_max(null)
+            : symbol === "math_min"
+            ? in_built_math_min(null)
+            : symbol === "math_hypot"
+            ? in_built_math_hypot(null)
+            : symbol === "math_random"
+            ? math_random()
+            : symbol === "runtime"
+            ? runtime()
+            : error(symbol,"unkown symbol:");
+        } else if (length(args) === 2 ){
             return symbol === "+"
             ? apply_in_underlying_javascript((a,b) => a+b, args)
             : symbol === "-"
@@ -300,22 +368,171 @@ function apply_primitive_procedure_procedure(arglist) {
             ? apply_in_underlying_javascript((a,b) => a&&b, args)
             : symbol === "||"
             ? apply_in_underlying_javascript((a,b) => a||b, args)
+            : symbol === "display"
+            ? display(list_ref(args, 0),list_ref(args, 1))
+            : symbol === "error"
+            ? error(list_ref(args, 0),list_ref(args, 1))
+            : symbol === "math_max"
+            ? in_built_math_max(args)
+            : symbol === "math_min"
+            ? in_built_math_min(args)
+            : symbol === "math_atan2"
+            ? math_atan2(list_ref(args, 0),list_ref(args, 1))
+            : symbol === "math_hypot"
+            ? in_built_math_hypot(args)
+            : symbol === "math_imul"
+            ? math_imul(list_ref(args, 0),list_ref(args, 1))
+            : symbol === "math_pow"
+            ? math_pow(list_ref(args, 0),list_ref(args, 1))
+            : symbol === "parse_int"
+            ? parse_int(list_ref(args, 0),list_ref(args, 1))
             : error(symbol,"unkown symbol:");
-        } else {
+        } else if (length(args) === 1) {
             return symbol === "-"
             ? apply_in_underlying_javascript(a => -a, args)
             : symbol === "!"
             ? apply_in_underlying_javascript(a => !a, args)
+            : symbol === "display"
+            ? display(list_ref(args, 0))
+            : symbol === "error"
+            ? error(list_ref(args, 0))
+            : symbol === "is_boolean"
+            ? is_boolean(list_ref(args, 0))
+            : symbol === "is_function"
+            ? in_built_is_function(list_ref(args, 0))
+            : symbol === "is_number"
+            ? is_number(list_ref(args, 0))
+            : symbol === "is_undefined"
+            ? is_undefined(list_ref(args, 0))
+            : symbol === "is_string"
+            ? is_string(list_ref(args, 0))
             : symbol === "math_abs"
-            ? apply_in_underlying_javascript((a) => math_abs(a), args)
+            ? math_abs(list_ref(args, 0))
+            : symbol === "math_acos"
+            ? math_acos(list_ref(args, 0))
+            : symbol === "math_acosh"
+            ? math_acosh(list_ref(args, 0))
+            : symbol === "math_asin"
+            ? math_asin(list_ref(args, 0))
+            : symbol === "math_asinh"
+            ? math_asinh(list_ref(args, 0))
+            : symbol === "math_atan"
+            ? math_atan(list_ref(args, 0))
+            : symbol === "math_atanh"
+            ? math_atanh(list_ref(args, 0))
+            : symbol === "math_cbrt"
+            ? math_cbrt(list_ref(args, 0))
+            : symbol === "math_ceil"
+            ? math_ceil(list_ref(args, 0))
+            : symbol === "math_clz32"
+            ? math_clz32(list_ref(args, 0))
+            : symbol === "math_cos"
+            ? math_cos(list_ref(args, 0))
+            : symbol === "math_cosh"
+            ? math_cosh(list_ref(args, 0))
+            : symbol === "math_exp"
+            ? math_exp(list_ref(args, 0))
+            : symbol === "math_expm1"
+            ? math_expm1(list_ref(args, 0))
+            : symbol === "math_floor"
+            ? math_floor(list_ref(args, 0))
+            : symbol === "math_fround"
+            ? math_fround(list_ref(args, 0))
+            : symbol === "math_hypot"
+            ? in_built_math_hypot(args)
+            : symbol === "math_log"
+            ? math_log(list_ref(args, 0))
+            : symbol === "math_log1p"
+            ? math_log1p(list_ref(args, 0))
+            : symbol === "math_log2"
+            ? math_log2(list_ref(args, 0))
+            : symbol === "math_log10"
+            ? math_log10(list_ref(args, 0))
+            : symbol === "math_max"
+            ? in_built_math_max(args)
+            : symbol === "math_min"
+            ? in_built_math_min(args)
+            : symbol === "math_round"
+            ? math_round(list_ref(args, 0))
+            : symbol === "math_sign"
+            ? math_sign(list_ref(args, 0))
             : symbol === "math_sin"
-            ? apply_in_underlying_javascript((a) => math_sin(a), args)
+            ? math_sin(list_ref(args, 0))
+            : symbol === "math_sinh"
+            ? math_sinh(list_ref(args, 0))
+            : symbol === "math_sqrt"
+            ? math_sqrt(list_ref(args, 0))
+            : symbol === "math_tan"
+            ? math_tan(list_ref(args, 0))
+            : symbol === "math_tanh"
+            ? math_tanh(list_ref(args, 0))
+            : symbol === "math_trunc"
+            ? math_trunc(list_ref(args, 0))
+            : symbol === "prompt"
+            ? prompt(list_ref(args, 0))
+            : symbol === "stringify"
+            ? stringify(list_ref(args, 0))
+            : error(symbol,"unknown symbol:");
+        } else {
+            return symbol === "math_max"
+            ? in_built_math_max(args)
+            : symbol === "math_min"
+            ? in_built_math_min(args)
+            : symbol === "math_hypot"
+            ? in_built_math_hypot(args)
             : error(symbol,"unkown symbol:");
         }
     } else {
         error("Incorrect number of arguments for is_primitive_procedure procedure");
     }
 }
+
+function in_built_is_function(a){
+    return is_pair(a);
+}
+function in_built_math_max(a){
+    if (is_null(a)) {
+        return -Infinity;
+    } else if (is_null(tail(a))) {
+        return head(a);
+    } else {
+        const first = head(a);
+        const rest = tail(a);
+        return in_built_math_max(pair(math_max(first,head(rest)), tail(rest)));
+    }
+}
+function in_built_math_min(a){
+    if (is_null(a)) {
+        return Infinity;
+    } else if (is_null(tail(a))) {
+        return head(a);
+    } else {
+        const first = head(a);
+        const rest = tail(a);
+        return in_built_math_min(pair(math_min(first,head(rest)), tail(rest)));
+    }
+}
+
+function in_built_math_hypot(a){
+    function helper_sum_squares(x){
+        if (is_null(x)) {
+            return 0;
+        } else {
+            return (head(x) * head(x)) + helper_sum_squares(tail(x));
+        }
+    }
+    if (is_null(a)) {
+        return 0;
+    } else if (is_null(tail(a))) {
+        return head(a);
+    } else {
+        const s = helper_sum_squares(a);
+        return math_sqrt(s);
+    }
+}
+
+
+
 
 function make_machine(register_names, ops, controller_text) {
 	const machine = make_new_machine();
@@ -798,7 +1015,7 @@ function name_of_name(stmt) {
 }
 
 function is_self_evaluating(stmt) {
-	return is_number(stmt) || is_boolean(stmt) || is_undefined(stmt);
+	return is_number(stmt) || is_boolean(stmt) || is_undefined(stmt) || is_string(stmt);
 }
 
 function is_undefined_expression(stmt) {     
@@ -1761,43 +1978,42 @@ function pretty_print_instructions(instruction_sequence) {
  * Only modify the variable user_input in get_compiled() function with Source expressions to be compiled."
  */
 
-/*
-function get_compiled() {
-    // Enter code to be compiled here:
-    const user_input = "123;";
+
+// function get_compiled() {
+//     // Enter code to be compiled here:
+//     const user_input = "123;";
     
-    const compiled_code = parse_and_compile(user_input);
-    pretty_print_instructions(compiled_code);
-    return compiled_code;
-}      
+//     const compiled_code = parse_and_compile(user_input);
+//     pretty_print_instructions(compiled_code);
+//     return compiled_code;
+// }      
 
-function source_machine() {
-    const ops = list(
-        list("make_top_environment",make_top_environment_procedure),
-        list("extend_environment",extend_environment_procedure),
-        list("extend_environment_block",extend_environment_block_procedure),
-        list("define_constant",define_constant_procedure),
-        list("lookup_variable_value",lookup_variable_value_procedure),
-        list("list",list_procedure),
-        list("cons",cons_procedure),
-        list("is_false",is_false_procedure),
-        list("make_compiled_procedure",make_compiled_procedure_procedure),
-        list("compiled_procedure_env",compiled_procedure_env_procedure),
-        list("compiled_procedure_entry",compiled_procedure_entry_procedure),
-        list("is_primitive_procedure",is_primitive_procedure_procedure),
-        list("compiled_procedure_entry",compiled_procedure_entry_procedure),
-        list("compiled_procedure_entry",compiled_procedure_entry_procedure),
-        list("apply_primitive_procedure",apply_primitive_procedure_procedure)
-    );
-    const  x = statements(get_compiled());
-    const machine = make_machine(all_regs(),ops,x);
-    machine("stack")("initialize");
-    set_register_contents(machine, "env",make_default_top_environment_procedure(list()));
+// function source_machine() {
+//     const ops = list(
+//         list("make_top_environment",make_top_environment_procedure),
+//         list("extend_environment",extend_environment_procedure),
+//         list("extend_environment_block",extend_environment_block_procedure),
+//         list("define_constant",define_constant_procedure),
+//         list("lookup_variable_value",lookup_variable_value_procedure),
+//         list("list",list_procedure),
+//         list("cons",cons_procedure),
+//         list("is_false",is_false_procedure),
+//         list("make_compiled_procedure",make_compiled_procedure_procedure),
+//         list("compiled_procedure_env",compiled_procedure_env_procedure),
+//         list("compiled_procedure_entry",compiled_procedure_entry_procedure),
+//         list("is_primitive_procedure",is_primitive_procedure_procedure),
+//         list("compiled_procedure_entry",compiled_procedure_entry_procedure),
+//         list("compiled_procedure_entry",compiled_procedure_entry_procedure),
+//         list("apply_primitive_procedure",apply_primitive_procedure_procedure)
+//     );
+//     const  x = statements(get_compiled());
+//     const machine = make_machine(all_regs(),ops,x);
+//     machine("stack")("initialize");
+//     set_register_contents(machine, "env",make_default_top_environment_procedure(list()));
 
-	return machine;
-}  
+// 	return machine;
+// }  
 
-const ad = source_machine();
-display(start(ad));
-display(get_register_contents(ad, "val"));
-*/
+// const ad = source_machine();
+// display(start(ad));
+// display(get_register_contents(ad, "val"));
