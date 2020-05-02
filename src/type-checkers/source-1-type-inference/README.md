@@ -1,5 +1,6 @@
 Type Inference for Source 1
 ================================
+> See [here](https://github.com/tysng/source-type-inference) for a detailed commit history
 
 Up and Running
 --------------------
