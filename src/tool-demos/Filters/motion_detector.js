@@ -5,6 +5,10 @@ let prev =[];
 for (let i=0; i<WIDTH; i = i+1)
 {
     prev[i] = [];
+    
+}
+for (let i=0; i<WIDTH; i = i+1)
+{
     for (let j=0; j<HEIGHT; j = j+1)
     {
         prev[i][j] = [0,0,0];
@@ -19,9 +23,8 @@ function motiondetector(src,dest)
         {
             for (let y=0; y<HEIGHT; y = y + 1)
             {
-                prev[x][y][0]=src[x][y][0];
-                prev[x][y][1]=src[x][y][1];
-                prev[x][y][2]=src[x][y][2];
+                prev[x][y]=src[x][y];
+                
             }
         }
         xx=xx+1;
@@ -50,9 +53,8 @@ function motiondetector(src,dest)
     {
         for(let y=0; y<HEIGHT; y = y + 1)
         {
-            prev[x][y][0]=src[x][y][0];
-            prev[x][y][1]=src[x][y][1];
-            prev[x][y][2]=src[x][y][2];
+            prev[x][y]=src[x][y];
+            
         }}
     }
     
