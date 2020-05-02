@@ -1,0 +1,55 @@
+% -*-latex-*- ; declares latex mode for emacs editor
+%\setcounter{chapter}{1}
+
+%https://tex.stackexchange.com/questions/89574/language-option-supported-in-listings
+\definecolor{lightgray}{rgb}{.9,.9,.9}
+\definecolor{darkgray}{rgb}{.4,.4,.4}
+\definecolor{purple}{rgb}{0.65, 0.12, 0.82}
+
+\lstdefinelanguage{JavaScript}{
+  keywords={typeof, new, true, false, catch, function, return, null, 
+  catch, switch, var, if, in, while, do, else, case, break},
+  keywordstyle=\color{blue}\bfseries,
+  ndkeywords={class, export, boolean, throw, implements, import, this},
+  ndkeywordstyle=\color{darkgray}\bfseries,
+  identifierstyle=\color{black},
+  sensitive=false,
+  comment=[l]{//},
+  morecomment=[s]{/*}{*/},
+  commentstyle=\color{purple}\ttfamily,
+  stringstyle=\color{red}\ttfamily,
+  morestring=[b]',
+  morestring=[b]"
+}
+
+\lstset{
+   language=JavaScript,
+   backgroundcolor=\color{lightgray},
+   extendedchars=true,
+   basicstyle=\footnotesize\ttfamily,
+   showstringspaces=false,
+   showspaces=false,
+   numbers=left,
+   numberstyle=\footnotesize,
+   numbersep=9pt,
+   tabsize=2,
+   breaklines=true,
+   showtabs=false,
+   captionpos=b
+}
+
+
+\chapter{The End of a Journey}
+
+\section{Acknowledgements}
+
+We previously mentioned about how the journey set out as two ambitious coders attempting to conquer and write a compiler, now that chapter has come to a close.\newline
+
+All of which will not be possible without the guidance and teachings of \textbf{Prof Martin Henz}. We will also like to thank and acknowledge the authors of \textbf{Structure and Interpretation of Computer Programs \-- JavaScript Adaptation} (SICP).\newline
+
+It has been a great and arduous journey. Now we can only await for future adventurers to scale up the mountains in conquering greater beasts.\newline
+
+
+Your adventurers,\newline
+%\textbf{\textit{Benjamin Ng Jing Kiat, Sean Tan Rui Xiang}}
+\textit{Benjamin Ng Jing Kiat, Sean Tan Rui Xiang}
