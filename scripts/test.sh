@@ -24,16 +24,31 @@ failed=0
 # $4 is the variant
 
 test_source() {
+    # read in test file to find the number of comment lines
+    IFS=$'\n' read -d '' -r -a lines < $2
+    NUM_VALID_COMMENT=0
+    
+    for ((i=${#lines[@]}-1;i >= 0; i--))
+    do
+        COMMENT=$(echo "${lines[i]}" | grep ^//)
+        if [ -z "$COMMENT" ]
+        then
+            break
+        else
+            ((NUM_VALID_COMMENT++))
+        fi
+    done
+
 
     # if program throws error, ignore the output and compare the error message only
     # NOTE: error output line is striped of line number as it is machine dependent
     ERROR=$( { $JS_SLANG -e --chapter=$3 "$(cat $1 $2)">$DIR/__tests__/output; } 2>&1 )
     if [ ! -z "$ERROR" ]
     then
-        DIFF=$(diff <(echo $ERROR | grep -o 'Error:.*') <(cat $2 | tail -1 | grep -o 'Error:.*'))
+        DIFF=$(diff <(echo $ERROR | grep -o 'Error:.*') <(cat $2 | tail -$NUM_VALID_COMMENT | grep -o 'Error:.*'))
     else 
         DIFF=$(diff <(cat $DIR/__tests__/output) \
-            <(cat $2 | tail -1 | cut -c4-))
+            <(cat $2 | tail -$NUM_VALID_COMMENT | cut -c4-))
     fi
     
     if [ "$DIFF" = "" ]
@@ -43,7 +58,6 @@ $DIFF"
     fi
     # clean up temp file
     rm $DIR/__tests__/output
-    
 }
 
 test_source_framework() {
