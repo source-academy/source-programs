@@ -104,29 +104,16 @@ function constant_declaration_value(stmt) {
 // name to the resulting value in the
 // first (innermost) frame
 
-function eval_constant_declaration(stmt, env) {
-    set_name_value(constant_declaration_name(stmt),
-        evaluate(constant_declaration_value(stmt), env),
-        env);
-}
+function analyze_constant_declaration(stmt) {
+    const name = constant_declaration_name(stmt);
+    const vfun = analyze(constant_declaration_value(stmt));
 
-/* VARIABLE DECLARATIONS */
+    return env => {
+                    set_name_value(name, vfun(env), env);
+                    return undefined;
+    };
 
-function is_variable_declaration(stmt) {
-   return is_tagged_list(stmt, "variable_declaration");
 }
-function variable_declaration_name(stmt) {
-   return head(tail(head(tail(stmt))));
-}
-function variable_declaration_value(stmt) {
-   return head(tail(tail(stmt)));
-}
-
-function eval_variable_declaration(stmt, env) {
-    set_name_value(variable_declaration_name(stmt),
-        evaluate(variable_declaration_value(stmt), env),
-        env);
-}   
     
 /* CONDITIONAL EXPRESSIONS */
 
@@ -418,23 +405,6 @@ function eval_return_statement(stmt, env) {
                         env));
 }
 
-/* ASSIGNMENT */
-
-function is_assignment(stmt) {
-   return is_tagged_list(stmt, "assignment");
-}
-function assignment_name(stmt) {
-   return head(tail(head(tail(stmt))));
-}
-function assignment_value(stmt) {
-   return head(tail(tail(stmt)));
-}
-function eval_assignment(stmt, env) {
-    const value = evaluate(assignment_value(stmt), env);
-    assign_name_value(assignment_name(stmt), value, env);
-    return value;
-}
-
 /* BLOCKS */
 
 // blocks are tagged with "block"
@@ -622,10 +592,6 @@ function analyze(stmt) {
            ? analyze_name(stmt)
          : is_constant_declaration(stmt)
            ? analyze_constant_declaration(stmt)
-         : is_variable_declaration(stmt)
-           ? analyze_variable_declaration(stmt)
-         : is_assignment(stmt)
-           ? analyze_assignment(stmt)
          : is_conditional_expression(stmt)
            ? analyze_conditional_expression(stmt)
          : is_function_definition(stmt)
