@@ -141,11 +141,14 @@ function is_true(x) {
 // evaluates the predicate and then the appropriate
 // branch, depending on whether the predicate evaluates to
 // true or not
-function eval_conditional_expression(stmt, env) {
-    return is_true(evaluate(cond_expr_pred(stmt),
-                            env))
-           ? evaluate(cond_expr_cons(stmt), env)
-           : evaluate(cond_expr_alt(stmt), env);
+function analyze_conditional_expression(stmt) {
+    const pfun = analyze(cond_expr_pred(stmt));
+    const cfun = analyze(cond_expr_cons(stmt));
+    const afun = analyze(cond_expr_alt(stmt));
+
+    return env => is_true(pfun(env))
+                  ? cfun(env)
+                  : afun(env);
 }
 
 /* FUNCTION DEFINITION EXPRESSIONS */
