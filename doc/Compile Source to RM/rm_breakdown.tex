@@ -1,0 +1,229 @@
+% -*-latex-*- ; declares latex mode for emacs editor
+\setcounter{chapter}{2}
+
+%https://tex.stackexchange.com/questions/89574/language-option-supported-in-listings
+\definecolor{lightgray}{rgb}{.9,.9,.9}
+\definecolor{darkgray}{rgb}{.4,.4,.4}
+\definecolor{purple}{rgb}{0.65, 0.12, 0.82}
+
+\lstdefinelanguage{JavaScript}{
+  keywords={typeof, new, true, false, catch, function, return, null, 
+  catch, switch, var, if, in, while, do, else, case, break},
+  keywordstyle=\color{blue}\bfseries,
+  ndkeywords={class, export, boolean, throw, implements, import, this},
+  ndkeywordstyle=\color{darkgray}\bfseries,
+  identifierstyle=\color{black},
+  sensitive=false,
+  comment=[l]{//},
+  morecomment=[s]{/*}{*/},
+  commentstyle=\color{purple}\ttfamily,
+  stringstyle=\color{red}\ttfamily,
+  morestring=[b]',
+  morestring=[b]"
+}
+
+\lstset{
+   language=JavaScript,
+   backgroundcolor=\color{lightgray},
+   extendedchars=true,
+   basicstyle=\footnotesize\ttfamily,
+   showstringspaces=false,
+   showspaces=false,
+   numbers=left,
+   numberstyle=\footnotesize,
+   numbersep=9pt,
+   tabsize=2,
+   breaklines=true,
+   showtabs=false,
+   captionpos=b
+}
+
+
+\chapter{The Register Machine}
+
+
+Our compiler closely follows the \textbf{Structure and Interpretation of Computer Programs \-- JavaScript Adaptation} (SICP) Chapter 5.1 on \textit{Designing Register Machines} and 5.2 on \textit{A Register Machine Simulator}. For the sake of brevity again, we shall avoid repetition of explanations available in the above-mentioned  chapter.\newline
+
+
+\section{The Register Machine Overview}
+\subsection{Registers}
+
+\noindent
+The Register Machine Simulator used in this project is an implementation of the Register Machine described in \textbf{Structure and Interpretation of Computer Programs \-- JavaScript Adaptation} (SICP) Chapter 5.2, designed specifically for Source. Therefore each register that is available for the compiler to use must have a purpose in keeping track of the state of the program.\newline
+
+\noindent
+A Register in our Register machine simulator is able to store both Source Primitives and Source Lists. Registers known to the compiler are: \textit{env},\textit{val},\textit{proc},\textit{argl},\textit{continue}. In addition to the registers specified by the compiler above, the Register Machine simulator additionally has the following registers: \textit{PC} and \textit{flag}. It also possess a single \textit{stack}, which functions as the run-time stack.
+
+
+\subsubsection{Env}
+The \textit{env} register stores the current context of the program execution. The environment in our register machine is represented by a pair. The head of the pair contains a reference to the parent environment. If there is no parent environment, then the head of will contain a null value. The tail of the pair is a list which contains the bindings of all names to values for the environment. 
+
+\subsubsection{Val}
+The \textit{val} register stores the most recent result of evaluating expressions. When program execution is complete, the \textit{val} register will hold the result of the program.
+
+\subsubsection{Proc}
+The \textit{proc} register stores the closure of a compiled function or procedure. Closures are implemented as pairs. The head of the pair contains the label that specifies the entry point to the function body. The tail of the pair contains the environment at time of function definition. Since the register machine has to make a distinction between primitive and compile functions, instead of closures, primitive functions are stored simply as a Source string that is identical to their name/symbol.
+
+\subsubsection{Argl}
+The \textit{argl} register stores a list that accumulates the arguments of a function before a procedure call. In preparation for a procedure call, the compiler will generate code that will insert the arguments into this list one-by-one.
+
+\subsubsection{Continue}
+The \textit{continue} register stores the label for the instruction that programs should return to after procedure calls.
+
+\subsubsection{PC}
+The \textit{PC} register stores the current and subsequent instructions as a list. To advance the PC, the Register Machine Simulator will simply navigate through the list and execute each instruction sequentially. Our compiler has no direct control over the \textit{PC}, and must use \textit{branch} or \textit{goto} instructions to change the contents of the \textit{PC}.\newline
+
+
+\subsubsection{flag}
+The \textit{flag} register stores Source boolean that indicates the latest result of a test instruction. The \textit{branch} instruction relies on this register to make the decision to branch.\newline
+
+\subsubsection{Stack}
+The \textit{stack} contains the register contents of registers targeted by the save instruction. The contents of the these registers can be retrieved via the restore instruction.\newline
+
+
+\section{Instruction Set}
+\subsection{Operands}
+Generally, instructions come in the forms:
+\begin{lstlisting}
+instruction(operand_1)
+instruction(operand_1,operand_2)
+\end{lstlisting}
+There are four type of operands that can be found in an instruction.
+\subsubsection{Register}
+The operand reg(\textit{register-name})represents the contents currently stored in the register specified by the string \textit{register-name}.
+
+\subsubsection{Label}
+The operand label(\textit{label-name})represents a label specified by the string \textit{label-name}. In our Register Machine simulator Labels are stored as lists that contain the entry-point instruction of the label, followed by all subsequent instructions.
+
+\subsubsection{Constant}
+The operand constant(\textit{constant-value})represents a constant specified by \textit{constant-value}.
+
+\subsubsection{Operations}
+Operations are a special type of operation that takes the form:
+\begin{lstlisting}
+list(op(operation-name), input_1, input_2, ... input_n)
+\end{lstlisting}
+op(operation-name) represents machine operation specified by \textit{operation-name}. Each machine operation takes a specific number arguments, which can be any operand except for other machine operations. The machine operation and its arguments are encapsulated in a list, which resolves to the result of the machine operation and its arguments at runtime. The full list of operations will be detailed in later sections.
+ 
+
+
+\subsection{Instructions}
+There are 7 main classes of instructions in the instruction set for our Source Register Machine.
+
+\subsubsection{Assign}
+The assign instruction has two operands and takes the forms:
+\begin{lstlisting}
+assign(register-name, reg(register-name))
+assign(register-name, constant(register-name))
+assign(register-name, label(register-name))
+assign(register-name, list(op(operation-name),input_1, input_2 ... input_n ))
+\end{lstlisting}
+The assign instruction will assign the value of the second operand to the register referenced by the first operand. The machine will then advance the PC. It should be noted that the compiler should never generate instructions that directly change the contents of the PC.
+
+\subsubsection{Test}
+The Test instruction has one operand and takes the form:
+\begin{lstlisting}
+test(list(op(operation-name),input_1, input_2 ... input_n ))
+\end{lstlisting}
+The test instruction expects the result of the operation specified by \textit{operation-name} to be a boolean, and will update the machine flag. The machine will then advance the PC.
+
+\subsubsection{Perform}
+The Test instruction has one operand and takes the form:
+\begin{lstlisting}
+perform(list(op(operation-name),input_1, input_2 ... input_n ))
+\end{lstlisting}
+The Perform instruction will execute the machine instruction specified by \textit{operation-name} and does not expect a result. If a result is present, the perform instruction ignores result. The machine will then advance the PC. 
+
+\subsubsection{Goto}
+The goto instruction has one operand and takes the form:
+\begin{lstlisting}
+go_to(label(label-name))
+go_to(reg(register-name))
+\end{lstlisting}
+The goto instruction will set the PC to the instruction specified by the \textit{label-name}. If operand is instead a register, then the contents of the register must be a label.
+
+\subsubsection{Branch}
+The branch instruction has one operand and takes the form:
+\begin{lstlisting}
+branch(label(label-name))
+branch(reg(register-name))
+\end{lstlisting}
+The branch instruction will set the PC to the instruction specified by the \textit{label-name} if the \textit{flag} register contains the Source boolean true. If operand is instead a register, then the contents of the register must be a label.
+
+\subsubsection{Save}
+The save instruction has one operand and takes the form:
+\begin{lstlisting}
+save(register-name)
+\end{lstlisting}
+The save instruction will push the contents of the register specified by the \textit{register-name} unto the \textit{stack}. The machine will then advance the PC.
+
+\subsubsection{Restore}
+The restore instruction has one operand and takes the form:
+\begin{lstlisting}
+restore(register-name)
+\end{lstlisting}
+The restore instruction will set pop one value from the \textit{stack} and assign it to the register specified by the \textit{register-name}. The machine will then advance the PC.
+
+\subsection{Machine Operations}
+Our Register Machine for Source contains basic machines operations that are known to the compiler. Each operation has a signature and therefore expects specific parameters. While the compiler has support for and uses some machine operations that enable features that extend beyond Source \S 1, such as variable declaration using let, the Register Machine simulator only supports up to Source \S 1. Therefore, programs written in beyond Source \S 1 compile and give a 'correct' instruction sequence, but the machine operations used to implement the functionality of these features are not yet present in this Register Machine Simulator.
+
+\subsubsection{Make top environment}
+The\textit{ make\_top\_environment} operation has no parameters.
+The result of this operation is an empty top-level environment.
+
+\subsubsection{Extend Environment}
+The \textit{ extend\_environment\_procedure} operation has three parameters.
+The first parameter is a list of formals. The second parameter is list of values that correspond to formals. Third parameter is the parent environment.
+The result of this operation is new environment which contains the binding for the formals, and whoose parent is the parent environment.
+
+\subsubsection{Extend Environment Block}
+The \textit{ extend\_environment\_block\_procedure} operation has one parameter, the parent environment.
+The result of this operation is new empty environment whoose parent is the parent environment.
+
+\subsubsection{Define Constant}
+The \textit{ define\_constant\_procedure} operation has three parameters.
+The first parameter is a name of constant to be defined. The second parameter is value of constant to be defined. Third parameter is the environment of constant to be defined.
+This operation has no result, but will mutate the environment and add the name-value binding.
+
+\subsubsection{Lookup Variable Value}
+The \textit{ lookup\_variable\_value\_procedure} operation has two parameters.
+The first parameter is a name of the variable to looked-up. The Second parameter is the environment to perform the lookup.
+This operation will result in the value corresponding to the name. This operation will sequentially move to outer environments should it fail to find a binding in its current environment.
+
+\subsubsection{List}
+The \textit{ list\_procedure} operation has one parameter, the initial value.
+This operation will result in a list with the initial value as its single element. 
+
+\subsubsection{Cons}
+The \textit{ cons\_procedure} operation has two parameters.
+The first parameter value of the element to be inserted. The Second parameter is old list to insert the value into.
+This operation will result in a new list with the value inserted as head and the old list as the tail. 
+
+\subsubsection{Is False}
+The \textit{ is\_false\_procedure} operation has one parameter, value to be tested.
+This operation will result boolean True if the value is the boolean False, False Otherwise. 
+
+\subsubsection{Make Compiled Procedure}
+The \textit{ make\_compiled\_procedure\_procedure} operation has two parameters.
+The first parameter is the label of the compiled procedure. The Second parameter is environment of the compiled procedure.
+This operation will result in the closure of the compiled procedure.
+
+\subsubsection{Compiled Procedure Environment}
+The \textit{ compiled\_procedure\_env\_procedure} operation has one parameter, the closure.
+This operation will result in the environment of the closure.
+
+\subsubsection{Compiled Procedure Entry}
+The \textit{ compiled\_procedure\_entry\_procedure} operation has one parameter, the closure.
+This operation will result in the label of the closure.
+
+\subsubsection{Is Primitive Procedure}
+The \textit{ is\_primitive\_procedure\_procedure} operation has one parameter, a function value.
+This operation will result in a boolean. True if the function value refers to a primitive procedure, false otherwise.
+
+\subsubsection{Apply Primitive Procedure}
+The \textit{ apply\_primitive\_procedure} operation has two parameters.
+The first parameter is the name of the primitive. The Second parameter is list of arguments.
+This operation will result the value of the primitive procedure applied with the arguments presented. Since this machine is built for Source, along with arithmetic operators, all Source \S 1 Built-in Functions are available as primitive procedures.
+
+\subsection{Reserved Names and Constants}
+The since our Register Machine is specific to Source, it initializes the top level environment with the bindings for primitive operators and built-in functions and constant of Source. Currently, the reserved names correspond to the constants and built-in functions of Source \S 1. Therefore, all functions and constants available to the programmer for Source \S 1 remain available for use.

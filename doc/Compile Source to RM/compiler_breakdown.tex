@@ -1,0 +1,488 @@
+% -*-latex-*- ; declares latex mode for emacs editor
+\setcounter{chapter}{1}
+
+%https://tex.stackexchange.com/questions/89574/language-option-supported-in-listings
+\definecolor{lightgray}{rgb}{.9,.9,.9}
+\definecolor{darkgray}{rgb}{.4,.4,.4}
+\definecolor{purple}{rgb}{0.65, 0.12, 0.82}
+
+\lstdefinelanguage{JavaScript}{
+  keywords={typeof, new, true, false, catch, function, return, null, 
+  catch, switch, var, if, in, while, do, else, case, break},
+  keywordstyle=\color{blue}\bfseries,
+  ndkeywords={class, export, boolean, throw, implements, import, this},
+  ndkeywordstyle=\color{darkgray}\bfseries,
+  identifierstyle=\color{black},
+  sensitive=false,
+  comment=[l]{//},
+  morecomment=[s]{/*}{*/},
+  commentstyle=\color{purple}\ttfamily,
+  stringstyle=\color{red}\ttfamily,
+  morestring=[b]',
+  morestring=[b]"
+}
+
+\lstset{
+   language=JavaScript,
+   backgroundcolor=\color{lightgray},
+   extendedchars=true,
+   basicstyle=\footnotesize\ttfamily,
+   showstringspaces=false,
+   showspaces=false,
+   numbers=left,
+   numberstyle=\footnotesize,
+   numbersep=9pt,
+   tabsize=2,
+   breaklines=true,
+   showtabs=false,
+   captionpos=b
+}
+
+\chapter{Compiler Overview}
+
+\section{The Compiler Breakdown}
+Our compiler closely follows the \textbf{Structure and Interpretation of Computer Programs \-- JavaScript Adaptation} (SICP) Chapter 5.5 on \textit{Compilation}. For the sake of brevity, we shall avoid repetition of explanations available in the above-mentioned  chapter.\newline
+
+At the very top of our compiler, we have a function \textit{parse and compile} which takes in a string defined by the user before parsing that string.
+
+\begin{lstlisting}[caption=Entry point for users]
+function parse_and_compile(string) {
+	...
+	return compile(parse(string), "val", "next");
+}
+\end{lstlisting}
+
+\noindent
+The parsed string is then treated as an input to the top level dispatch \textit{compile}, which acts as an entry point for different expressions to be compiled.
+
+\begin{lstlisting}[caption=Top level compile view]
+function compile(exp, target, linkage) {
+    return is_self_evaluating(exp)
+        ? compile_self_evaluating(exp, target, linkage)
+        : is_variable(exp)
+        ? compile_variable(exp, target, linkage)
+        : is_assignment(exp)
+        ? compile_assignment(exp, target, linkage)
+        : is_variable_declaration(exp)
+        ? compile_variable_definition(exp, target, linkage)
+        : is_constant_declaration(exp)
+        ? compile_constant_definition(exp, target, linkage)
+        : is_conditional_expression(exp) 
+        ? compile_if(exp, target, linkage)
+        : is_function_definition(exp)
+        ? compile_function_expression(exp, target, linkage)
+        : is_return_statement(exp)
+        ? compile(return_statement_expression(exp), target, linkage)
+        : is_sequence(exp)
+        ? compile_sequences(sequence_statements(exp), target, linkage)
+        : is_application(exp)
+        ? compile_application(exp, target, linkage)
+        : error(exp, "Unknown expression type - - COMPILE");
+}
+\end{lstlisting}
+
+\noindent
+Following this, we shall discuss the breakdown and output of the various expressions present.\newline
+
+To aid our readers in understanding some of the terms used in the subsequent chapters here is a list of registers our readers may encounter in subsequent sections.
+\begin{center}
+\begin{tabular}{|l|ll|} \hline 
+Abbreviation & Register Name & Uses\\ \hline
+%Using argOne NOT argL
+\textbf{arg1}  & List of Arguments & Parameters for function definitions. \\ 
+\textbf{continue} & Continue & Indicates how the program should proceed.\\
+\textbf{env} & Environment & Used in preservation, function definitions etc.\\
+\textbf{proc}  & Procedure & Mainly used when creating instruction sequences. \\ 
+\textbf{val} & Values & Stores values such as self-evaluating expressions. \\ \hline
+\end{tabular}
+\end{center}
+
+We shall now explore the inner workings of the compiler.
+
+\subsection{Compiling Self-Evaluating Expressions}
+Refer to SICP 5.5.2 for a detailed explanation.
+
+A self-evaluating expression is an expression that represents itself as seen in the denotational semantics of \textbf{Source \S 0}.
+
+\noindent
+$\Rule{}{\TruE \eval \textit{true}}$
+\hfill
+$\Rule{}{\FalsE \eval \textit{false}}$
+\hfill
+$\Rule{n \eval_{\textbf{N}} i}{n \eval i}$
+
+This is supported by the semantic domain, where we observe.
+\begin{center}
+\begin{tabular}{|l|ll|} \hline 
+Semantic domain & Definition & Explanation\\ \hline
+\textbf{Bool} & $\{\textit{true}, \textit{false}\}$ & ring of booleans \\
+\textbf{Int}  & $\{\ldots,-2,-1,0,1,2,\ldots\}$     & ring of integers \\ \hline
+\end{tabular}
+\end{center}
+
+Thus, examples of such expressions are:
+\begin{lstlisting}[caption=Examples of self-evaluating expressions]
+true; // As satisfied by the ring of booleans
+4215; // As satisfied by the ring of integers
+\end{lstlisting}
+
+\noindent
+Such expressions will then call the \textit{is self evaluating} function in compile.\newline
+
+Since it is a self-evaluating expression, we simply assign the required value to the target register and proceed to the next instruction as specified by the linkage descriptor.
+\begin{lstlisting}[caption=RM for self-evaluating expressions]
+assign('val', constant(true)),
+assign('val', constant(4215))
+\end{lstlisting}
+
+Once an expression has been determined to be self-evaluating, the compiler will execute the compile\_self\_evaluating function.
+
+\begin{lstlisting}[caption=Compile self-evaluating]
+function compile_self_evaluating(exp, target, linkage) {
+    return end_with_linkage(
+        linkage,
+        make_instruction_sequence(
+            list(),
+            list(target),
+            list(assign(target, list(constant(exp))))));
+}
+\end{lstlisting}
+
+The \textit{val} register is modified.
+
+Following SICP 5.5, compiling self evaluating expressions takes in 3 parameters namely: the expression to be compiled, target register and linkage. The linkage indicates how the program should proceed (i.e. jump to another label, continue with next instruction etc).
+
+\subsection{Compiling Variable}
+Refer to SICP 5.5.2 for a detailed explanation.
+
+The approach when compiling variables is highly similar to compiling self-evaluating expressions.
+As we are looking up a variable, we will require the \textit{env} register.
+
+\begin{lstlisting}[caption=Compile variable]
+function compile_variable(exp, target, linkage) {
+    const operation = list(op("lookup_variable_value"), reg('env'), constant(exp));
+    return end_with_linkage(
+        linkage,
+        make_instruction_sequence(
+            list('env'),
+            list(target),
+            list(assign(target, operation))));
+}
+\end{lstlisting}
+
+\subsection{Compiling Declarations}
+If we wish to declare a variable or constant, we can do so using the following compilation functions.
+
+\subsubsection{Compiling Constant Declarations}
+For constant declarations, we are required to use the \textit{const} keyword.
+
+Here's how constant declarations get compiled:
+\begin{lstlisting}[caption=Compile constant declarations]
+function compile_variable_definition(exp, target, linkage ){
+    const variable = variable_declaration_name(exp);
+    const get_value_code =  compile(variable_declaration_value(exp), 'val','next');
+
+    const assignment_operation = perform( list(op("define_variable"), constant(variable), reg('val'), reg('env')) );
+    const return_value = assign(target, list(constant("ok"))); //"ok" denotes success.
+    
+    return end_with_linkage(
+        linkage,
+        preserving(
+            list('env'),
+            get_value_code,
+            make_instruction_sequence(
+                list('env','val'),
+                list(target),
+                list(assignment_operation , return_value)
+            )
+        )
+    );
+}
+\end{lstlisting}
+
+An example of constant declaration is as follows:
+\begin{lstlisting}[caption=Examples of Constant Declarations]
+const course_number = 4215;
+const enrolment_status = true;
+\end{lstlisting}
+
+Should we pass the constant declaration to the compiler, you may obtain the following RM.
+\begin{lstlisting}[caption=Constant Declaration RM]
+assign('val', constant(4215))
+perform(list(op('define_constant'), constant('course_number'), reg('val'), reg('env')))
+assign('val', constant('ok'))
+
+assign('val', constant(true))
+perform(list(op('define_constant'), constant('enrolment_status'), reg('val'), reg('env')))
+assign('val', constant('ok'))
+\end{lstlisting}
+
+
+\subsubsection{Compiling Variable Declarations and Assignments}
+While the \textit{const} keyword does not allow reassignment of values to the already declared constant, we can use the \textit{let} keyword to denote variable declarations instead. 
+
+We shall now explore how to compile variable declarations. The following shows an example of variable declarations:
+\begin{lstlisting}[caption=Examples of Variable Declarations]
+let module_code = 2040;
+module_code = 4215;
+\end{lstlisting}
+
+First we declare a variable using the \textit{let} keyword. Because of the property and nature of \textit{let}, we are allowed to modify the value previously assigned to the variable \textit{module\_code}. In this case, we are updating the variable with the value of 4215.\newline
+
+The above example will then produce such a RM code:
+\begin{lstlisting}[caption=Variable Declaration RM]
+assign('val', constant(2040))
+perform(list(op('define_variable'), constant('module_code'), reg('val'), reg('env')))
+assign('val', constant('ok'))
+assign('val', constant(4215))
+perform(list(op('set_variable_value'), constant('module_code'), reg('val'), reg('env')))
+assign('val', constant('ok'))
+\end{lstlisting}
+
+Once a statement has been denoted and tagged with \textit{variable\_declaration}, the compiler will then call the following function.
+
+\begin{lstlisting}[caption=compile variable declarations]
+function compile_variable_definition( exp, target, linkage ){
+    const variable = variable_declaration_name(exp);
+    const get_value_code =  compile(variable_declaration_value(exp), 'val','next');
+
+    const assignment_operation = perform( list(op("define_variable"), constant(variable), reg('val'), reg('env')) );
+    const return_value = assign(target, list(constant("ok"))); //"ok" denotes success.
+    
+    return end_with_linkage(
+        linkage,
+        preserving(
+            list('env'),
+            get_value_code,
+            make_instruction_sequence(
+                list('env','val'),
+                list(target),
+                list(assignment_operation , return_value)
+            )
+        )
+    );
+}
+\end{lstlisting}
+
+Since we are looking up a variable, we will require the \textit{env} register. In addition, the newly assigned values the variable will mean modifying the \textit{val} register.
+
+\subsubsection{Compiling Assignment}
+Refer to SICP 5.5.2 for a detailed explanation.
+
+As mentioned, a declared variable can be modified. Compiling assignments will apply to assignment of values to previously declared variables.\newline
+
+For variable declarations, we use the operation \textit{set\_variable\_value} to denote modifications to an already declared variable.\newline
+
+In our approach, we assign the constant("ok") to the target register to denote assignment success.\newline
+
+Thus, the following function in the compiler performs assignment to variables:
+\begin{lstlisting}[caption=compile assignment]
+function compile_assignment( exp, target, linkage ){
+    const variable = assignment_variable(exp);
+    const get_value_code =  compile(assignment_expression(exp), 'val','next');
+
+    const assignment_operation = perform( list(op("set_variable_value"), constant(variable), reg('val'), reg('env')) );
+    const return_value = assign(target, list(constant("ok"))); //ok to signify success
+    
+    return end_with_linkage(
+        linkage,
+        preserving(
+            list('env'),
+            get_value_code,
+            make_instruction_sequence(
+                list('env','val'),
+                list(target),
+                list(assignment_operation , return_value)
+            )
+        )
+    );
+}
+\end{lstlisting}
+
+\subsection{Compiling Conditionals}
+Now we shall discuss how conditional expressions are compiled.\newline
+
+An example of a conditional statement is:
+\begin{lstlisting}[caption=Example of Conditionals (Ternary Operator)]
+x > 5 ? true : false;
+\end{lstlisting}
+
+The above example uses a ternary operator. Should we prefer using the traditional if-else statement, the compiler also allows such statement as depicted by the following example.\begin{lstlisting}[caption=Example of Conditionals (If-Else Statements)]
+if(1231 > 2028) {
+	x = 3230;
+}
+else {
+	x = 3207;
+}
+\end{lstlisting}
+
+We first breakdown the expression into 3 different segments:
+
+\begin{center}
+\begin{tabular}{|l|l|} \hline 
+Segment & Compilation Uses \\ \hline
+\textbf{Conditional} & Conditional expression\\
+\textbf{Consequent}  & Statement when conditional evaluates to true \\ 
+\textbf{Alternative}  & Statement when conditional evaluates to false \\ \hline
+\end{tabular}
+\end{center}
+
+Since a conditional expression evaluates to either true or false, we use different labels to show denote the different pathways in our RM code. After which, we create machine instructions for individual segments before appending these created instructions in order.
+
+\begin{lstlisting}[caption=compilie if]
+function compile_if(exp, target, linkage){
+    let t_branch = make_label("true_branch");
+    let f_branch = make_label("false_branch");
+    let after_if = make_label("after_if");
+    let consequent_linkage = linkage === 'next' ? after_if : linkage;
+
+    let p_code = compile(cond_expr_pred(exp), 'val','next');
+    let c_code = compile(cond_expr_cons(exp), target, consequent_linkage);
+    let a_code = compile(cond_expr_alt(exp), target, linkage);
+    
+    const after_predicate_check = make_instruction_sequence(list('val'), list(), 
+    	list(test( list(op("is_false"), reg('val'))),
+        branch(label(f_branch))
+        ));
+
+    const CandABranches =  parallel_instruction_sequences( 
+		append_instruction_sequence(list(label_sequence(t_branch), c_code)), 
+		append_instruction_sequence(list(label_sequence(f_branch), a_code)) 
+		);
+
+    const afterPredicateComplete = append_instruction_sequence(
+        list(
+            after_predicate_check,
+            CandABranches,
+            label_sequence(after_if)
+        )
+    );
+
+    return preserving(
+        list('env', 'continue'),
+        p_code,
+        afterPredicateComplete
+    );
+}
+\end{lstlisting}
+
+\subsection{Compiling Functions}
+The section on compilation of functions can be further broken down into:
+1. Compiling Function Expressions
+2. Compiling Return Statements
+
+\subsubsection{Compiling Function Expressions}
+Here's how compiling a function works as seen in the compiler. Once an expression satisfies the is\_function\_definition condition, the following takes place:
+
+\begin{lstlisting}[caption=compile function expression]
+function compile_function_expression(exp, target, linkage) {
+    let proc_entry = make_label("entry");
+    let after_fexp = make_label("after_lambda");
+    let lambda_linkage  = linkage === "next" ?  after_fexp : linkage;
+
+    const function_definitiion = end_with_linkage(
+        lambda_linkage,
+        make_instruction_sequence(
+            list('env'),
+            list(target),
+            list(assign(target, list(op("make_compiled_procedure"), label(proc_entry), reg('env'))))
+        )
+    );
+    const function_body = compile_lambda_body(exp , proc_entry);
+    return append_instruction_sequence(
+        list(
+            tack_on_instruction_sequence(function_definitiion,function_body),
+            label_sequence(after_fexp)
+        )
+    );
+}
+\end{lstlisting}
+
+Let's break down the compilation steps.\newline
+
+It is important to note that we will require different sign posts to guide the program execution such as a function's entry label, parameters and body.
+
+This will be the start of function compilation where we first set up of our function's entry point and linkage continuation.
+\begin{lstlisting}[caption=Compile function part I]
+// Starting point for function.
+let proc_entry = make_label("entry");
+
+// Linkage code created. 
+let after_fexp = make_label("after_lambda"); 
+
+// Goto given linkage or label("after_lambda").
+let lambda_linkage  = linkage === "next" ?  after_fexp : linkage; 
+\end{lstlisting}
+
+After which, we move on to compiling the function definition.
+\begin{lstlisting}[caption=Compile function part II]
+const function_definitiion = end_with_linkage(
+	lambda_linkage,
+	make_instruction_sequence(
+		list("env"),
+		list(target),
+		list(assign(target, list(op("make_compiled_procedure"), label(proc_entry), reg('env'))))
+		)
+);
+\end{lstlisting}
+
+Following the function definition, we can compile the function body.
+\begin{lstlisting}[caption=Compile function part III]
+// Compilation of function body.
+const function_body = compile_lambda_body(exp , proc_entry);
+\end{lstlisting}
+
+
+\subsubsection{Compiling Return Statements}
+Understandably, functions can also include a return statement. In our approach, the compilation of function expressions is explicitly separated from the compilation of the return statement simply by calling the top level compile function that specifies the return code.
+
+\begin{lstlisting}[caption=Compile Return Statement]
+compile(return_statement_expression(exp), target, linkage);
+\end{lstlisting}
+
+\subsection{Compiling Sequences}
+We now look at how sequences are compiled.\newline
+
+An example of a conditional statement is:
+\begin{lstlisting}[caption=Example of Sequences]
+1; 2; 3; true; x; //Multiple expressions in the same row.
+\end{lstlisting}
+
+Simply put, a sequence is a combination of multiple statements. Hence, our compiler needs to separate a given sequence into individual expressions for compilation. The following shows that the compiler keeps checking and compiling individual expressions until the last expression in the sequence has been compiled.
+
+\begin{lstlisting}[caption=Compile Sequences]
+function compile_sequences(seq, target, linkage) {
+    return is_last_statement(seq)
+        ? compile(first_statement(seq),target, linkage)
+        : preserving(
+            list('env', 'continue'),
+            compile(first_statement(seq), target, 'next'),
+            compile_sequences(rest_statements(seq),target, linkage)
+        );
+}
+\end{lstlisting}
+
+\subsection{Compiling Applications}
+We explicitly separated the compilation of function expressions to the compilation of the return statement.
+
+Applications are tagged with \textit{application} and comprise of operators and operands.
+
+\begin{lstlisting}[caption=Compile Sequences]
+function compile_application(exp,target,linkage){
+    const proc_code = compile(operator(exp),'proc',"next");
+    const operand_codes = map(operand=> compile(operand, 'val',"next"),operands(exp));
+
+    const procedure_call_code = compile_procedure_call(target, linkage);
+    const arglist_code = construct_arglist(operand_codes);
+    return preserving(
+        list('env','continue'),
+        proc_code,
+        preserving(
+            list('proc','continue'),
+            arglist_code,
+            procedure_call_code
+        )
+    );
+}
+\end{lstlisting}
+
