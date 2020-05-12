@@ -948,7 +948,7 @@ function parse_and_compile(string) {
             }
         }
         add_nullary_instruction(OP);
-        return 1;
+        return length(ops_types);
     }
 
     function compile(expr, index_table, insert_flag) {
@@ -1255,6 +1255,11 @@ function PUSH_OS() {
     B = B + 1;
     HEAP[OS + LAST_CHILD_SLOT] = B; // update address of current top of OS
     HEAP[OS + B] = A;
+    if (B >= HEAP[OS + SIZE_SLOT]) {
+        show_node(OS);
+        display(B, "new top");
+        error('stack overflow');
+    } else {}
 }
 
 // POP puts the top-most value into RES
@@ -1545,6 +1550,7 @@ M[START] = () =>   { A = 1; // first OS only needs to hold one closure
                      NEW_OS();
                      OS = RES;
                      A = 0;
+                     E = -Infinity;
                      NEW_ENVIRONMENT();
                      ENV = RES;
                      PC = PC + 1;
@@ -1935,4 +1941,15 @@ function run() {
         POP_OS();
         return show_heap_value(RES);
     }
+}
+
+function show_node(address) {
+  const tag = HEAP[address];
+  const size = HEAP[address + SIZE_SLOT];
+  display("======================");
+  display(node_kind(tag), address);
+  for (let i = 1; i < size + 1; i = i + 1) {
+    display(stringify(address + i) + ": " + stringify(HEAP[address + i]));
+  }
+  display("======================");
 }
