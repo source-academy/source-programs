@@ -948,7 +948,7 @@ function parse_and_compile(string) {
             }
         }
         add_nullary_instruction(OP);
-        return 1;
+        return length(ops_types);
     }
 
     function compile(expr, index_table, insert_flag) {
@@ -1684,6 +1684,7 @@ M[START] = () =>   { A = 1; // first OS only needs to hold one closure
                      NEW_OS();
                      OS = RES;
                      A = 0;
+                     E = -Infinity;
                      NEW_ENVIRONMENT();
                      ENV = RES;
                      PC = PC + 1;
