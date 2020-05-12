@@ -14,6 +14,7 @@ The evaluators in this section all follow the general style of SICP JS Chapter 4
 * [`src/evaluators/source-2-lazy.js`](https://github.com/source-academy/source-programs/blob/master/src/evaluators/source-2-lazy.js): lazy evaluator for Source §2, described in SICP JS 4.2
 * [`src/evaluators/source-2-non-det.js`](https://github.com/source-academy/source-programs/blob/master/src/evaluators/source-2-non-det.js): evaluator for Source §2 with non-determinism, described in SICP JS 4.3
 * [`src/evaluators/typed-source.js`](https://github.com/source-academy/source-programs/blob/master/src/evaluators/typed-source.js): evaluator for Typed Source (typed version of a Source §1 sublanguage)
+* [`src/evaluators/source-4-1-lazy.js`](https://github.com/source-academy/source-programs/blob/master/src/evaluators/source-4-1-lazy.js): lazy evaluator for Source §2.
 
 ## Steppers
 
