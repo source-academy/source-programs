@@ -117,8 +117,6 @@ or
 
 where only the part that starts from `Error:` will be compared. Line number is be ignored as it varies. If line number is needed for a particular reason, it can be appended to the back.
 
-> **Note**: for virtual machine tests, you will have to make a function that outputs a single line output without the help of any `displays()`, as the test currently only supports 1 line comparison. Help to make this generic is appreciated.
-
 > Integration of the `test` script with `src/test/framework/` is pending a fix to the `--variant` parameter; any help appreciated.
 
 # License

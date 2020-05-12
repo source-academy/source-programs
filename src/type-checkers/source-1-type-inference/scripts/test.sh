@@ -1,12 +1,14 @@
 #! /usr/bin/env bash
 
-JS_SLANG="node --stack-size=4000 node_modules/js-slang/dist/repl/repl.js"
+JS_SLANG="node --stack-size=2000 node_modules/js-slang/dist/repl/repl.js"
 
 # must use BSD awk
 AWK="awk"
 
-SOURCEFILES=src/*/*.js
+SOURCEFILES="*.js"
 SOURCE_TEST="src/test/framework/main.js"
+# SOURCEFILES=src/*/*.js
+
 
 DEFAULT_CHAPTER=4
 DEFAULT_VARIANT="default"
@@ -22,6 +24,7 @@ failed=0
 # $2 is the test file
 # $3 is the chapter
 # $4 is the variant
+
 
 test_source() {
     # read in test file to find the number of comment lines
