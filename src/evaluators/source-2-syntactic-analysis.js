@@ -740,25 +740,3 @@ function read_eval_print_loop(history) {
 	                         stringify(user_print(res)));
     }
 }
-
-/*
-examples:
-parse_and_eval("1;");
-parse_and_eval("1 + 1;");
-parse_and_eval("1 + 3 * 4;");
-parse_and_eval("(1 + 3) * 4;");
-parse_and_eval("1.4 / 2.3 + 70.4 * 18.3;");
-parse_and_eval("true;");
-parse_and_eval("! (1 === 1);");
-parse_and_eval("(! (1 === 1)) ? 1 : 2;");
-parse_and_eval("'hello' + ' ' + 'world';");
-parse_and_eval("6 * -1;");
-parse_and_eval("-12 - 8;");
-*/
-
-parse_and_eval("function factorial(n) { return n === 1 ? 1 : n * factorial(n - 1);} factorial(4);");
-
-/*
-read_eval_print_loop("");
-*/
-
