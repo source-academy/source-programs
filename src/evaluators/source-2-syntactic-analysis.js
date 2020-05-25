@@ -309,6 +309,15 @@ function analyze_application(stmt) {
 }
 
 /* APPLY */
+// function application needs to distinguish between
+// primitive functions (which are evaluated using the
+// underlying JavaScript), and compound functions.
+// An application of the latter needs to evaluate the
+// body of the function value with respect to an 
+// environment that results from extending the function
+// object's environment by a binding of the function
+// parameters to the arguments and of local names to
+// the special value no_value_yet
 
 function execute_application(fun, args) {
     if (is_primitive_function(fun)) {
@@ -334,43 +343,6 @@ function apply_primitive_function(fun, argument_list) {
     return apply_in_underlying_javascript(
                 primitive_implementation(fun),
                 argument_list);     
-}
-    
-// function application needs to distinguish between
-// primitive functions (which are evaluated using the
-// underlying JavaScript), and compound functions.
-// An application of the latter needs to evaluate the
-// body of the function value with respect to an 
-// environment that results from extending the function
-// object's environment by a binding of the function
-// parameters to the arguments and of local names to
-// the special value no_value_yet
-
-function apply(fun, args) {
-   if (is_primitive_function(fun)) {
-      return apply_primitive_function(fun, args);
-   } else if (is_compound_function(fun)) {
-      const body = function_body(fun);
-      const locals = local_names(body);
-      const names = insert_all(function_parameters(fun),
-                               locals);
-      const temp_values = map(x => no_value_yet,
-                              locals);
-      const values = append(args, temp_values);			   
-      const result =
-         evaluate(body,
-                  extend_environment(
-                      names,
-                      values,
-                      function_environment(fun)));
-      if (is_return_value(result)) {
-         return return_value_content(result);
-      } else {
-          return undefined;
-      }
-   } else {
-      error(fun, "Unknown function type in apply");
-   }
 }
 
 // We use a nullary function as temporary value for names whose
