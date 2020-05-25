@@ -166,12 +166,12 @@ function function_definition_body(stmt) {
    return head(tail(tail(stmt)));
 }
 
-// compound function values keep track of parameters, body
+// compound function values keep track of parameters, locals, body
 // and environment, in a list tagged as "compound_function"
 
-function make_compound_function(parameters, body, env) {
+function make_compound_function(parameters, locals, body, env) {
     return list("compound_function",
-                parameters, body, env);
+                parameters, locals, body, env);
 }
 function is_compound_function(f) {
     return is_tagged_list(f, "compound_function");
@@ -179,11 +179,14 @@ function is_compound_function(f) {
 function function_parameters(f) {
     return list_ref(f, 1);
 }
-function function_body(f) {
+function function_locals(f) {
     return list_ref(f, 2);
 }
-function function_environment(f) {
+function function_body(f) {
     return list_ref(f, 3);
+}
+function function_environment(f) {
+    return list_ref(f, 4);
 }
 
 // evaluating a function definition expression
@@ -191,12 +194,11 @@ function function_environment(f) {
 // current environment is stored as the function
 // value's environment
 
-function eval_function_definition(stmt, env) {
-    return make_compound_function(
-              map(name_of_name,
-                  function_definition_parameters(stmt)),
-              function_definition_body(stmt),
-              env);
+function analyze_function_definition(stmt) {
+    const vars = function_definition_parameters(stmt);
+    const locals = local_names(function_definition_body(stmt));
+    const body_fun = analyze(function_definition_body(stmt));
+    return env => make_compound_function(vars, locals, body_fun, env);
 }
 
 /* SEQUENCES */
