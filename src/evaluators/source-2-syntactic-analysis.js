@@ -402,10 +402,9 @@ function is_return_value(value) {
 function return_value_content(value) {
     return head(tail(value));
 }
-function eval_return_statement(stmt, env) {
-    return make_return_value(
-               evaluate(return_statement_expression(stmt),
-                        env));
+function analyze_return_statement(stmt) {
+    const retval_func = analyze(return_statement_expression(stmt));
+    return env => make_return_value(retval_func(env));
 }
 
 /* BLOCKS */
