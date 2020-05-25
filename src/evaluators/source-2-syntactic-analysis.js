@@ -245,7 +245,7 @@ function analyze_sequence(stmts) {
             } else {
                 return fun2(env);
             }
-        }
+        };
     }
 
     function loop(first_fun, rest_funs) {
@@ -377,9 +377,7 @@ function local_names(stmt) {
     } else {
        return is_constant_declaration(stmt)
            ? list(constant_declaration_name(stmt))
-           : is_variable_declaration(stmt)
-             ? list(variable_declaration_name(stmt))
-             : null;
+           : null;
     }
 }	     
 
@@ -606,9 +604,9 @@ function analyze(stmt) {
          : is_function_definition(stmt)
            ? analyze_function_definition(stmt)
          : is_sequence(stmt)
-           ? analyze_sequence(sequence_actions(stmt))
+           ? analyze_sequence(sequence_statements(stmt))
          : is_block(stmt)
-           ? analyze_block(block_body(stmt))
+           ? analyze_block(stmt)
          : is_return_statement(stmt)
            ? analyze_return_statement(stmt)
          : is_application(stmt)
