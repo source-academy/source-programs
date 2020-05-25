@@ -301,7 +301,30 @@ function primitive_implementation(fun) {
    return list_ref(fun, 1);
 }
 
+function analyze_application(stmt) {
+    const function_func = analyze(operator(stmt));
+    const arg_funcs = analyze(operands(stmt));
+    return env => execute_application(function_func(env),
+                      map(arg_func => arg_func(env), arg_funcs));
+}
+
 /* APPLY */
+
+function execute_application(fun, args) {
+    if (is_primitive_function(fun)) {
+        return apply_primitive_function(fun, args);
+    } else if (is_compound_function(fun)) {
+        const body = function_body(fun);
+        const locals = function_locals(fun);
+        const names = insert_all(map(name_of_name, function_parameters(fun)),
+                                 locals);
+        const temp_values = map(x => no_value_yet, locals);
+        const values = append(args, temp_values);
+        return body(extend_environment(names, values, function_environment(fun)));
+    } else {
+        error(fun, "unknown function type in execute_application");
+    }
+}
 
 // apply_in_underlying_javascript allows us
 // to make use of JavaScript's primitive functions
