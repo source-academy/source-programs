@@ -303,7 +303,7 @@ function primitive_implementation(fun) {
 
 function analyze_application(stmt) {
     const function_func = analyze(operator(stmt));
-    const arg_funcs = analyze(operands(stmt));
+    const arg_funcs = map(analyze, operands(stmt));
     return env => execute_application(function_func(env),
                       map(arg_func => arg_func(env), arg_funcs));
 }
