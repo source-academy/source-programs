@@ -186,7 +186,7 @@ function function_environment(f) {
     return list_ref(f, 3);
 }
 
-// evluating a function definition expression
+// evaluating a function definition expression
 // results in a function value. Note that the
 // current environment is stored as the function
 // value's environment
