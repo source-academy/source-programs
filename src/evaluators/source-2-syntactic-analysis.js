@@ -436,13 +436,14 @@ function block_body(stmt) {
 // a binding of all local names to the special value
 // no_value_yet
 
-function eval_block(stmt, env) {
+function analyze_block(stmt) {
     const body = block_body(stmt);
     const locals = local_names(body);	    
     const temp_values = map(x => no_value_yet,
                             locals);
-    return evaluate(body,
-                extend_environment(locals, temp_values, env));
+    const body_func = analyze(body);
+
+    return env => body_func(extend_environment(locals, temp_values, env));
 }
 
 /* ENVIRONMENTS */
