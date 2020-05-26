@@ -326,7 +326,14 @@ function execute_application(fun, args) {
                                  locals);
         const temp_values = map(x => no_value_yet, locals);
         const values = append(args, temp_values);
-        return body(extend_environment(names, values, function_environment(fun)));
+        const result = body(extend_environment(names, values, function_environment(fun)));
+        
+        if (is_return_value(result)) {
+            return return_value_content(result);
+        } else {
+            return undefined;
+        }
+
     } else {
         error(fun, "unknown function type in execute_application");
     }
