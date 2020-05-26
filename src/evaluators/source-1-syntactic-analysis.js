@@ -525,35 +525,6 @@ function lookup_name_value(name, env) {
     return env_loop(env);
 }
 
-// to assign a name to a new value in a specified environment,
-// we scan for the name, just as in lookup_name_value, and
-// change the corresponding value when we find it,
-// provided it is tagged as mutable
-
-function assign_name_value(name, val, env) {
-    function env_loop(env) {
-        function scan(names, vals) {
-            return is_null(names)
-                ? env_loop(
-                    enclosing_environment(env))
-                : name === head(names)
-                  ? ( tail(head(vals))
-                      ? set_head(head(vals), val)
-                      : error("no assignment " +
-                          "to constants allowed") )
-                  : scan(tail(names), tail(vals));
-        } 
-        if (is_empty_environment(env)) {
-            error(name, "Unbound name in assignment: ");
-        } else {
-            const frame = first_frame(env);
-            return scan(frame_names(frame),
-                        frame_values(frame));
-        }
-    }
-    return env_loop(env);
-}
-
 // applying a compound function to parameters will
 // lead to the creation of a new environment, with
 // respect to which the body of the function needs
@@ -561,10 +532,11 @@ function assign_name_value(name, val, env) {
 // (also used for blocks)
 
 function extend_environment(names, vals, base_env) {
+    const is_variable = false; // Source 1 does not have variables
     if (length(names) === length(vals)) {
         return enclose_by(
                    make_frame(names, 
-                      map(x => pair(x, true), vals)),
+                      map(x => pair(x, is_variable), vals)),
                    base_env);
     } else if (length(names) < length(vals)) {
         error("Too many arguments supplied: " + 
