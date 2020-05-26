@@ -218,9 +218,6 @@ function sequence_statements(stmt) {
 function is_empty_sequence(stmts) {
    return is_null(stmts);
 }
-function is_last_statement(stmts) {
-   return is_null(tail(stmts));
-}
 function first_statement(stmts) {
    return head(stmts);
 }
