@@ -712,31 +712,3 @@ const the_global_environment = setup_environment();
 function parse_and_eval(str) {
     return eval_toplevel(parse(str));
 }
-
-
-/* THE READ-EVAL-PRINT LOOP */
-
-// The function user_print is necessary to
-// avoid infinite recursion when printing
-// circular environments
-function user_print(object) {
-   return is_compound_function(object)
-       ? "function" +
-         stringify(function_parameters(object)) +
-         stringify(function_body(object)) +
-         "<environment>"
-       : object;
-}
-
-function read_eval_print_loop(history) {
-    const prog = prompt("History:" + history + 
-                        "\n\n" + "Enter next: ");
-    if (prog === null) {
-        display("session has ended");
-    } else {
-        const res = parse_and_eval(prog);
-        read_eval_print_loop(history + "\n" + 
-                             stringify(prog) + " ===> " +
-	                         stringify(user_print(res)));
-    }
-}
