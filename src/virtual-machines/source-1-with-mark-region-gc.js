@@ -759,37 +759,7 @@ let K = 0;
 let L = 0;
 let N = 0;
 
-function show_executing(s) {
-  display(undefined, "--- RUN ---" + s);
-  display(PC, "PC :");
-  display(get_name(P[PC]), "instr:");
-}
 
-// for debugging: show all registers
-function show_registers(s) {
-  show_executing(s);
-  display(undefined, "--- REGISTERS ---");
-  display(RES, "RES:");
-  display(A, "A  :");
-  display(B, "B  :");
-  display(C, "C  :");
-  display(D, "D  :");
-  display(E, "E  :");
-  display(F, "F  :");
-  display(G, "G  :");
-  display(H, "H  :");
-  display(I, "I  :");
-  display(J, "J  :");
-  display(K, "K  :");
-  display(L, "L  :");
-  display(N, "N  :");
-  display(BUMP_HEAD, "BUMP_HEAD  :");
-  display(BUMP_TAIL, "BUMP_TAIL  :");
-  display(OS, "OS :");
-  display(ENV, "ENV:");
-  display(RTS, "RTS:");
-  display(TOP_RTS, "TOP_RTS:");
-}
 
 // HEAP is array containing all dynamically allocated data structures
 let HEAP = NaN;
@@ -1001,180 +971,6 @@ function unmark_all() {
     MARK_STACK = [];
 }
 
-/**
- * Assertions and reference implementations 
- * FOR DEBUGGING
- */
-
-let LIVE_NODES = list();
-
-function assert_true(bool, msg, stack) {
-    if (bool) {
-        // yay 
-    } else {
-        visualize_heap("");
-        show_registers("");
-        display(stack);
-        error(msg);
-    }
-}
-
-function assert_false(bool, msg, stack) {
-    return assert_true(!bool, msg, stack);
-}
-
-function assert_same(v1, v2, stack) {
-    return assert_true(v1 === v2, 
-                       "v1: " + stringify(v1) + " and v2: " + stringify(v2) + " are not the same", 
-                       stack);
-}
-
-function assert_same_as_ref(v1, ref_wrapper, stack) {
-    const new_stack = pair("assert_same_as_ref", stack);
-    return assert_same(v1, ref_wrapper(stack), new_stack);
-}
-
-/**
- * Reference implemntation for the mark algorithm, returns a list of all live nodes
- * @param {list} stack list of current executions
- */
-function ref_mark(stack) {
-    const new_stack = pair("MARKING_REFERENCE", stack);
-    let marked = list();
-    function dfs(node_address, stack) {
-        const dfs_stack = pair("currently on: " + stringify(node_address), stack);
-        assert_valid_address(node_address, dfs_stack);
-        marked = pair(node_address, marked);
-        const first_child_index = HEAP[node_address + FIRST_CHILD_SLOT];
-        const last_child_index = HEAP[node_address + LAST_CHILD_SLOT];
-        for (let i = first_child_index; i < last_child_index; i = i + 1) {
-            const child_address = HEAP[node_address + i];
-            if (child_address !== undefined && length(member(child_address, marked)) === 0) {
-                dfs(child_address, dfs_stack);
-            } else {}
-        }
-    }
-    const rts_list = build_list(OVERFLOW ? TOP_RTS - 2 : TOP_RTS, i => RTS[i]);
-    const roots = pair(OS, pair(ENV, rts_list));
-    map(a => a < 0 ? "not initialized" : dfs(a, new_stack), TEMP_ROOT === -1 ? roots : pair(TEMP_ROOT, roots));
-    return marked;
-}
-
-function assert_valid_address(address, stack) {
-    const new_stack = pair("assert address in addressable space: " + stringify(address), stack);
-    assert_false(address === undefined, "node is undefined", new_stack);
-    const block_address = math_floor(address / BLOCK_SIZE) * BLOCK_SIZE;
-    const start = block_address + BLOCK_BK_SIZE + NUM_OF_LINES_PER_BLOCK * LINE_BK_SIZE;
-    const end = block_address + BLOCK_SIZE;
-    assert_true(start <= address && address < end,
-                "not in addressable space",
-                new_stack);
-}
-
-function assert_valid_node(node_address, stack) {
-    const new_stack = pair("assert node " + stringify(node_address) + " must not have undefined or unaddressable children",
-                            stack);
-    assert_false(node_address === undefined, "node is undefined", new_stack);
-    if (is_leaf_node(node_address)) {
-        const leaf_stack = pair("node identified as leaf", new_stack);
-        const size = HEAP[node_address + SIZE_SLOT];
-        for (let i = 0; i < size; i = i + 1) {
-            assert_false(HEAP[node_address + i] === undefined, "address " + stringify(node_address + i) + " is undefined", leaf_stack);
-        }
-    } else {
-        const branch_stack = pair("node not leaf", new_stack);
-        const firstchild = HEAP[node_address + FIRST_CHILD_SLOT];
-        const lastchild = HEAP[node_address + LAST_CHILD_SLOT];
-        for (let i = firstchild; i < lastchild; i = i + 1) {
-            assert_valid_address(HEAP[node_address + i], branch_stack);
-        }
-    }
-}
-
-function is_leaf_node(node) {
-    return node === BOOL_TAG || node === UNDEFINED_TAG || node === NUMBER_TAG;
-}
-
-function ref_get_block(address, stack) {
-    const new_stack = pair("getting block address of: ", stringify(address), stack);
-    assert_true(0 <= address && address < HEAP_SIZE, "address supplied not in heapspace", new_stack);
-    return math_floor(address / BLOCK_SIZE) * BLOCK_SIZE;
-}
-
-function ref_get_line(address, stack) {
-  const new_stack = pair("getting line address of: ", stringify(address),
-                         stack);
-  assert_valid_address(address, new_stack);
-  const block_address = ref_get_block(address, new_stack);
-  const start = block_address + BLOCK_BK_SIZE + NUM_OF_LINES_PER_BLOCK * LINE_BK_SIZE;
-  const line_no = (address - start) / LINE_SIZE;
-  const line_address = math_floor(line_no) * LINE_BK_SIZE + block_address + BLOCK_BK_SIZE;
-//   display("line address result", line_address);
-  return line_address;
-}
-
-function copy_rts(top) {
-    let copy = [];
-    for (let i = 0; i <= top; i = i + 1) {
-        copy[i] = RTS[i];
-    }
-    return copy;
-}
-
-/**
- * Ensures that RTS stack has not been modified since ~copy~
- * @param {array} copy array of duplicated stack before changes
- * @param {array} stack current RTS array
- */
-function assert_rts(copy, stack) {
-    const new_stack = pair("ensuring rts did not change since last snapshot: ", stack);
-    assert_same(array_length(copy), TOP_RTS + 1, new_stack);
-    for (let i = 0; i < TOP_RTS; i = i + 1) {
-        assert_same(copy[i], RTS[i], new_stack);
-    }
-}
-
-function assert_lines_marked(node_address, stack) {
-    const new_stack = pair("assert lines marked for node: " + stringify(node_address), stack);
-    const size = HEAP[node_address + SIZE_SLOT];
-    for (let i = 0; i < size; i = i + 1) {
-        const line_address = ref_get_line(node_address + i, new_stack);
-        assert_marked(LINE_MARK_SLOT, line_address, new_stack);
-    }
-}
-
-function assert_marked(mark_offset, address, stack) {
-    const new_stack = pair("assert mark slot of address: " + stringify(address) + " is marked", stack);
-    assert_true(HEAP[address + mark_offset] === MARKED, 
-                "object is not marked",
-                new_stack);
-}
-
-function assert_node_marked(node_address, stack) {
-  const new_stack = pair("assert node: " + stringify(node_address) + " is marked", stack);
-  assert_marked(MARK_SLOT, node_address, new_stack);
-  assert_lines_marked(node_address, new_stack);
-  const block_address = ref_get_block(node_address, new_stack);
-  assert_marked(MARK_SLOT, block_address, new_stack);
-}
-
-/**
- * Make sures that the block and lines of a node is not free 
- * @param {number} address Address of the node in the HEAP
- * @param {list} stack stacktrace stack
- */
-function assert_unfree(address, stack) {
-    const new_stack = pair("assert node at " + stringify(address) + " should not be free", stack);
-    const block_address = ref_get_block(address, new_stack);
-    assert_false(HEAP[block_address + BLOCK_STATE_SLOT] === FREE, "the block of this node should not be free", new_stack);
-    const size = HEAP[address + SIZE_SLOT];
-    for (let i = 0; i < size; i = i + 1) {
-        const line_address = ref_get_line(address + i, new_stack);
-        const msg = "line limit of " + stringify(line_address) + " should not be smaller than live node";
-        assert_true(address + i < HEAP[line_address + LINE_LIMIT_SLOT], 
-            msg, new_stack);
-    }
-}
 
 // Changes A, B, C, I, SCAN
 function MARK() {
@@ -1812,10 +1608,218 @@ function EXTEND() {
   TEMP_ROOT = -1;
 }
 
+/**
+ * Assertions and reference implementations 
+ * FOR DEBUGGING
+ */
+
+let LIVE_NODES = list();
+
+function assert_true(bool, msg, stack) {
+    if (bool) {
+        // yay 
+    } else {
+        visualize_heap("");
+        show_registers("");
+        display(stack);
+        error(msg);
+    }
+}
+
+function assert_false(bool, msg, stack) {
+    return assert_true(!bool, msg, stack);
+}
+
+function assert_same(v1, v2, stack) {
+    return assert_true(v1 === v2, 
+                       "v1: " + stringify(v1) + " and v2: " + stringify(v2) + " are not the same", 
+                       stack);
+}
+
+function assert_same_as_ref(v1, ref_wrapper, stack) {
+    const new_stack = pair("assert_same_as_ref", stack);
+    return assert_same(v1, ref_wrapper(stack), new_stack);
+}
+
+/**
+ * Reference implemntation for the mark algorithm, returns a list of all live nodes
+ * @param {list} stack list of current executions
+ */
+function ref_mark(stack) {
+    const new_stack = pair("MARKING_REFERENCE", stack);
+    let marked = list();
+    function dfs(node_address, stack) {
+        const dfs_stack = pair("currently on: " + stringify(node_address), stack);
+        assert_valid_address(node_address, dfs_stack);
+        marked = pair(node_address, marked);
+        const first_child_index = HEAP[node_address + FIRST_CHILD_SLOT];
+        const last_child_index = HEAP[node_address + LAST_CHILD_SLOT];
+        for (let i = first_child_index; i < last_child_index; i = i + 1) {
+            const child_address = HEAP[node_address + i];
+            if (child_address !== undefined && length(member(child_address, marked)) === 0) {
+                dfs(child_address, dfs_stack);
+            } else {}
+        }
+    }
+    const rts_list = build_list(OVERFLOW ? TOP_RTS - 2 : TOP_RTS, i => RTS[i]);
+    const roots = pair(OS, pair(ENV, rts_list));
+    map(a => a < 0 ? "not initialized" : dfs(a, new_stack), TEMP_ROOT === -1 ? roots : pair(TEMP_ROOT, roots));
+    return marked;
+}
+
+function assert_valid_address(address, stack) {
+    const new_stack = pair("assert address in addressable space: " + stringify(address), stack);
+    assert_false(address === undefined, "node is undefined", new_stack);
+    const block_address = math_floor(address / BLOCK_SIZE) * BLOCK_SIZE;
+    const start = block_address + BLOCK_BK_SIZE + NUM_OF_LINES_PER_BLOCK * LINE_BK_SIZE;
+    const end = block_address + BLOCK_SIZE;
+    assert_true(start <= address && address < end,
+                "not in addressable space",
+                new_stack);
+}
+
+function assert_valid_node(node_address, stack) {
+    const new_stack = pair("assert node " + stringify(node_address) + " must not have undefined or unaddressable children",
+                            stack);
+    assert_false(node_address === undefined, "node is undefined", new_stack);
+    if (is_leaf_node(node_address)) {
+        const leaf_stack = pair("node identified as leaf", new_stack);
+        const size = HEAP[node_address + SIZE_SLOT];
+        for (let i = 0; i < size; i = i + 1) {
+            assert_false(HEAP[node_address + i] === undefined, "address " + stringify(node_address + i) + " is undefined", leaf_stack);
+        }
+    } else {
+        const branch_stack = pair("node not leaf", new_stack);
+        const firstchild = HEAP[node_address + FIRST_CHILD_SLOT];
+        const lastchild = HEAP[node_address + LAST_CHILD_SLOT];
+        for (let i = firstchild; i < lastchild; i = i + 1) {
+            assert_valid_address(HEAP[node_address + i], branch_stack);
+        }
+    }
+}
+
+function is_leaf_node(node) {
+    return node === BOOL_TAG || node === UNDEFINED_TAG || node === NUMBER_TAG;
+}
+
+function ref_get_block(address, stack) {
+    const new_stack = pair("getting block address of: ", stringify(address), stack);
+    assert_true(0 <= address && address < HEAP_SIZE, "address supplied not in heapspace", new_stack);
+    return math_floor(address / BLOCK_SIZE) * BLOCK_SIZE;
+}
+
+function ref_get_line(address, stack) {
+  const new_stack = pair("getting line address of: ", stringify(address),
+                         stack);
+  assert_valid_address(address, new_stack);
+  const block_address = ref_get_block(address, new_stack);
+  const start = block_address + BLOCK_BK_SIZE + NUM_OF_LINES_PER_BLOCK * LINE_BK_SIZE;
+  const line_no = (address - start) / LINE_SIZE;
+  const line_address = math_floor(line_no) * LINE_BK_SIZE + block_address + BLOCK_BK_SIZE;
+//   display("line address result", line_address);
+  return line_address;
+}
+
+function copy_rts(top) {
+    let copy = [];
+    for (let i = 0; i <= top; i = i + 1) {
+        copy[i] = RTS[i];
+    }
+    return copy;
+}
+
+/**
+ * Ensures that RTS stack has not been modified since ~copy~
+ * @param {array} copy array of duplicated stack before changes
+ * @param {array} stack current RTS array
+ */
+function assert_rts(copy, stack) {
+    const new_stack = pair("ensuring rts did not change since last snapshot: ", stack);
+    assert_same(array_length(copy), TOP_RTS + 1, new_stack);
+    for (let i = 0; i < TOP_RTS; i = i + 1) {
+        assert_same(copy[i], RTS[i], new_stack);
+    }
+}
+
+function assert_lines_marked(node_address, stack) {
+    const new_stack = pair("assert lines marked for node: " + stringify(node_address), stack);
+    const size = HEAP[node_address + SIZE_SLOT];
+    for (let i = 0; i < size; i = i + 1) {
+        const line_address = ref_get_line(node_address + i, new_stack);
+        assert_marked(LINE_MARK_SLOT, line_address, new_stack);
+    }
+}
+
+function assert_marked(mark_offset, address, stack) {
+    const new_stack = pair("assert mark slot of address: " + stringify(address) + " is marked", stack);
+    assert_true(HEAP[address + mark_offset] === MARKED, 
+                "object is not marked",
+                new_stack);
+}
+
+function assert_node_marked(node_address, stack) {
+  const new_stack = pair("assert node: " + stringify(node_address) + " is marked", stack);
+  assert_marked(MARK_SLOT, node_address, new_stack);
+  assert_lines_marked(node_address, new_stack);
+  const block_address = ref_get_block(node_address, new_stack);
+  assert_marked(MARK_SLOT, block_address, new_stack);
+}
+
+/**
+ * Make sures that the block and lines of a node is not free 
+ * @param {number} address Address of the node in the HEAP
+ * @param {list} stack stacktrace stack
+ */
+function assert_unfree(address, stack) {
+    const new_stack = pair("assert node at " + stringify(address) + " should not be free", stack);
+    const block_address = ref_get_block(address, new_stack);
+    assert_false(HEAP[block_address + BLOCK_STATE_SLOT] === FREE, "the block of this node should not be free", new_stack);
+    const size = HEAP[address + SIZE_SLOT];
+    for (let i = 0; i < size; i = i + 1) {
+        const line_address = ref_get_line(address + i, new_stack);
+        const msg = "line limit of " + stringify(line_address) + " should not be smaller than live node";
+        assert_true(address + i < HEAP[line_address + LINE_LIMIT_SLOT], 
+            msg, new_stack);
+    }
+}
+
+function show_executing(s) {
+  display(undefined, "--- RUN ---" + s);
+  display(PC, "PC :");
+  display(get_name(P[PC]), "instr:");
+}
+
+// for debugging: show all registers
+function show_registers(s) {
+  show_executing(s);
+  display(undefined, "--- REGISTERS ---");
+  display(RES, "RES:");
+  display(A, "A  :");
+  display(B, "B  :");
+  display(C, "C  :");
+  display(D, "D  :");
+  display(E, "E  :");
+  display(F, "F  :");
+  display(G, "G  :");
+  display(H, "H  :");
+  display(I, "I  :");
+  display(J, "J  :");
+  display(K, "K  :");
+  display(L, "L  :");
+  display(N, "N  :");
+  display(BUMP_HEAD, "BUMP_HEAD  :");
+  display(BUMP_TAIL, "BUMP_TAIL  :");
+  display(OS, "OS :");
+  display(ENV, "ENV:");
+  display(RTS, "RTS:");
+  display(TOP_RTS, "TOP_RTS:");
+}
+
 // debugging: show current heap
 function is_node_tag(x) {
   return x !== undefined && x <= -100 && x >= -110;
 }
+
 function node_kind(x) {
   return x === NUMBER_TAG
     ? "number"
