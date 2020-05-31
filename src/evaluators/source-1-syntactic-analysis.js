@@ -551,18 +551,6 @@ function extend_environment(names, vals, base_env) {
 
 /* EVALUATE */
 
-// list_of_values evaluates a given list of expressions
-// with respect to an environment
-
-function list_of_values(exps, env) {
-    if (no_operands(exps)) {
-        return null;
-    } else {
-        return pair(evaluate(first_operand(exps), env),
-                    list_of_values(rest_operands(exps), env));
-   }
-}
-
 // The workhorse of our evaluator is the analyze function.
 // It dispatches on the kind of statement at hand, and
 // invokes the appropriate analysis. Analysing a statement / expression
