@@ -1,20 +1,20 @@
 /*
 Evaluator for language with booleans, conditionals,
-sequences, functions, constants, variables and blocks
+sequences, functions, constants and blocks.
 
 This is an evaluator for a language that lets you declare
-functions, variables and constants, apply functions, and
+functions, constants, apply functions, and
 carry out simple arithmetic calculations, boolean operations.
+This evaluator uses syntactic analysis, which is introduced
+in SICP JS 4.1.7.
 
 The covered Source §1 sublanguage is:
 
-stmt    ::= const name = expr ; 
-         |  let name = expr ; 
+stmt    ::= const name = expr ;
          |  function name ( params ) block
          |  expr ; 
          |  stmt stmt
-         |  return expr ; 
-         |  name = expr ; 
+         |  return expr ;
          |  block
 block   ::= { stmt }
 params  ::=  | name ( , name )... 
@@ -356,11 +356,6 @@ function apply_primitive_function(fun, argument_list) {
 // (null) is irrelevant.
 const no_value_yet = () => null;
 
-// The function local_names collects all names declared in the
-// body statements. For a name to be included in the list of
-// local_names, it needs to be declared outside of any other
-// block or function.
-
 function insert_all(xs, ys) {
     return is_null(xs)
         ? ys
@@ -369,6 +364,10 @@ function insert_all(xs, ys) {
           : error(head(xs), "multiple declarations of: ");
 }
 
+// The function local_names collects all names declared in the
+// body statements. For a name to be included in the list of
+// local_names, it needs to be declared outside of any other
+// block or function.
 function local_names(stmt) {
     if (is_sequence(stmt)) {
         const stmts = sequence_statements(stmt);
@@ -386,9 +385,6 @@ function local_names(stmt) {
 }	     
 
 /* RETURN STATEMENTS */
-
-// functions return the value that results from
-// evaluating their expression
 
 function is_return_statement(stmt) {
    return is_tagged_list(stmt, "return_statement");
@@ -410,6 +406,10 @@ function is_return_value(value) {
 function return_value_content(value) {
     return head(tail(value));
 }
+
+// return statements are evaluated by evaluating
+// their sub-expression and then wrapping the result in a
+// list
 function analyze_return_statement(stmt) {
     const retval_func = analyze(return_statement_expression(stmt));
     return env => make_return_value(retval_func(env));
@@ -563,11 +563,11 @@ function list_of_values(exps, env) {
    }
 }
 
-// The workhorse of our evaluator is the evaluate function.
+// The workhorse of our evaluator is the analyze function.
 // It dispatches on the kind of statement at hand, and
-// invokes the appropriate implementations of their
-// evaluation process, as described above, always using
-// a current environment
+// invokes the appropriate analysis. Analysing a statement / expression
+// will return an execution function that accepts an environment
+// and returns the value of the statement / expression.
 function analyze(stmt) {
     return is_self_evaluating(stmt)
            ? analyze_self_evaluating(stmt)
