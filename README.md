@@ -15,27 +15,27 @@ The evaluators in this section all follow the general style of SICP JS Chapter 4
 
 Some classic problems, solved in Source.
 
-- [`src/classics/permutations.js`](https://github.com/source-academy/source-programs/blob/master/src/classics/permutations.js): permutations of a list
-- [`src/classics/sorting_lists.js`](https://github.com/source-academy/source-programs/blob/master/src/classics/sorting_lists.js): some list sorting functions
-- [`src/classics/subsets.js`](https://github.com/source-academy/source-programs/blob/master/src/classics/subsets.js): compute all subsets of a list
+- [`src/classics/permutations.js`](https://share.sourceacademy.nus.edu.sg/xvmtm): permutations of a list
+- [`src/classics/sorting_lists.js`](https://share.sourceacademy.nus.edu.sg/lshq5): some list sorting functions
+- [`src/classics/subsets.js`](https://share.sourceacademy.nus.edu.sg/u9vfe): compute all subsets of a list
 
 ## Steppers
 
 The steppers in this section implement a small-step semantics, following the substitution model of SICP JS Chapter 1 and 2.
 
-- [`src/steppers/source-0.js`](https://github.com/source-academy/source-programs/blob/master/src/steppers/source-0.js): stepper for Source §0
+- [`src/steppers/source-0.js`](https://share.sourceacademy.nus.edu.sg/hnbvq): stepper for Source §0
 
 ## Type checkers
 
 The type checkers in this section follow a rule-based static semantics available in [doc/type-checking.pdf](https://github.com/source-academy/source-programs/blob/master/doc/type-checking.pdf).
 
-- [`src/type-checkers/source-0.js`](https://github.com/source-academy/source-programs/blob/master/src/type-checkers/source-0.js): type checker for Source §0
+- [`src/type-checkers/source-0.js`](https://share.sourceacademy.nus.edu.sg/su5ha): type checker for Source §0
 
 ## Virtual machines
 
 The virtual machines in this section are SECD-style and follow a description in [doc/virtual-machines.pdf](https://github.com/source-academy/source-programs/blob/master/doc/virtual-machines.pdf). Each virtual machine comes with a compiler, implemented in the same file.
 
-- [`src/virtual-machines/source-0.js`](https://github.com/source-academy/source-programs/blob/master/src/virtual-machines/source-0.js): virtual machine for Source §0 (calculator language)
+- [`src/virtual-machines/source-0.js`](https://share.sourceacademy.nus.edu.sg/tn6la): virtual machine for Source §0 (calculator language)
 
 ## Tool Demos
 
