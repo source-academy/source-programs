@@ -19,7 +19,7 @@ The evaluators in this section all follow the general style of SICP JS Chapter 4
 
 The steppers in this section implement a small-step semantics, following the substitution model of SICP JS Chapter 1 and 2.
 
-- [`src/steppers/source-0.js`](https://github.com/source-academy/source-programs/blob/master/src/steppers/source-0.js): stepper for Source §0
+- [`src/steppers/source-0.js`](https://github.com/source-academy/source-programs/blob/master/src/steppers/source-0.js): stepper for Source §0, [play](https://share.sourceacademy.nus.edu.sg/hnbvq)
 
 ## Type checkers
 
