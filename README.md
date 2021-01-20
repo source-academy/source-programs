@@ -8,7 +8,7 @@ All programs in this repository are runnable in the [Source Academy playground](
 
 The evaluators in this section all follow the general style of SICP JS Chapter 4.
 
-- [`src/evaluators/source-0.js`](https://github.com/source-academy/source-programs/blob/master/src/evaluators/source-0.js): evaluator for Source §0 (calculator language)
+- [`src/evaluators/source-0.js`](https://share.sourceacademy.nus.edu.sg/y1mpz): evaluator for Source §0 (calculator language)
 
 
 ## Classics
