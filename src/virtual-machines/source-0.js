@@ -1,12 +1,16 @@
 /*
+Virtual machine implementation of language Source §0 
+following the virtual machine of Lecture Week 2 of CS4215
 
-Virtual machine for language Source §0 (including division)
+Instructions: Copy this file into the Source Academy frontend:
+              https://source-academy.github.io/playground
+	      You can use the google drive feature to save your 
+	      work. When done, copy the file back to the
+	      repository and push your changes.
 
-using virtual machine SVML0, Lecture Week 5 of CS4215
+              To run your program, press "Run" and observe
+	      the result on the right.
 
-Instructions: press "Run" to evaluate an example expression
-              (scroll down to see the example)
-             
 The language Source §0 is defined as follows:
 
 prgm    ::= expr ;
@@ -15,300 +19,258 @@ expr    ::= number
          |  true | false
          |  expr binop expr
          |  unop expr
-binop   ::= + | - | * | / | < | >
-         | ===
-unop    ::= !              
+binop   ::= + | - | * | / | < | > 
+         | === |  && | ||
+unop    ::= !
 */
-
-// SYNTAX OF SOURCE §0
 
 // Functions from SICP JS Section 4.1.2
 // with slight modifications
 
+
 function is_tagged_list(expr, the_tag) {
     return is_pair(expr) && head(expr) === the_tag;
 }
-     
-function is_application(expr) {
-   return is_tagged_list(expr, "application") ||
-          is_tagged_list(expr, "boolean_operation");
+
+function make_literal(value) {
+    return list("literal", value);
 }
+
+function is_literal(expr) {
+    return is_tagged_list(expr, "literal");
+}
+
+function literal_value(expr) {
+    return head(tail(expr));
+}
+
+function is_operator_combination(expr) {
+   return is_unary_operator_combination(expr) ||
+          is_binary_operator_combination(expr);
+}
+
+function is_unary_operator_combination(expr) {
+   return is_tagged_list(expr, "unary_operator_combination");
+}
+
+// logical composition (&&, ||) is treated as binary operator combination
+function is_binary_operator_combination(expr) {
+   return is_tagged_list(expr, "binary_operator_combination") ||
+          is_tagged_list(expr, "logical_composition");
+}
+
 function operator(expr) {
-   return head(tail(head(tail(expr))));
+   return head(tail(expr));
 }
-function operands(expr) {
+
+function first_operand(expr) {
    return head(tail(tail(expr)));
 }
-function no_operands(ops) {
-   return is_null(ops);
-}
-function first_operand(ops) {
-   return head(ops);
-}
-function rest_operands(ops) {
-   return tail(ops);
-}
-function to_string(expr) {
-    return (is_number(expr) || is_boolean(expr))
-            ? stringify(expr)
-            : length(operands(expr)) === 1
-            ? "(" + operator(expr) +
-                    to_string(list_ref(operands(expr), 0)) + ")"
-            : "(" + to_string(list_ref(operands(expr), 0)) +
-                    operator(expr) +  
-                    to_string(list_ref(operands(expr), 1)) + ")";
+
+function second_operand(expr) {
+   return head(tail(tail(tail(expr))));
 }
 
-// OP-CODES
+// two new functions, not in 4.1.2
 
-// op-codes of machine instructions, used by compiler
-// and machine
+function is_boolean_literal(expr) {
+    return is_tagged_list(expr, "literal") && 
+           is_boolean(literal_value(expr));
+}
 
-const LDCN    =  0;
-const LDCB    =  1;
-const PLUS    =  2;
-const MINUS   =  3;
-const TIMES   =  4;
-const EQUAL   =  5;
-const LESS    =  6;
-const GREATER =  7;
-const NOT     =  8;
-const DONE    =  9;
-const DIV     = 10;
+function is_number_literal(expr) {
+    return is_tagged_list(expr, "literal") && 
+           is_number(literal_value(expr));
+}
 
-// COMPILER FROM SOURCE TO SVML
+// functions to represent virtual machine code
 
-// parse given string and compile it to machine code
-// return the machine code in an array
+function op_code(instr) {
+    return head(instr);
+}
 
-function parse_and_compile(string) {
-    const machine_code = [];
-    // compile: see relation ->> in CS4215 notes 3.5.2
-    function compile(expr, next) {
-        if (is_number(expr)) {
-            machine_code[next] = LDCN;
-            machine_code[next + 1] = expr;
-            return next + 2;
-        } else if (is_boolean(expr)) {
-            machine_code[next] = LDCB;
-            machine_code[next + 1] = expr;    
-            return next + 2;
+function arg(instr) {
+    return head(tail(instr));
+}
+
+function make_simple_instruction(op_code) {
+    return list(op_code);
+}
+
+function DONE() {
+    return list("DONE");
+}
+
+function LDCI(i) {
+    return list("LDCI", i);
+}
+
+function LDCB(b) {
+    return list("LDCB", b);
+}
+
+function PLUS() {
+    return list("PLUS");
+}
+
+function MINUS() {
+    return list("MINUS");
+}
+
+function TIMES() {
+    return list("TIMES");
+}
+
+function DIV() {
+    return list("DIV");
+}
+
+function AND() {
+    return list("AND");
+}
+
+function OR() {
+    return list("OR");
+}
+
+function NOT() {
+    return list("NOT");
+}
+
+function LT() {
+    return list("LT");
+}
+
+function GT() {
+    return list("GT");
+}
+
+function EQ() {
+    return list("EQ");
+}
+
+// compile_program: see relation ->> in Section 3.5.2
+
+function compile_program(program) {
+    return append(compile_expression(program), list(DONE()));
+}
+
+// compile_expression: see relation hookarrow in 3.5.2
+
+function compile_expression(expr) {
+    if (is_number_literal(expr)) {
+        return list(LDCI(literal_value(expr)));
+    } else if (is_boolean_literal(expr)) {
+        return list(LDCB(literal_value(expr)));
+    } else {
+        const op = operator(expr);
+        const operand_1 = first_operand(expr);
+        if (op === "!") {
+            return append(compile_expression(operand_1),
+                          list(NOT()));
         } else {
-            const op = operator(expr);
-            const ops = operands(expr);
-            const operand_1 = first_operand(ops);
-            if (op === "!") {
-                const next_next = compile(operand_1, next);
-                machine_code[next_next] = NOT;
-                return next_next + 1;
-            } else {
-                const operand_2 = first_operand(rest_operands(ops));
-                const op_code = op === "+" ? PLUS
-                              : op === "-" ? MINUS
-                              : op === "*" ? TIMES
-                              : op === "===" ? EQUAL
-                              : op === "<" ? LESS
-                              : op === ">" ? GREATER
-                              : op === "/" ? DIV
-                              : error(op, "unknown operator:");
-                const next_next = compile(operand_1, next);
-                const next_next_next = compile(operand_2, next_next);
-                machine_code[next_next_next] = op_code;
-                return next_next_next + 1;
-            }
+            const operand_2 = second_operand(expr);
+            const op_code = op === "+" ? "PLUS"
+                          : op === "-" ? "MINUS"
+                          : op === "*" ? "TIMES"
+                          : op === "/" ? "DIV"
+                          : op === "===" ? "EQ"
+                          : op === "<" ? "LT"
+                          : op === ">" ? "GT"
+                          : op === "&&" ? "AND"
+                          : /*op === "||" ?*/ "OR";
+            return append(compile_expression(operand_1),
+                          append(compile_expression(operand_2),
+                                 list(make_simple_instruction(op_code))));
         }
     }
-    const next = compile(parse(string), 0);
-    machine_code[next] = DONE;
-    return machine_code;
 }
 
-// VIRTUAL MACHINE
-
-// "registers" are the global variables of our machine.
-// These contain primitive values (numbers or boolean
-// values) or arrays of primitive values
-
-// P is an array that contains an SVML machine program:
-// the op-codes of instructions and their arguments
-let P = [];
-// PC is program counter: index of the next instruction
-let PC = 0;
-// OS is array representing the operand stack of the machine
-let OS = [];
-// operand stack is initially empty, so we start out with -1
-let TOP = -1;
-// temporary value, used by the machine instructions
-let TMP = 0;  
-
-// PUSH and POP are convenient subroutines that operate on
-// the operand stack OS, its OS_TOP address and OS_TMP.
-// PUSH expects its argument in OS_TMP.
-function PUSH() {
-    TOP = TOP + 1;
-    OS[TOP] = TMP;
-}
-// POP puts the top-most value into OS_TMP.
-function POP() {
-    TMP = OS[TOP];
-    TOP = TOP - 1;
+function parse_and_compile(string) {
+    return compile_program(parse(string));
 }
 
-// some registers for intermediate results
-let A = 0;
-let B = 0;
-let C = 0;
+// parse_and_compile("! (1 === 1 && 2 > 3);");
+// parse_and_compile("1 + 2 / 0;");
+// parse_and_compile("1 + 2 / 1;");
+// parse_and_compile("3 / 4;");
 
-// SVMLa implementation
+// machine state: a pair consisting 
+// of an operand stack and a program counter,
+// following 3.5.3
 
-// We implement our machine with an array M that
-// contains subroutines. Each subroutine implements
-// a machine instruction, using a nullary function.
-// The machine can then index into M using the op-codes
-// of the machine instructions. To be implementable on
-// common hardware, the subroutines have the
-// following structure:
-// * they have no parameters
-// * they do not return any results
-// * they do not have local variables
-// * they do not call other functions except the
-//   subroutines PUSH and POP
-// * each line is very simple, for example an array access
-// Ideally, each line can be implemented directly with a
-// machine instruction of a real computer. In that case,
-// the subroutines could become machine language macros,
-// and the compiler could generate real machine code.
+function make_state(stack, pc) {
+    return pair(stack, pc);
+}
 
-const M = [];
+function get_stack(state) {
+    return head(state);
+}
 
-M[LDCN] = () =>    { TMP = P[PC + 1];
-                     PUSH();
-                     PC = PC + 2;
-                   };
+function get_pc(state) {
+    return tail(state);
+}
 
-M[LDCB] = () =>    { TMP = P[PC + 1];
-                     PUSH();
-                     PC = PC + 2;
-                   };
+// operations on the operand stack
 
-M[PLUS] = () =>    { POP();
-                     A = TMP;
-                     POP();
-                     TMP = TMP + A;
-                     PUSH();
-                     PC = PC + 1;
-                   };
+function empty_stack() {
+    return null;
+}
+function push(stack, value) {
+    return pair(value, stack);
+}
 
-M[MINUS] = () =>   { POP();
-                     A = TMP;
-                     POP();
-                     TMP = TMP - A;
-                     PUSH();
-                     PC = PC + 1;
-                   };
+function pop(stack) {
+    return tail(stack);
+}
 
-M[TIMES] = () =>   { POP();
-                     A = TMP;
-                     POP();
-                     TMP = TMP * A;
-                     PUSH();
-                     PC = PC + 1;
-                   };
-     
-M[EQUAL] = () =>   { POP();
-                     A = TMP;
-                     POP();
-                     TMP = TMP === A;
-                     PUSH();
-                     PC = PC + 1;
-                   };
-         
-M[LESS] = () =>    { POP();
-                     A = TMP;
-                     POP();
-                     TMP = TMP < A;
-                     PUSH();
-                     PC = PC + 1;
-                   };
-     
-M[GREATER] = () => { POP();
-                     A = TMP;
-                     POP();
-                     TMP = TMP > A;
-                     PUSH();
-                     PC = PC + 1;
-                   };
+function top(stack) {
+    return head(stack);
+}
 
-M[NOT] = () =>     { POP();
-                     TMP = ! TMP;
-                     PUSH();
-                     PC = PC + 1;
-                   };
-               
-// register that says if machine is running                  
-let RUNNING = true;
-const NORMAL = 0;
-const ERROR = 1;
-let STATE = NORMAL;
+// run the machine according to 3.5.3
 
-M[DONE] = () =>    { RUNNING = false;
-                   };
+function run(code) {
+    const initial_state = make_state(empty_stack(), 0);
+    return transition(code, initial_state);
+}
 
-M[DIV] = () =>     { POP();
-                     A = TMP;
-                     POP();
-                     TMP = TMP / A;
-                     PUSH();
-                     PC = PC + 1;
-                     A = A === 0;
-                     if (A) { STATE = ERROR; } else {}
-                     if (A) { RUNNING = false; } else {}
-                   };
-
-function run() {
-    while (RUNNING) {
-        M[P[PC]]();
-    }
-    if (STATE === ERROR) {
-        error(OS[TOP], "execution aborted:");
+function transition(code, state) {
+    const pc = get_pc(state);
+    const stack = get_stack(state);
+    const instr = list_ref(code, pc);
+    if (op_code(instr) === "DONE") {
+        return top(stack);
     } else {
-        display(OS[TOP], "result:");
+        return transition(code, make_state(next_stack(stack, instr), 
+                                           pc + 1));
     }
 }
 
-// EXAMPLES
+function next_stack(stack, instr) {
+    const op = op_code(instr);
+    return op === "LDCI" ? push(stack, arg(instr))
+      : op === "LDCB" ? push(stack, arg(instr))
+      : op === "PLUS" ? push(pop(pop(stack)), top(pop(stack)) + top(stack))
+      : op === "MINUS" ? push(pop(pop(stack)), top(pop(stack)) - top(stack))
+      : op === "TIMES" ? push(pop(pop(stack)), top(pop(stack)) * top(stack))
+      : op === "DIV" ? push(pop(pop(stack)), math_floor(top(pop(stack)) / 
+                                                        top(stack)))
+      : op === "NOT" ? push(pop(stack), ! top(stack))
+      : op === "EQ" ? push(pop(pop(stack)), top(pop(stack)) === top(stack))
+      : op === "LT" ? push(pop(pop(stack)), top(pop(stack)) < top(stack))
+      : op === "GT" ? push(pop(pop(stack)), top(pop(stack)) > top(stack))
+      : op === "AND" ? push(pop(pop(stack)), top(pop(stack)) && top(stack))
+      : /*op === "OR" ?*/ push(pop(pop(stack)), top(pop(stack)) || top(stack));
+}
 
-/*
-// simple hand-coded example, computing 21 - 4
-P =
-[ LDCN, 21,
-  LDCN, 4,
-  MINUS,
-  DONE
-];
-run();
-*/
+function parse_compile_and_run(string) {
+    const code = compile_program(parse(string));
+    return run(code);
+}
 
-/*
-// simple hand-coded example, computing 3 * (17 + 4)
-P =
-[ LDCN, 3,
-  LDCN, 17,
-  LDCN, 4,
-  PLUS,
-  TIMES,
-  DONE
-];
-run();
-*/
-
-// compiler and VM test cases
-
-// P = parse_and_compile("1 + 1 === 2;");
-// run();
-
- P = parse_and_compile("3 > 2;");
- run();
-
-// P = parse_and_compile("1 + 1 / 0;");
-// run();
+// parse_compile_and_run("! (1 === 1 && 2 > 3);");
+// parse_compile_and_run("1 + 2 / 0;");
+// parse_compile_and_run("1 + 2 / 1;");
+// parse_compile_and_run("3 / 4;");
+parse_compile_and_run("3 < 4 && 7 > 6;");

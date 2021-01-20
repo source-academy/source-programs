@@ -11,6 +11,14 @@ The evaluators in this section all follow the general style of SICP JS Chapter 4
 - [`src/evaluators/source-0.js`](https://github.com/source-academy/source-programs/blob/master/src/evaluators/source-0.js): evaluator for Source §0 (calculator language)
 
 
+## Classics
+
+Some classic problems, solved in Source.
+
+- [`src/classics/permutations.js`](https://github.com/source-academy/source-programs/blob/master/src/classics/permutations.js): permutations of a list
+- [`src/classics/sorting_lists.js`](https://github.com/source-academy/source-programs/blob/master/src/classics/sorting_lists.js): some list sorting functions
+- [`src/classics/subsets.js`](https://github.com/source-academy/source-programs/blob/master/src/classics/subsets.js): compute all subsets of a list
+
 ## Steppers
 
 The steppers in this section implement a small-step semantics, following the substitution model of SICP JS Chapter 1 and 2.
@@ -22,22 +30,12 @@ The steppers in this section implement a small-step semantics, following the sub
 The type checkers in this section follow a rule-based static semantics available in [doc/type-checking.pdf](https://github.com/source-academy/source-programs/blob/master/doc/type-checking.pdf).
 
 - [`src/type-checkers/source-0.js`](https://github.com/source-academy/source-programs/blob/master/): type checker for Source §0
-- [`src/type-checkers/typed-source.js`](https://github.com/source-academy/source-programs/blob/master/src/type-checkers/source-0.js): type checker for Typed Source, a typed version of a Source §1 sublanguage
 
 ## Virtual machines
 
 The virtual machines in this section are SECD-style and follow a description in [doc/virtual-machines.pdf](https://github.com/source-academy/source-programs/blob/master/doc/virtual-machines.pdf). Each virtual machine comes with a compiler, implemented in the same file.
 
-- [`src/virtual-machines/source-0m.js`](https://github.com/source-academy/source-programs/blob/master/src/virtual-machines/source-0m.js): virtual machine for Source §0- (calculator language without division)
 - [`src/virtual-machines/source-0.js`](https://github.com/source-academy/source-programs/blob/master/src/virtual-machines/source-0.js): virtual machine for Source §0 (calculator language)
-- [`src/virtual-machines/source-0p.js`](https://github.com/source-academy/source-programs/blob/master/src/virtual-machines/source-0p.js): virtual machine for Source §0 (calculator language with conditionals)
-- [`src/virtual-machines/source-1.js`](https://github.com/source-academy/source-programs/blob/master/src/virtual-machines/source-1.js): virtual machine for a Source §1 sublanguage (without memory management)
-- [`src/virtual-machines/source-1-with-copying-gc.js`](https://github.com/source-academy/source-programs/blob/master/src/virtual-machines/source-1-with-copying-gc.js): virtual machine for a Source §1 sublanguage with a Cheney-style stop-and-copy garbage collector
-- [`src/virtual-machines/source-1-with-mark-region-gc.js`](https://github.com/source-academy/source-programs/blob/master/src/virtual-machines/source-1-with-mark-region-gc.js): virtual machine for a Source §1 sublanguage with a Mark-Region garbage collector (2-tier granularity and overflow allocator)
-- [`src/virtual-machines/register-machine-gcd.js`](https://github.com/source-academy/source-programs/blob/master/src/virtual-machines/register-machine-gcd.js): register machine following SICP JS Section 5.2, using GCD example
-- [`src/virtual-machines/source-2-with-copying-gc.js`](https://github.com/source-academy/source-programs/blob/master/src/virtual-machines/source-2-with-copying-gc.js): virtual machine for a Source §2 sublanguage with a Cheney-style stop-and-copy garbage collector
-- [`src/virtual-machines/source-2-with-ms-gc.js`](https://github.com/source-academy/source-programs/blob/master/src/virtual-machines/source-2-with-ms-gc.js): virtual machine for a Source §2 sublanguage with a Mark-and-Sweep-style garbage collector
-- [`src/virtual-machines/source-2-with-mark-region-gc.js`](https://github.com/source-academy/source-programs/blob/master/src/virtual-machines/source-2-with-mark-region-gc.js): virtual machine for a Source §1 sublanguage with a Mark-Region garbage collector (2-tier granularity and overflow allocator)
 
 ## Tool Demos
 
@@ -57,7 +55,6 @@ The virtual machines in this section are SECD-style and follow a description in 
 - [`src/module-demos/times.js`](https://tinyurl.com/SICPJS-timestables): visual times tables using the "curves" library
 - [`src/module-demos/sounds.js`](https://tinyurl.com/SICPJS-siren): a "sounds" library for generating sounds and music, starting from their constituent sine waves
 - [`src/module-demos/bohemian.js`](https://tinyurl.com/SICPJS-rhapsody): Bohemian Rhapsody cover using the "sounds" library
-- [`src/module-demos/pix-n-flix.js`](https://tinyurl.com/SICP-distortion): a library for image and video processing, based on the constituent pixels
 
 ## Test framework
 

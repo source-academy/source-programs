@@ -16,7 +16,7 @@ function twist(counter) {
         : stack_frac(1/10,
              random_color(
                  scale_independent(0.1, 1, square)),
-             rotate(runtime(),
+             rotate(get_time(),
                  twist(counter + 1))
             );
 }
