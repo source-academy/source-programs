@@ -23,13 +23,13 @@ Some classic problems, solved in Source.
 
 The steppers in this section implement a small-step semantics, following the substitution model of SICP JS Chapter 1 and 2.
 
-- [`src/steppers/source-0.js`](https://github.com/source-academy/source-programs/blob/master/src/steppers/source-0.js): stepper for Source §0, [play](https://share.sourceacademy.nus.edu.sg/hnbvq)
+- [`src/steppers/source-0.js`](https://github.com/source-academy/source-programs/blob/master/src/steppers/source-0.js): stepper for Source §0
 
 ## Type checkers
 
 The type checkers in this section follow a rule-based static semantics available in [doc/type-checking.pdf](https://github.com/source-academy/source-programs/blob/master/doc/type-checking.pdf).
 
-- [`src/type-checkers/source-0.js`](https://github.com/source-academy/source-programs/blob/master/): type checker for Source §0
+- [`src/type-checkers/source-0.js`](https://github.com/source-academy/source-programs/blob/master/src/type-checkers/source-0.js): type checker for Source §0
 
 ## Virtual machines
 
