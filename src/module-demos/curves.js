@@ -55,20 +55,20 @@ const to_domain = x => (2 * x - 1) * 100 * math_PI; // map to right domain
 
 const heart_scale = (t, heart) => math_sin(math_PI * t) * heart; // x, y scaler
 
-const heart = t => make_3D_point(
-    t,
+const heart = t => make_3D_color_point(
+    t < 0.5 ? 30 * math_pow(t, 2) : 30 * (2 * math_pow(0.5, 2) - math_pow(1 - t, 2)),
     heart_scale(t, 16 * math_pow(math_sin(to_domain(t)), 3)),
     heart_scale(t, 13 * math_cos(to_domain(t)) - 5 * math_cos(2 * to_domain(t)) 
     - 2 * math_cos(3 * to_domain(t)) - math_cos(4 * to_domain(t))));
 
-const colored_heart = t => make_3D_color_point(
-    t,
+const colored_heart = t =>  make_3D_color_point(
+    t < 0.5 ? 30 * math_pow(t, 2) : 30 * (2 * math_pow(0.5, 2) - math_pow(1 - t, 2)),
     heart_scale(t, 16 * math_pow(math_sin(to_domain(t)), 3)),
     heart_scale(t, 13 * math_cos(to_domain(t)) - 5 * math_cos(2 * to_domain(t)) 
     - 2 * math_cos(3 * to_domain(t)) - math_cos(4 * to_domain(t))),
-    math_pow(math_cos(2 * math_PI * t), 2) * 255,    // r-component
-    math_pow(math_sin(2 * math_PI * t), 2) * 255,    // g-component
-    t * 255);                                        // b-component
+    math_pow(math_cos(2 * math_PI * t), 2) * 255,   // r-component
+    math_pow(math_sin(2 * math_PI * t), 2) * 255,   // g-component
+    t * 255);                                       // b-component
 
 // =============================================================================
 // 2D Curves
@@ -105,6 +105,5 @@ const colored_heart = t => make_3D_color_point(
 // draw_3D_points_full_view_proportional(500)(colored_spring);
 
 // Example of 
-// draw_3D_connected_full_view(10000)(heart);
-draw_3D_connected_full_view(10000)(colored_heart);
-
+// draw_3D_points_full_view_proportional(60000)(heart);
+draw_3D_points_full_view_proportional(60000)(colored_heart);
