@@ -12,7 +12,7 @@
   },
   "dependencies": {
     "js-slang": "^0.4.49",
-    "lodash": "^4.17.21"
+    "lodash": "^4.17.23"
   },
   "repository": {
     "type": "git",
